@@ -49,19 +49,19 @@ The initial phase focuses on creating the user interface using `tkinter`.
 
 This phase introduces more capabilities to the canvas application.
 
-- [ ] **Implement Circle Coloring:**
+- [x] **Implement Circle Coloring:**
     *   Assign a color to each new circle.
     *   Available colors: green, blue, red, yellow.
     *   Initially, implement random color assignment by calling a dedicated function. Logic for non-random coloring will be added later.
-- [ ] **Method to Connect Circles:**
+- [x] **Method to Connect Circles:**
     *   Draw a straight line connecting each newly added circle to the previously added circle.
-- [ ] **Collect Data to Track the Circles:**
+- [x] **Collect Data to Track the Circles:**
     *   Create a data store to collect information about each circle when it is drawn on the canvas.
     *   Ensure the storage method is versatile enough to be updated with new attributes as this be required in a future phase.
     *   Store its coordinates (x, y).
     *   Store a unique numerical identifier (ID) incrementing from 1 upward for each new circle.
     *   Store its color.
     *   When a connecting line is added, store the ID of the other circle it has been connected to.
-- [ ] **Circle Data Debug display option:**
+- [x] **Circle Data Debug display option:**
     *   Add a debug button
     *   When clicked this button should add an overlay that shows the data collected for the most recent circle
