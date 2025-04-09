@@ -112,19 +112,19 @@ This phase introduces a more interactive way to connect circles.
 
 This phase introduces functionality to edit existing circles on the canvas.
 
-- [ ] **Add Edit Mode Button:**
+- [x] **Add Edit Mode Button:**
     *   Create a new button labeled "Edit Mode" in the control frame.
     *   Implement logic to toggle an `in_edit_mode` state variable when the button is clicked.
-- [ ] **Implement Edit Mode Hint Text:**
+- [x] **Implement Edit Mode Hint Text:**
     *   When entering edit mode, display instructional text (e.g., "Click-and-drag to move, right click to remove. Press space when done").
     *   Hide this text when exiting edit mode.
-- [ ] **Implement Circle Dragging:**
+- [x] **Implement Circle Dragging:**
     *   Bind mouse press (`<Button-1>`), drag (`<B1-Motion>`), and release (`<ButtonRelease-1>`) events when in edit mode.
     *   On press, identify if the click is on an existing circle.
     *   On drag, update the position of the selected circle on the canvas.
     *   Continuously redraw connecting lines attached to the dragged circle during the drag motion.
     *   On release, update the circle's stored coordinates (x, y) in the `circles` list and `circle_lookup` dictionary.
-- [ ] **Implement Circle Removal:**
+- [x] **Implement Circle Removal:**
     *   Bind the right-click event (`<Button-3>`) when in edit mode.
     *   On right-click, identify if the click is on an existing circle using `get_circle_at_coords`.
     *   If a circle is right-clicked:
@@ -133,9 +133,41 @@ This phase introduces functionality to edit existing circles on the canvas.
         *   Remove the circle's data from the `circles` list and `circle_lookup` dictionary.
         *   Iterate through the `connected_to` list of the removed circle. For each connected circle ID, update *its* `connected_to` list to remove the ID of the deleted circle.
         *   Remove relevant entries from the `connections` dictionary.
-- [ ] **Implement Exiting Edit Mode:**
+- [x] **Implement Exiting Edit Mode:**
     *   Bind the spacebar key press event (`<space>`) to an exit function when in edit mode.
     *   When spacebar is pressed:
         *   Set `in_edit_mode` to `False`.
         *   Hide the edit mode hint text.
         *   Ensure standard click-to-draw behavior is re-enabled (i.e., clicks should draw new circles again).
+
+### Phase 5: Code Improvements and Refactoring
+
+This phase focuses on improving the existing implementation by addressing edge cases, reducing redundancy, and enhancing code organization.
+
+- [ ] **Improve Mode Interaction:**
+    *   Implement a proper state management system for application modes.
+    *   Ensure that entering one mode (e.g., edit mode) properly exits other modes (e.g., selection mode).
+    *   Add explicit checks in each mode-specific handler to verify the application is in the correct mode.
+    *   Consider creating a `_set_application_mode(mode_name)` method that handles all transition logic.
+
+- [ ] **Refactor Circle Removal Logic:**
+    *   Consolidate the circle and connection removal code into a reusable helper method.
+    *   Create a separate method for handling the "last circle removed" scenario.
+    *   Ensure consistent cleanup when removing circles, whether through edit mode or through clearing the canvas.
+
+- [ ] **Centralize Event Binding Management:**
+    *   Create dedicated methods for binding and unbinding event sets (e.g., `_bind_edit_mode_events()` and `_unbind_edit_mode_events()`).
+    *   Ensure all event bindings are properly tracked and managed across mode changes.
+    *   Consider creating an event binding registry to track which events are currently bound.
+
+- [ ] **Enhance UI Element Positioning:**
+    *   Implement dynamic positioning of UI elements to avoid overlaps.
+    *   Create a layout manager for hint text and debug information to ensure proper spacing.
+    *   Define UI regions for different types of information (e.g., hints, debug, controls).
+    *   Add configuration options for spacing and positioning of UI elements.
+
+- [ ] **Add Error Handling and Validation:**
+    *   Implement input validation for user interactions.
+    *   Add error handling for edge cases (e.g., circle dragged outside of canvas).
+    *   Create informative user feedback for invalid operations.
+    *   Ensure all user actions produce appropriate visual feedback.
