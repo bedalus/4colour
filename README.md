@@ -150,6 +150,10 @@ This phase focuses on improving the existing implementation by addressing edge c
     *   Add explicit checks in each mode-specific handler to verify the application is in the correct mode.
     *   Consider creating a `_set_application_mode(mode_name)` method that handles all transition logic.
 
+### Phase 6: Deferred Improvements
+
+This phase includes improvements deferred from Phase 5.
+
 - [ ] **Refactor Circle Removal Logic:**
     *   Consolidate the circle and connection removal code into a reusable helper method.
     *   Create a separate method for handling the "last circle removed" scenario.
