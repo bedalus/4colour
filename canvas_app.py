@@ -34,6 +34,12 @@ class CanvasApplication:
         self.next_id = 1
         self.last_circle_id = None
         
+        # Dictionary for quick circle lookup by ID
+        self.circle_lookup = {}
+        
+        # Dictionary to store connection information
+        self.connections = {}
+        
         # Debug overlay
         self.debug_enabled = False
         self.debug_text = None
@@ -103,12 +109,12 @@ class CanvasApplication:
             "x": x,
             "y": y,
             "color": color,
-            "connected_to": []
+            "connected_to": []  # This remains a list that can grow indefinitely
         }
         
         # Connect to previous circle if it exists
         if self.last_circle_id is not None:
-            last_circle = next((c for c in self.circles if c["id"] == self.last_circle_id), None)
+            last_circle = self.circle_lookup.get(self.last_circle_id)
             if last_circle:
                 # Draw a line connecting this circle to the previous one
                 line_id = self.canvas.create_line(
@@ -123,8 +129,17 @@ class CanvasApplication:
                 circle_data["connected_to"].append(self.last_circle_id)
                 last_circle["connected_to"].append(self.next_id)
                 
-        # Add circle to the list
+                # Store the connection details
+                connection_key = f"{self.next_id}_{self.last_circle_id}"
+                self.connections[connection_key] = {
+                    "line_id": line_id,
+                    "from_circle": self.next_id,
+                    "to_circle": self.last_circle_id
+                }
+        
+        # Add circle to the list and lookup dictionary
         self.circles.append(circle_data)
+        self.circle_lookup[self.next_id] = circle_data
         self.last_circle_id = self.next_id
         self.next_id += 1
         
@@ -140,6 +155,8 @@ class CanvasApplication:
         self.canvas.delete("all")
         self.drawn_items.clear()
         self.circles.clear()
+        self.circle_lookup.clear()  # Clear the lookup dictionary
+        self.connections.clear()    # Clear connections data
         self.last_circle_id = None
         self.next_id = 1
         
@@ -183,6 +200,47 @@ class CanvasApplication:
             fill="black",
             font=("Arial", 10)
         )
+        
+    def add_connection(self, from_id, to_id):
+        """Add a connection between two circles.
+        
+        Args:
+            from_id: ID of the first circle
+            to_id: ID of the second circle
+            
+        Returns:
+            bool: True if connection was made, False otherwise
+        """
+        from_circle = self.circle_lookup.get(from_id)
+        to_circle = self.circle_lookup.get(to_id)
+        
+        if not from_circle or not to_circle:
+            return False
+            
+        # Check if connection already exists
+        if to_id in from_circle["connected_to"] or from_id in to_circle["connected_to"]:
+            return False
+            
+        # Draw the line
+        line_id = self.canvas.create_line(
+            from_circle["x"], from_circle["y"], 
+            to_circle["x"], to_circle["y"], 
+            width=1
+        )
+        
+        # Update connection data
+        from_circle["connected_to"].append(to_id)
+        to_circle["connected_to"].append(from_id)
+        
+        # Store connection details
+        connection_key = f"{from_id}_{to_id}"
+        self.connections[connection_key] = {
+            "line_id": line_id,
+            "from_circle": from_id,
+            "to_circle": to_id
+        }
+        
+        return True
 
 def main():
     """Application entry point."""

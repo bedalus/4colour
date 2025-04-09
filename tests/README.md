@@ -30,6 +30,8 @@ The tests cover the following functionality:
 2. Drawing on click
 3. Canvas resizing (increase/decrease)
 4. Minimum canvas size constraint
+5. Circle connections and data management
+6. Dynamic circle relationship tracking
 
 ## Adding New Tests
 

@@ -39,17 +39,20 @@ class TestCanvasApplication(unittest.TestCase):
         """Test that the app initializes with correct values."""
         self.assertEqual(self.app.canvas_width, 700)
         self.assertEqual(self.app.canvas_height, 500)
-        self.assertEqual(self.app.circle_radius, 5)
+        self.assertEqual(self.app.circle_radius, 10)  # Updated to match new value
         self.assertEqual(self.app.available_colors, ["green", "blue", "red", "yellow"])
         self.assertEqual(self.app.circles, [])
         self.assertEqual(self.app.next_id, 1)
         self.assertIsNone(self.app.last_circle_id)
         self.assertFalse(self.app.debug_enabled)
+        # Test new dictionaries
+        self.assertEqual(self.app.circle_lookup, {})
+        self.assertEqual(self.app.connections, {})
         self.root.title.assert_called_with("4colour Canvas")
         self.root.geometry.assert_called_with("800x600")
     
     def test_get_random_color(self):
-        """Test that the random color function works correctly."""
+        """Test that the random color function works correctly.""" 
         # Set a seed to make the test predictable
         random.seed(42)
         expected_color = random.choice(self.app.available_colors)
@@ -89,6 +92,10 @@ class TestCanvasApplication(unittest.TestCase):
         self.assertEqual(circle["color"], "red")
         self.assertEqual(circle["connected_to"], [])
         
+        # Check that circle_lookup is updated
+        self.assertIn(1, self.app.circle_lookup)
+        self.assertEqual(self.app.circle_lookup[1], circle)
+        
         # Check that last_circle_id was updated
         self.assertEqual(self.app.last_circle_id, 1)
         # Check that next_id was incremented
@@ -97,14 +104,16 @@ class TestCanvasApplication(unittest.TestCase):
     def test_draw_on_click_second_circle(self):
         """Test drawing a second circle that connects to the first."""
         # Setup: Add a first circle
-        self.app.circles = [{
+        first_circle = {
             "id": 1,
             "canvas_id": 100,
             "x": 50,
             "y": 50,
             "color": "blue",
             "connected_to": []
-        }]
+        }
+        self.app.circles = [first_circle]
+        self.app.circle_lookup = {1: first_circle}
         self.app.last_circle_id = 1
         self.app.next_id = 2
         
@@ -139,6 +148,18 @@ class TestCanvasApplication(unittest.TestCase):
         self.assertEqual(second_circle["color"], "green")
         self.assertEqual(second_circle["connected_to"], [1])
         
+        # Check that circle_lookup is updated
+        self.assertIn(2, self.app.circle_lookup)
+        self.assertEqual(self.app.circle_lookup[2], second_circle)
+        
+        # Check that connections dictionary is updated
+        connection_key = "2_1"
+        self.assertIn(connection_key, self.app.connections)
+        connection = self.app.connections[connection_key]
+        self.assertEqual(connection["from_circle"], 2)
+        self.assertEqual(connection["to_circle"], 1)
+        self.assertEqual(connection["line_id"], 200)  # From the mock return value
+        
         # Check that first circle's connections were updated
         first_circle = self.app.circles[0]
         self.assertEqual(first_circle["connected_to"], [2])
@@ -151,10 +172,12 @@ class TestCanvasApplication(unittest.TestCase):
     def test_clear_canvas(self):
         """Test clearing the canvas."""
         # Setup: Add some circles and connections
-        self.app.circles = [
-            {"id": 1, "canvas_id": 100, "x": 50, "y": 50, "color": "blue", "connected_to": [2]},
-            {"id": 2, "canvas_id": 101, "x": 100, "y": 100, "color": "red", "connected_to": [1]},
-        ]
+        first_circle = {"id": 1, "canvas_id": 100, "x": 50, "y": 50, "color": "blue", "connected_to": [2]}
+        second_circle = {"id": 2, "canvas_id": 101, "x": 100, "y": 100, "color": "red", "connected_to": [1]}
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        self.app.connections = {"1_2": {"line_id": 102, "from_circle": 1, "to_circle": 2}}
         self.app.drawn_items = [(50, 50), (100, 100)]
         self.app.last_circle_id = 2
         self.app.next_id = 3
@@ -168,6 +191,10 @@ class TestCanvasApplication(unittest.TestCase):
         # Check that drawn_items and circles were cleared
         self.assertEqual(len(self.app.drawn_items), 0)
         self.assertEqual(len(self.app.circles), 0)
+        
+        # Check that dictionaries were cleared
+        self.assertEqual(len(self.app.circle_lookup), 0)
+        self.assertEqual(len(self.app.connections), 0)
         
         # Check that last_circle_id was reset
         self.assertIsNone(self.app.last_circle_id)
@@ -245,6 +272,82 @@ class TestCanvasApplication(unittest.TestCase):
         args, kwargs = self.app.canvas.create_text.call_args
         self.assertEqual(kwargs['anchor'], tk.NW)
         self.assertEqual(kwargs['text'], "No circles drawn yet")
+    
+    def test_add_connection(self):
+        """Test adding a connection between two existing circles."""
+        # Setup: Add two circles without connection
+        first_circle = {
+            "id": 1,
+            "canvas_id": 100,
+            "x": 50,
+            "y": 50,
+            "color": "blue",
+            "connected_to": []
+        }
+        second_circle = {
+            "id": 2,
+            "canvas_id": 101,
+            "x": 100, 
+            "y": 100,
+            "color": "red",
+            "connected_to": []
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        # Mock the canvas create_line method
+        self.app.canvas.create_line.return_value = 300
+        
+        # Call add_connection
+        result = self.app.add_connection(1, 2)
+        
+        # Check that connection was successfully created
+        self.assertTrue(result)
+        
+        # Check that create_line was called
+        self.app.canvas.create_line.assert_called_once_with(
+            50, 50, 100, 100, width=1
+        )
+        
+        # Check that connection data was updated in both circles
+        self.assertIn(2, first_circle["connected_to"])
+        self.assertIn(1, second_circle["connected_to"])
+        
+        # Check that connections dictionary is updated
+        self.assertIn("1_2", self.app.connections)
+        connection = self.app.connections["1_2"]
+        self.assertEqual(connection["from_circle"], 1)
+        self.assertEqual(connection["to_circle"], 2)
+        self.assertEqual(connection["line_id"], 300)
+    
+    def test_add_connection_nonexistent_circle(self):
+        """Test adding a connection with nonexistent circle."""
+        # Setup: Add one circle
+        first_circle = {
+            "id": 1,
+            "canvas_id": 100,
+            "x": 50,
+            "y": 50,
+            "color": "blue",
+            "connected_to": []
+        }
+        
+        self.app.circles = [first_circle]
+        self.app.circle_lookup = {1: first_circle}
+        
+        # Try to connect to nonexistent circle
+        result = self.app.add_connection(1, 99)
+        
+        # Check that connection failed
+        self.assertFalse(result)
+        
+        # Check that create_line was not called
+        self.app.canvas.create_line.assert_not_called()
+        
+        # Check that no connections were added
+        self.assertEqual(first_circle["connected_to"], [])
+        self.assertEqual(self.app.connections, {})
 
 if __name__ == "__main__":
     unittest.main()
