@@ -27,6 +27,17 @@ NOTE: These guidelines apply only to code in the 4colour repo.
 
 Completed items are marked with `[x]`. New work items should be itemized and preceded by an empty checkbox (`- [ ]`). When implementing features, follow the requirements of the next unmarked checkbox. Once a feature is fully implemented and tested, mark the checkbox as complete to track progress.
 
+## Test-Driven Development
+
+To ensure smooth development and avoid regressions:
+
+- Update unit tests whenever functionality changes - this is as important as the implementation itself.
+- Tests should be updated to match the new behavior, not the other way around.
+- Run tests before and after making changes to verify that your implementation works correctly.
+- If a test fails, understand whether it's because of a bug in the implementation or because the test needs to be updated for new behavior.
+- All new features must have corresponding tests in the `tests` directory.
+- Consider writing tests before implementing a feature to clarify expected behavior.
+
 ### Coding Plan
 
 The initial phase focuses on creating the user interface using `tkinter`.
