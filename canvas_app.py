@@ -22,7 +22,7 @@ class CanvasApplication:
         self.root.geometry("800x600")
         
         # Initialize canvas dimensions
-        self.canvas_width = 700
+        self.canvas_width = 800
         self.canvas_height = 500
         self.circle_radius = 10
         
@@ -51,6 +51,11 @@ class CanvasApplication:
         self.hint_text_id = None
         self.newly_placed_circle_id = None
         
+        # Edit mode properties
+        self.in_edit_mode = False
+        self.dragged_circle_id = None
+        self.edit_hint_text_id = None
+        
         self._setup_ui()
         
     def _setup_ui(self):
@@ -64,6 +69,9 @@ class CanvasApplication:
         
         # Add debug button
         ttk.Button(control_frame, text="Debug Info", command=self._toggle_debug).pack(side=tk.LEFT, padx=2)
+        
+        # Add edit mode button
+        ttk.Button(control_frame, text="Edit Mode", command=self._toggle_edit_mode).pack(side=tk.LEFT, padx=2)
         
         # Create canvas for drawing
         self.canvas = tk.Canvas(
@@ -161,6 +169,10 @@ class CanvasApplication:
             
     def _clear_canvas(self):
         """Clear all items from the canvas."""
+        # Don't allow clearing the canvas while in edit mode
+        if self.in_edit_mode:
+            return
+
         self.canvas.delete("all")
         self.drawn_items.clear()
         self.circles.clear()
@@ -175,6 +187,10 @@ class CanvasApplication:
             
     def _toggle_debug(self):
         """Toggle the debug information display."""
+        # Don't allow toggling debug while in edit mode
+        if self.in_edit_mode:
+            return
+
         self.debug_enabled = not self.debug_enabled
         if self.debug_enabled:
             self._show_debug_info()
@@ -355,6 +371,233 @@ class CanvasApplication:
             self.canvas.delete(self.hint_text_id)
             self.hint_text_id = None
             
+        # Update debug info if enabled
+        if self.debug_enabled:
+            self._show_debug_info()
+
+    def _toggle_edit_mode(self):
+        """Toggle edit mode on/off."""
+        # Don't allow entering edit mode when in selection mode
+        if self.in_selection_mode:
+            return
+
+        self.in_edit_mode = not self.in_edit_mode
+        
+        if self.in_edit_mode:
+            # Enter edit mode
+            self._show_edit_hint_text()
+            
+            # Bind edit-specific mouse events
+            self.canvas.bind("<Button-1>", self._start_drag)
+            self.canvas.bind("<B1-Motion>", self._drag_circle)
+            self.canvas.bind("<ButtonRelease-1>", self._end_drag)
+            self.canvas.bind("<Button-3>", self._remove_circle)  # Right click
+            self.root.bind("<space>", self._exit_edit_mode)
+        else:
+            # Exit edit mode
+            self._exit_edit_mode(None)
+            
+    def _show_edit_hint_text(self):
+        """Display instructional hint text for edit mode."""
+        # Clear any existing hint text
+        if self.hint_text_id:
+            self.canvas.delete(self.hint_text_id)
+            self.hint_text_id = None
+        
+        if self.edit_hint_text_id:
+            self.canvas.delete(self.edit_hint_text_id)
+            
+        # Create new edit hint text - positioned slightly to the right to avoid debug text
+        self.edit_hint_text_id = self.canvas.create_text(
+            (self.canvas_width // 2) + 20,  # Moved 20 pixels to the right
+            20,
+            text="Click-and-drag to move, right click to remove. Press space when done",
+            anchor=tk.N,
+            fill="black",
+            font=("Arial", 12)
+        )
+        
+    def _exit_edit_mode(self, event):
+        """Exit edit mode and restore normal behavior.
+        
+        Args:
+            event: Key press event (can be None if called programmatically)
+        """
+        # Only proceed if actually in edit mode
+        if not self.in_edit_mode:
+            return
+            
+        # Reset edit mode flag
+        self.in_edit_mode = False
+        self.dragged_circle_id = None
+            
+        # Hide edit hint text
+        if self.edit_hint_text_id:
+            self.canvas.delete(self.edit_hint_text_id)
+            self.edit_hint_text_id = None
+            
+        # Restore default bindings
+        self.canvas.bind("<Button-1>", self._draw_on_click)
+        self.canvas.unbind("<B1-Motion>")
+        self.canvas.unbind("<ButtonRelease-1>")
+        self.canvas.unbind("<Button-3>")
+        self.root.bind("<space>", self._confirm_selection)
+
+    def _start_drag(self, event):
+        """Start dragging a circle.
+        
+        Args:
+            event: Mouse press event containing x and y coordinates
+        """
+        if not self.in_edit_mode:
+            return
+            
+        # Find if a circle was clicked
+        circle_id = self.get_circle_at_coords(event.x, event.y)
+        if circle_id is not None:
+            self.dragged_circle_id = circle_id
+            
+    def _drag_circle(self, event):
+        """Drag a circle to a new position.
+        
+        Args:
+            event: Mouse motion event containing x and y coordinates
+        """
+        if not self.in_edit_mode or self.dragged_circle_id is None:
+            return
+            
+        # Get the circle being dragged
+        circle = self.circle_lookup.get(self.dragged_circle_id)
+        if not circle:
+            return
+            
+        # Calculate movement
+        dx = event.x - circle["x"]
+        dy = event.y - circle["y"]
+        
+        # Update circle position on canvas
+        self.canvas.move(circle["canvas_id"], dx, dy)
+        
+        # Update circle data
+        circle["x"] = event.x
+        circle["y"] = event.y
+        
+        # Update connecting lines in real-time
+        self._update_connections(self.dragged_circle_id)
+        
+        # Update debug info if enabled
+        if self.debug_enabled:
+            self._show_debug_info()
+            
+    def _end_drag(self, event):
+        """End dragging a circle.
+        
+        Args:
+            event: Mouse release event
+        """
+        if not self.in_edit_mode or self.dragged_circle_id is None:
+            return
+            
+        # Reset dragged circle ID
+        self.dragged_circle_id = None
+        
+    def _update_connections(self, circle_id):
+        """Update all lines connected to a circle.
+        
+        Args:
+            circle_id: ID of the circle whose connections should be updated
+        """
+        circle = self.circle_lookup.get(circle_id)
+        if not circle:
+            return
+            
+        # Update all connections for this circle
+        for connected_id in circle["connected_to"]:
+            connected_circle = self.circle_lookup.get(connected_id)
+            if not connected_circle:
+                continue
+                
+            # Find connection key (could be in either order)
+            key1 = f"{circle_id}_{connected_id}"
+            key2 = f"{connected_id}_{circle_id}"
+            
+            connection = self.connections.get(key1) or self.connections.get(key2)
+            if connection:
+                # Delete the old line
+                self.canvas.delete(connection["line_id"])
+                
+                # Create a new line
+                new_line_id = self.canvas.create_line(
+                    circle["x"], circle["y"],
+                    connected_circle["x"], connected_circle["y"],
+                    width=1
+                )
+                
+                # Update connection data
+                connection["line_id"] = new_line_id
+
+    def _remove_circle(self, event):
+        """Remove a circle when right-clicked in edit mode.
+        
+        Args:
+            event: Mouse right-click event containing x and y coordinates
+        """
+        if not self.in_edit_mode:
+            return
+            
+        # Find if a circle was right-clicked
+        circle_id = self.get_circle_at_coords(event.x, event.y)
+        if circle_id is None:
+            return
+            
+        # Get the circle to remove
+        circle = self.circle_lookup.get(circle_id)
+        if not circle:
+            return
+            
+        # First, remove all connections to this circle
+        connected_circles = circle["connected_to"].copy()  # Make a copy to avoid modifying while iterating
+        for connected_id in connected_circles:
+            connected_circle = self.circle_lookup.get(connected_id)
+            if connected_circle:
+                # Remove this circle from the connected circle's connections
+                if circle_id in connected_circle["connected_to"]:
+                    connected_circle["connected_to"].remove(circle_id)
+                
+                # Find and remove the connection line
+                key1 = f"{circle_id}_{connected_id}"
+                key2 = f"{connected_id}_{circle_id}"
+                
+                # Remove the connection from either direction
+                connection = self.connections.get(key1)
+                if connection:
+                    self.canvas.delete(connection["line_id"])
+                    del self.connections[key1]
+                else:
+                    connection = self.connections.get(key2)
+                    if connection:
+                        self.canvas.delete(connection["line_id"])
+                        del self.connections[key2]
+        
+        # Remove the circle's visual representation
+        self.canvas.delete(circle["canvas_id"])
+        
+        # Remove the circle from data structures
+        self.circles = [c for c in self.circles if c["id"] != circle_id]
+        del self.circle_lookup[circle_id]
+        
+        # Check if this was the last circle and reset if so
+        if not self.circles:
+            # Exit edit mode first (to reset event bindings)
+            self._exit_edit_mode(None)
+            # Clear canvas to fully reset the scenario
+            self.canvas.delete("all")
+            self.drawn_items.clear()
+            self.connections.clear()
+            self.last_circle_id = None
+            self.next_id = 1
+            return
+        
         # Update debug info if enabled
         if self.debug_enabled:
             self._show_debug_info()

@@ -37,9 +37,9 @@ class TestCanvasApplication(unittest.TestCase):
     
     def test_initialization(self):
         """Test that the app initializes with correct values."""
-        self.assertEqual(self.app.canvas_width, 700)
+        self.assertEqual(self.app.canvas_width, 800)  # Updated to match new value
         self.assertEqual(self.app.canvas_height, 500)
-        self.assertEqual(self.app.circle_radius, 10)  # Updated to match new value
+        self.assertEqual(self.app.circle_radius, 10)
         self.assertEqual(self.app.available_colors, ["green", "blue", "red", "yellow"])
         self.assertEqual(self.app.circles, [])
         self.assertEqual(self.app.next_id, 1)
@@ -580,6 +580,430 @@ class TestCanvasApplication(unittest.TestCase):
             
             # Check that add_connection was not called
             mock_add_connection.assert_not_called()
+
+    def test_toggle_edit_mode_enable(self):
+        """Test enabling edit mode."""
+        # Ensure edit mode is initially disabled
+        self.app.in_edit_mode = False
+        self.app.edit_hint_text_id = None
+        
+        # Mock the show_edit_hint_text method
+        with patch.object(self.app, '_show_edit_hint_text') as mock_show_hint:
+            # Call the toggle method
+            self.app._toggle_edit_mode()
+            
+            # Check that edit mode is now enabled
+            self.assertTrue(self.app.in_edit_mode)
+            # Check that show_edit_hint_text was called
+            mock_show_hint.assert_called_once()
+            
+        # Check that event bindings were updated for edit mode
+        self.app.canvas.bind.assert_any_call("<Button-1>", self.app._start_drag)
+        self.app.canvas.bind.assert_any_call("<B1-Motion>", self.app._drag_circle)
+        self.app.canvas.bind.assert_any_call("<ButtonRelease-1>", self.app._end_drag)
+        self.app.canvas.bind.assert_any_call("<Button-3>", self.app._remove_circle)
+        self.app.root.bind.assert_any_call("<space>", self.app._exit_edit_mode)
+    
+    def test_toggle_edit_mode_disable(self):
+        """Test disabling edit mode."""
+        # Setup: Edit mode is initially enabled
+        self.app.in_edit_mode = True
+        self.app.edit_hint_text_id = 100  # Mock text ID
+        
+        # Mock the exit_edit_mode method
+        with patch.object(self.app, '_exit_edit_mode') as mock_exit:
+            # Call the toggle method
+            self.app._toggle_edit_mode()
+            
+            # Check that exit_edit_mode was called
+            mock_exit.assert_called_once_with(None)
+
+    def test_start_drag(self):
+        """Test starting to drag a circle."""
+        # Setup: Add a circle and enable edit mode
+        circle = {
+            "id": 1,
+            "canvas_id": 100,
+            "x": 50,
+            "y": 50,
+            "color": "blue",
+            "connected_to": []
+        }
+        
+        self.app.circles = [circle]
+        self.app.circle_lookup = {1: circle}
+        self.app.in_edit_mode = True
+        self.app.dragged_circle_id = None
+        
+        # Mock the get_circle_at_coords method to return our circle ID
+        with patch.object(self.app, 'get_circle_at_coords', return_value=1):
+            # Create a mock event for mouse click
+            event = Mock()
+            event.x = 50
+            event.y = 50
+            
+            # Call the start drag method
+            self.app._start_drag(event)
+            
+            # Check that the dragged circle ID was set correctly
+            self.assertEqual(self.app.dragged_circle_id, 1)
+    
+    def test_start_drag_no_circle(self):
+        """Test starting to drag when no circle is clicked."""
+        self.app.in_edit_mode = True
+        self.app.dragged_circle_id = None
+        
+        # Mock the get_circle_at_coords method to return None (no circle found)
+        with patch.object(self.app, 'get_circle_at_coords', return_value=None):
+            # Create a mock event for mouse click
+            event = Mock()
+            event.x = 200
+            event.y = 200
+            
+            # Call the start drag method
+            self.app._start_drag(event)
+            
+            # Check that the dragged circle ID remains None
+            self.assertIsNone(self.app.dragged_circle_id)
+    
+    def test_drag_circle(self):
+        """Test dragging a circle to a new position."""
+        # Setup: Add a circle, enable edit mode, and set it as being dragged
+        circle = {
+            "id": 1,
+            "canvas_id": 100,
+            "x": 50,
+            "y": 50,
+            "color": "blue",
+            "connected_to": []
+        }
+        
+        self.app.circles = [circle]
+        self.app.circle_lookup = {1: circle}
+        self.app.in_edit_mode = True
+        self.app.dragged_circle_id = 1
+        
+        # Mock the update_connections method
+        with patch.object(self.app, '_update_connections') as mock_update:
+            # Create a mock event for mouse drag
+            event = Mock()
+            event.x = 60
+            event.y = 70  # Moved 10 right and 20 down
+            
+            # Call the drag method
+            self.app._drag_circle(event)
+            
+            # Check that the circle was moved on the canvas
+            self.app.canvas.move.assert_called_once_with(100, 10, 20)
+            
+            # Check that the circle's coordinates were updated
+            self.assertEqual(circle["x"], 60)
+            self.assertEqual(circle["y"], 70)
+            
+            # Check that connections were updated
+            mock_update.assert_called_once_with(1)
+    
+    def test_end_drag(self):
+        """Test ending a circle drag operation."""
+        # Setup: Enable edit mode and set a circle as being dragged
+        self.app.in_edit_mode = True
+        self.app.dragged_circle_id = 1
+        
+        # Create a mock event for mouse release
+        event = Mock()
+        
+        # Call the end drag method
+        self.app._end_drag(event)
+        
+        # Check that the dragged circle ID was reset
+        self.assertIsNone(self.app.dragged_circle_id)
+    
+    def test_update_connections(self):
+        """Test updating connection lines when a circle moves."""
+        # Setup: Add two connected circles
+        first_circle = {
+            "id": 1,
+            "canvas_id": 100,
+            "x": 50,
+            "y": 50,
+            "color": "blue",
+            "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2,
+            "canvas_id": 101,
+            "x": 100,
+            "y": 100,
+            "color": "red",
+            "connected_to": [1]
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        # Create a connection between the circles
+        self.app.connections = {
+            "1_2": {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2
+            }
+        }
+        
+        # Mock create_line to return a new line ID
+        self.app.canvas.create_line.return_value = 201
+        
+        # Call the update connections method
+        self.app._update_connections(1)
+        
+        # Check that the old line was deleted
+        self.app.canvas.delete.assert_called_once_with(200)
+        
+        # Check that a new line was created
+        self.app.canvas.create_line.assert_called_once_with(
+            50, 50, 100, 100, width=1
+        )
+        
+        # Check that the connection was updated with the new line ID
+        connection = self.app.connections["1_2"]
+        self.assertEqual(connection["line_id"], 201)
+
+    def test_remove_circle(self):
+        """Test removing a circle with right-click in edit mode."""
+        # Setup: Add two connected circles
+        first_circle = {
+            "id": 1,
+            "canvas_id": 100,
+            "x": 50,
+            "y": 50,
+            "color": "blue",
+            "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2,
+            "canvas_id": 101,
+            "x": 100,
+            "y": 100,
+            "color": "red",
+            "connected_to": [1]
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        self.app.in_edit_mode = True
+        
+        # Create a connection between the circles
+        self.app.connections = {
+            "1_2": {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2
+            }
+        }
+        
+        # Mock the get_circle_at_coords method to return circle 1
+        with patch.object(self.app, 'get_circle_at_coords', return_value=1):
+            # Create a mock event for right-click
+            event = Mock()
+            event.x = 50
+            event.y = 50
+            
+            # Call the remove circle method
+            self.app._remove_circle(event)
+            
+            # Check that the circle was deleted from the canvas
+            self.app.canvas.delete.assert_any_call(100)  # Circle's canvas_id
+            
+            # Check that the connection line was deleted
+            self.app.canvas.delete.assert_any_call(200)  # Connection line_id
+            
+            # Check that the circle was removed from data structures
+            self.assertEqual(len(self.app.circles), 1)
+            self.assertEqual(self.app.circles[0]["id"], 2)
+            self.assertNotIn(1, self.app.circle_lookup)
+            
+            # Check that the connection was removed from the connections dictionary
+            self.assertEqual(len(self.app.connections), 0)
+            
+            # Check that the connected circle's data was updated
+            self.assertEqual(second_circle["connected_to"], [])
+            
+    def test_remove_circle_no_connections(self):
+        """Test removing a circle that has no connections."""
+        # Setup: Add a circle with no connections and a second circle to prevent last circle handling
+        circle1 = {
+            "id": 1,
+            "canvas_id": 100,
+            "x": 50,
+            "y": 50,
+            "color": "blue",
+            "connected_to": []
+        }
+        circle2 = {
+            "id": 2,
+            "canvas_id": 101,
+            "x": 150,
+            "y": 150,
+            "color": "red",
+            "connected_to": []
+        }
+        
+        self.app.circles = [circle1, circle2]
+        self.app.circle_lookup = {1: circle1, 2: circle2}
+        self.app.in_edit_mode = True
+        self.app.connections = {}
+        
+        # Mock the get_circle_at_coords method to return the first circle
+        with patch.object(self.app, 'get_circle_at_coords', return_value=1):
+            # Create a mock event for right-click
+            event = Mock()
+            event.x = 50
+            event.y = 50
+            
+            # Call the remove circle method
+            self.app._remove_circle(event)
+            
+            # Check that the circle was deleted from the canvas
+            self.app.canvas.delete.assert_called_once_with(100)  # Circle's canvas_id
+            
+            # Check that the circle was removed from data structures
+            self.assertEqual(len(self.app.circles), 1)
+            self.assertEqual(self.app.circles[0]["id"], 2)
+            self.assertNotIn(1, self.app.circle_lookup)
+        
+    def test_exit_edit_mode(self):
+        """Test exiting edit mode with spacebar."""
+        # Setup: Enable edit mode and set hint text
+        self.app.in_edit_mode = True
+        self.app.edit_hint_text_id = 100
+        
+        # Create a mock event for spacebar press
+        event = Mock()
+        
+        # Call the exit edit mode method
+        self.app._exit_edit_mode(event)
+        
+        # Check that edit mode was disabled
+        self.assertFalse(self.app.in_edit_mode)
+        
+        # Check that hint text was removed
+        self.app.canvas.delete.assert_called_once_with(100)
+        self.assertIsNone(self.app.edit_hint_text_id)
+        
+        # Check that event bindings were restored
+        self.app.canvas.bind.assert_called_with("<Button-1>", self.app._draw_on_click)
+        self.app.canvas.unbind.assert_any_call("<B1-Motion>")
+        self.app.canvas.unbind.assert_any_call("<ButtonRelease-1>")
+        self.app.canvas.unbind.assert_any_call("<Button-3>")
+        self.app.root.bind.assert_called_with("<space>", self.app._confirm_selection)
+
+    def test_show_edit_hint_text(self):
+        """Test displaying the edit mode hint text with adjusted position."""
+        # Setup: Create a mock for the canvas create_text method
+        self.app.canvas.create_text.return_value = 400
+        self.app.canvas_width = 700
+        
+        # Call the show edit hint text method
+        self.app._show_edit_hint_text()
+        
+        # Check that hint text was created
+        self.app.canvas.create_text.assert_called_once()
+        # Check that the text position is adjusted to avoid debug text overlap
+        args, kwargs = self.app.canvas.create_text.call_args
+        self.assertEqual(args[0], (700 // 2) + 20)  # Half of canvas_width + 20 pixels
+        self.assertEqual(args[1], 20)
+        self.assertEqual(kwargs['text'], "Click-and-drag to move, right click to remove. Press space when done")
+        self.assertEqual(kwargs['anchor'], tk.N)
+        
+        # Check that edit_hint_text_id was saved
+        self.assertEqual(self.app.edit_hint_text_id, 400)
+
+    def test_clear_canvas_in_edit_mode(self):
+        """Test that clear canvas doesn't work when in edit mode."""
+        # Setup: Enable edit mode
+        self.app.in_edit_mode = True
+        
+        # Add some circles
+        self.app.circles = [{"id": 1, "canvas_id": 100}]
+        
+        # Call the clear canvas method
+        self.app._clear_canvas()
+        
+        # Check that the canvas delete method was not called
+        self.app.canvas.delete.assert_not_called()
+        
+        # Check that the circles list wasn't cleared
+        self.assertEqual(len(self.app.circles), 1)
+        
+    def test_toggle_debug_in_edit_mode(self):
+        """Test that debug toggle doesn't work when in edit mode."""
+        # Setup: Enable edit mode and ensure debug is initially disabled
+        self.app.in_edit_mode = True
+        self.app.debug_enabled = False
+        
+        # Call the toggle debug method
+        self.app._toggle_debug()
+        
+        # Check that debug state didn't change
+        self.assertFalse(self.app.debug_enabled)
+        
+    def test_toggle_edit_mode_in_selection_mode(self):
+        """Test that edit mode can't be enabled during selection mode."""
+        # Setup: Enable selection mode and disable edit mode
+        self.app.in_selection_mode = True
+        self.app.in_edit_mode = False
+        
+        # Try to enable edit mode
+        self.app._toggle_edit_mode()
+        
+        # Check that edit mode didn't get enabled
+        self.assertFalse(self.app.in_edit_mode)
+
+    def test_remove_last_circle(self):
+        """Test removing the last remaining circle in edit mode."""
+        # Setup: Add a single circle
+        circle = {
+            "id": 1,
+            "canvas_id": 100,
+            "x": 50,
+            "y": 50,
+            "color": "blue",
+            "connected_to": []
+        }
+        
+        self.app.circles = [circle]
+        self.app.circle_lookup = {1: circle}
+        self.app.in_edit_mode = True
+        self.app.connections = {}
+        self.app.next_id = 2
+        self.app.last_circle_id = 1
+        self.app.drawn_items = [(50, 50)]
+        
+        # Mock the exit_edit_mode method
+        with patch.object(self.app, '_exit_edit_mode') as mock_exit:
+            # Mock the get_circle_at_coords method
+            with patch.object(self.app, 'get_circle_at_coords', return_value=1):
+                # Create a mock event for right-click
+                event = Mock()
+                event.x = 50
+                event.y = 50
+                
+                # Call the remove circle method
+                self.app._remove_circle(event)
+                
+                # Check that exit_edit_mode was called
+                mock_exit.assert_called_once_with(None)
+                
+        # Check that the circle was deleted from the canvas
+        self.app.canvas.delete.assert_any_call(100)  # Circle's canvas_id
+        self.app.canvas.delete.assert_any_call("all")  # Clear canvas called
+        
+        # Check that the app was reset to initial state
+        self.assertEqual(len(self.app.circles), 0)
+        self.assertEqual(len(self.app.circle_lookup), 0)
+        self.assertEqual(len(self.app.connections), 0)
+        self.assertEqual(self.app.next_id, 1)
+        self.assertIsNone(self.app.last_circle_id)
 
 if __name__ == "__main__":
     unittest.main()
