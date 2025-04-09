@@ -59,42 +59,19 @@ class TestCanvasApplication(unittest.TestCase):
         self.assertEqual(len(self.app.drawn_items), 1)
         self.assertEqual(self.app.drawn_items[0], (100, 100))
     
-    def test_increase_canvas_size(self):
-        """Test increasing the canvas size."""
-        original_width = self.app.canvas_width
-        original_height = self.app.canvas_height
+    def test_clear_canvas(self):
+        """Test clearing the canvas."""
+        # Add some items to drawn_items
+        self.app.drawn_items = [(100, 100), (200, 200)]
         
-        self.app._increase_canvas_size()
+        # Call the clear method
+        self.app._clear_canvas()
         
-        self.assertEqual(self.app.canvas_width, original_width + 50)
-        self.assertEqual(self.app.canvas_height, original_height + 50)
-        self.app.canvas.config.assert_called_once()
+        # Check that the canvas delete method was called
+        self.app.canvas.delete.assert_called_once_with("all")
         
-    def test_decrease_canvas_size(self):
-        """Test decreasing the canvas size."""
-        # Set a large initial size to ensure we can decrease
-        self.app.canvas_width = 200
-        self.app.canvas_height = 200
-        
-        self.app._decrease_canvas_size()
-        
-        self.assertEqual(self.app.canvas_width, 150)
-        self.assertEqual(self.app.canvas_height, 150)
-        self.app.canvas.config.assert_called_once()
-    
-    def test_min_canvas_size(self):
-        """Test that canvas doesn't get too small."""
-        # Set a small initial size
-        self.app.canvas_width = 100
-        self.app.canvas_height = 100
-        
-        self.app._decrease_canvas_size()
-        
-        # Size should remain the same
-        self.assertEqual(self.app.canvas_width, 100)
-        self.assertEqual(self.app.canvas_height, 100)
-        # Canvas config should not be called
-        self.app.canvas.config.assert_not_called()
+        # Check that drawn_items was cleared
+        self.assertEqual(len(self.app.drawn_items), 0)
 
 if __name__ == "__main__":
     unittest.main()

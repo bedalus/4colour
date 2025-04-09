@@ -37,8 +37,7 @@ The initial phase focuses on creating the user interface using `tkinter`.
 3.  **Implement Drawing on Click:**
     *   Bind mouse click events to the canvas.
     *   Implement simple functions to draw a small circle on the canvas wherever the user has clicked.
-4.  **Add Canvas Resizing Controls:**
-    *   Create '+' and '-' buttons.
-    *   Position the buttons in the top-left corner (potentially overlaying the canvas or in a separate frame).
-    *   Implement functions bound to these buttons to increase/decrease the canvas widget's dimensions by a sensible increment (e.g., 50 pixels).
-    *   Ensure existing drawings are handled appropriately on resize (e.g., cleared or redrawn).
+4.  **Add Clear Canvas Control:**
+    *   Create a 'Clear Canvas' button.
+    *   Position the button in a control frame above the canvas.
+    *   Implement function to clear all drawings from the canvas when pressed.

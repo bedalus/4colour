@@ -33,9 +33,8 @@ class CanvasApplication:
         control_frame = ttk.Frame(self.root)
         control_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
         
-        # Add resize buttons
-        ttk.Button(control_frame, text="+", command=self._increase_canvas_size).pack(side=tk.LEFT, padx=2)
-        ttk.Button(control_frame, text="-", command=self._decrease_canvas_size).pack(side=tk.LEFT, padx=2)
+        # Add clear canvas button
+        ttk.Button(control_frame, text="Clear Canvas", command=self._clear_canvas).pack(side=tk.LEFT, padx=2)
         
         # Create canvas for drawing
         self.canvas = tk.Canvas(
@@ -70,38 +69,11 @@ class CanvasApplication:
         )
         # Store the coordinates of drawn items
         self.drawn_items.append((x, y))
-        
-    def _increase_canvas_size(self):
-        """Increase the canvas dimensions by 50 pixels."""
-        self.canvas_width += 50
-        self.canvas_height += 50
-        self._resize_canvas()
-        
-    def _decrease_canvas_size(self):
-        """Decrease the canvas dimensions by 50 pixels."""
-        # Ensure canvas doesn't get too small
-        if self.canvas_width > 100 and self.canvas_height > 100:
-            self.canvas_width -= 50
-            self.canvas_height -= 50
-            self._resize_canvas()
-    
-    def _resize_canvas(self):
-        """Handle canvas resizing, maintaining drawn items."""
-        # Configure the canvas with new dimensions
-        self.canvas.config(width=self.canvas_width, height=self.canvas_height)
-        
-        # Clear the canvas
+            
+    def _clear_canvas(self):
+        """Clear all items from the canvas."""
         self.canvas.delete("all")
-        
-        # Redraw all items
-        for x, y in self.drawn_items:
-            self.canvas.create_oval(
-                x - self.circle_radius, 
-                y - self.circle_radius,
-                x + self.circle_radius,
-                y + self.circle_radius,
-                fill="black"
-            )
+        self.drawn_items.clear()
 
 def main():
     """Application entry point."""
