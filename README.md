@@ -107,3 +107,35 @@ This phase introduces a more interactive way to connect circles.
         *   Remove all visual selection indicators from the canvas.
         *   Hide the instructional hint text.
         *   Re-enable the standard click-to-draw behavior for the next circle.
+
+### Phase 4: Edit Mode
+
+This phase introduces functionality to edit existing circles on the canvas.
+
+- [ ] **Add Edit Mode Button:**
+    *   Create a new button labeled "Edit Mode" in the control frame.
+    *   Implement logic to toggle an `in_edit_mode` state variable when the button is clicked.
+- [ ] **Implement Edit Mode Hint Text:**
+    *   When entering edit mode, display instructional text (e.g., "Click-and-drag to move, right click to remove. Press space when done").
+    *   Hide this text when exiting edit mode.
+- [ ] **Implement Circle Dragging:**
+    *   Bind mouse press (`<Button-1>`), drag (`<B1-Motion>`), and release (`<ButtonRelease-1>`) events when in edit mode.
+    *   On press, identify if the click is on an existing circle.
+    *   On drag, update the position of the selected circle on the canvas.
+    *   Continuously redraw connecting lines attached to the dragged circle during the drag motion.
+    *   On release, update the circle's stored coordinates (x, y) in the `circles` list and `circle_lookup` dictionary.
+- [ ] **Implement Circle Removal:**
+    *   Bind the right-click event (`<Button-3>`) when in edit mode.
+    *   On right-click, identify if the click is on an existing circle using `get_circle_at_coords`.
+    *   If a circle is right-clicked:
+        *   Remove the circle's visual representation from the canvas.
+        *   Remove all connecting lines associated with this circle from the canvas.
+        *   Remove the circle's data from the `circles` list and `circle_lookup` dictionary.
+        *   Iterate through the `connected_to` list of the removed circle. For each connected circle ID, update *its* `connected_to` list to remove the ID of the deleted circle.
+        *   Remove relevant entries from the `connections` dictionary.
+- [ ] **Implement Exiting Edit Mode:**
+    *   Bind the spacebar key press event (`<space>`) to an exit function when in edit mode.
+    *   When spacebar is pressed:
+        *   Set `in_edit_mode` to `False`.
+        *   Hide the edit mode hint text.
+        *   Ensure standard click-to-draw behavior is re-enabled (i.e., clicks should draw new circles again).
