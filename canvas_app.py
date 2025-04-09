@@ -24,7 +24,7 @@ class CanvasApplication:
         # Initialize canvas dimensions
         self.canvas_width = 700
         self.canvas_height = 500
-        self.circle_radius = 5
+        self.circle_radius = 10
         
         # Available colors for circles
         self.available_colors = ["green", "blue", "red", "yellow"]
