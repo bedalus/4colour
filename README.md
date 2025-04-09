@@ -1,5 +1,7 @@
 # Contribution Guidelines
 
+NOTE: These guidelines apply only to code in the 4colour repo.
+
 ## Coding Standards
 - Follow [PEP 8](https://peps.python.org/pep-0008/) for Python or equivalent standards for other languages.
 - Use meaningful variable and function names.
