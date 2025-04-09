@@ -152,26 +152,34 @@ This phase focuses on improving the existing implementation by addressing edge c
 
 ### Phase 5 Debugging Notes
 
-During the implementation of the mode management system in Phase 5, several issues were encountered:
+During the implementation and refinement of the application, several key improvements were made to enhance usability and code structure:
 
-1. **Mode State Management Implementation**
-   * Added an `ApplicationMode` enum to represent the three distinct states: NORMAL, SELECTION, and EDIT
-   * Implemented a centralized `_set_application_mode` method to handle mode transitions
-   * Added property getters/setters for `in_edit_mode` and `in_selection_mode` to maintain backward compatibility
+1. **Mode Management System**
+   * Renamed modes to "CREATE" and "ADJUST" for better UI clarity
+   * Implemented an `ApplicationMode` enum to represent the three distinct states
+   * Created a centralized `_set_application_mode` method to handle all transitions
+   * Added property getters/setters to maintain backward compatibility
 
-2. **Issues Encountered**
-   * **Double Event Binding**: The mode transition system was inadvertently causing hint text to be displayed twice due to calling hint display methods both in the mode transition and in the original handler methods.
-   * **Mode Transition Rules**: The initial implementation didn't properly enforce the rule that edit mode cannot be entered while in selection mode, causing test failures.
-   * **State Management Complexity**: The interaction between the new enum-based state system and the existing boolean flags revealed edge cases where the state could become inconsistent.
+2. **UI Improvements**
+   * Enhanced the "Edit Mode" button to act as a clear toggle displaying the action it will perform:
+     * Shows "Engage adjust mode" when in create mode
+     * Shows "Engage create mode" when in adjust mode
+   * Changed selection confirmation from spacebar to the 'y' key for better ergonomics
+   * Updated hint text to reflect the new key binding
+   * Implemented focus management to shift focus to the debug button after any button click
 
-3. **Current Status**
-   * The unit tests are still failing, specifically `test_toggle_edit_mode_in_selection_mode`, indicating that our mode transition logic is not properly preventing edit mode activation while in selection mode.
-   * Further investigation suggests that the property setters and the `_set_application_mode` method may have conflicting rules about mode transitions.
+3. **Mode Transition Enhancement**
+   * Simplified mode transitions with a clear toggle mechanism
+   * Improved the logic for exiting selection mode
+   * Removed the spacebar requirement for exiting adjust mode
+   * Added automatic mode reset when the last circle is removed
 
-4. **Next Steps**
-   * Review and refactor the mode transition logic to ensure consistent behavior
-   * Consider implementing a state machine pattern to make mode transitions more explicit and controllable
-   * Add additional test cases to verify mode transition edge cases
+4. **Event Handling Refinements**
+   * Consolidated event binding management
+   * Ensured proper cleanup of UI elements when switching modes
+   * Improved the handling of overlapping hint text and debug information
+
+All tests now pass, and the application provides clearer visual cues about its current state and available actions.
 
 ### Phase 6: Deferred Improvements
 

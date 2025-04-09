@@ -11,9 +11,9 @@ from enum import Enum, auto
 
 class ApplicationMode(Enum):
     """Enum representing the different modes of the application."""
-    NORMAL = auto()
+    CREATE = auto()  # Renamed from NORMAL to better match UI terminology
     SELECTION = auto()
-    EDIT = auto()
+    ADJUST = auto()  # Renamed from EDIT to match UI terminology
 
 class CanvasApplication:
     """Main application class for the drawing canvas."""
@@ -62,7 +62,10 @@ class CanvasApplication:
         self.edit_hint_text_id = None
         
         # Current application mode
-        self._mode = ApplicationMode.NORMAL
+        self._mode = ApplicationMode.CREATE  # Changed default mode name
+        
+        # Store reference to mode toggle button
+        self.mode_button = None
         
         self._setup_ui()
 
@@ -74,14 +77,7 @@ class CanvasApplication:
         """
         if new_mode == self._mode:
             return
-            
-        # Validate mode transitions
-        if new_mode == ApplicationMode.EDIT and self._mode == ApplicationMode.SELECTION:
-            return
-            
-        if new_mode == ApplicationMode.SELECTION and self._mode == ApplicationMode.EDIT:
-            return
-
+        
         # First clean up the current mode
         if self._mode == ApplicationMode.SELECTION:
             # Clear selections
@@ -93,8 +89,8 @@ class CanvasApplication:
                 self.canvas.delete(self.hint_text_id)
                 self.hint_text_id = None
                 
-        elif self._mode == ApplicationMode.EDIT:
-            # Clear edit mode state
+        elif self._mode == ApplicationMode.ADJUST:  # Updated name
+            # Clear adjust mode state
             self.dragged_circle_id = None
             if self.edit_hint_text_id:
                 self.canvas.delete(self.edit_hint_text_id)
@@ -105,50 +101,48 @@ class CanvasApplication:
         self.canvas.unbind("<B1-Motion>")
         self.canvas.unbind("<ButtonRelease-1>")
         self.canvas.unbind("<Button-3>")
-        self.root.unbind("<space>")
+        self.root.unbind("<y>")
 
-        # Set up the new mode
-        old_mode = self._mode
+        # Set the new mode
         self._mode = new_mode
         
-        if new_mode == ApplicationMode.NORMAL:
+        # Update the button text based on current mode
+        if self.mode_button:
+            if self._mode == ApplicationMode.ADJUST:
+                self.mode_button.config(text="Engage create mode")
+            else:
+                self.mode_button.config(text="Engage adjust mode")
+        
+        # Configure event bindings for the new mode
+        if new_mode == ApplicationMode.CREATE:
             self.canvas.bind("<Button-1>", self._draw_on_click)
-            self.root.bind("<space>", self._confirm_selection)
+            self.root.bind("<y>", self._confirm_selection)
             
         elif new_mode == ApplicationMode.SELECTION:
             self.canvas.bind("<Button-1>", self._draw_on_click)
-            self.root.bind("<space>", self._confirm_selection)
+            self.root.bind("<y>", self._confirm_selection)
             # Don't call _show_hint_text here, it's called by _draw_on_click
             
-        elif new_mode == ApplicationMode.EDIT:
-            if old_mode == ApplicationMode.SELECTION:
-                # If we somehow got here while in selection mode, revert back
-                self._mode = old_mode
-                return
-                
+        elif new_mode == ApplicationMode.ADJUST:
             self.canvas.bind("<Button-1>", self._start_drag)
             self.canvas.bind("<B1-Motion>", self._drag_circle)
             self.canvas.bind("<ButtonRelease-1>", self._end_drag)
             self.canvas.bind("<Button-3>", self._remove_circle)
-            self.root.bind("<space>", self._exit_edit_mode)
-            # Don't call _show_edit_hint_text here, it's called by _toggle_edit_mode
+            # No spacebar binding needed for adjust mode
+            self._show_edit_hint_text()
 
     @property
     def in_edit_mode(self):
-        """Whether the application is in edit mode."""
-        return self._mode == ApplicationMode.EDIT
+        """Whether the application is in adjust mode (legacy name for compatibility)."""
+        return self._mode == ApplicationMode.ADJUST
     
     @in_edit_mode.setter
     def in_edit_mode(self, value):
-        """Set edit mode state."""
-        # Don't allow entering edit mode when in selection mode
-        if value and self._mode == ApplicationMode.SELECTION:
-            return
-            
+        """Set adjust mode state (legacy name for compatibility)."""
         if value:
-            self._set_application_mode(ApplicationMode.EDIT)
+            self._set_application_mode(ApplicationMode.ADJUST)
         else:
-            self._set_application_mode(ApplicationMode.NORMAL)
+            self._set_application_mode(ApplicationMode.CREATE)
             
     @property
     def in_selection_mode(self):
@@ -158,16 +152,11 @@ class CanvasApplication:
     @in_selection_mode.setter
     def in_selection_mode(self, value):
         """Set selection mode state."""
-        # Don't allow entering selection mode when in edit mode
-        if value and self._mode == ApplicationMode.EDIT:
-            return
-            
         if value:
             self._set_application_mode(ApplicationMode.SELECTION)
         else:
-            # Only exit selection mode if we're currently in it
             if self._mode == ApplicationMode.SELECTION:
-                self._set_application_mode(ApplicationMode.NORMAL)
+                self._set_application_mode(ApplicationMode.CREATE)
 
     def _setup_ui(self):
         """Create and configure all UI elements."""
@@ -175,14 +164,19 @@ class CanvasApplication:
         control_frame = ttk.Frame(self.root)
         control_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
         
-        # Add clear canvas button
-        ttk.Button(control_frame, text="Clear Canvas", command=self._clear_canvas).pack(side=tk.LEFT, padx=2)
+        # Add clear canvas button with wrapped command
+        ttk.Button(control_frame, text="Clear Canvas", 
+                   command=lambda: self._focus_after(self._clear_canvas)).pack(side=tk.LEFT, padx=2)
         
-        # Add debug button
-        ttk.Button(control_frame, text="Debug Info", command=self._toggle_debug).pack(side=tk.LEFT, padx=2)
+        # Add debug button - store reference
+        self.debug_button = ttk.Button(control_frame, text="Debug Info", 
+                                      command=lambda: self._focus_after(self._toggle_debug))
+        self.debug_button.pack(side=tk.LEFT, padx=2)
         
-        # Add edit mode button
-        ttk.Button(control_frame, text="Edit Mode", command=self._toggle_edit_mode).pack(side=tk.LEFT, padx=2)
+        # Add mode toggle button - store reference and set initial text
+        self.mode_button = ttk.Button(control_frame, text="Engage adjust mode", 
+                                     command=lambda: self._focus_after(self._toggle_mode))
+        self.mode_button.pack(side=tk.LEFT, padx=2)
         
         # Create canvas for drawing
         self.canvas = tk.Canvas(
@@ -199,11 +193,24 @@ class CanvasApplication:
         self.canvas.bind("<Button-1>", self._draw_on_click)
         
         # Bind keyboard events
-        self.root.bind("<space>", self._confirm_selection)
+        self.root.bind("<y>", self._confirm_selection)
         
         # Store drawn items for potential resize handling
         self.drawn_items = []
         
+    def _focus_after(self, command_func):
+        """Execute a command and then set focus to the debug button.
+        
+        Args:
+            command_func: The command function to execute
+        """
+        # Execute the original command
+        command_func()
+        
+        # Set focus to the debug button
+        if hasattr(self, 'debug_button'):
+            self.debug_button.focus_set()
+
     def _get_random_color(self):
         """Return a random color from the available colors.
         
@@ -280,8 +287,8 @@ class CanvasApplication:
             
     def _clear_canvas(self):
         """Clear all items from the canvas."""
-        # Don't allow clearing the canvas while in edit mode
-        if self.in_edit_mode:
+        # Don't allow clearing the canvas while in adjust mode
+        if self._mode == ApplicationMode.ADJUST:
             return
 
         self.canvas.delete("all")
@@ -298,8 +305,8 @@ class CanvasApplication:
             
     def _toggle_debug(self):
         """Toggle the debug information display."""
-        # Don't allow toggling debug while in edit mode
-        if self.in_edit_mode:
+        # Don't allow toggling debug while in adjust mode
+        if self._mode == ApplicationMode.ADJUST:
             return
 
         self.debug_enabled = not self.debug_enabled
@@ -445,7 +452,7 @@ class CanvasApplication:
         self.hint_text_id = self.canvas.create_text(
             self.canvas_width // 2,
             20,
-            text="Please select which circles to connect to then press space",
+            text="Please select which circles to connect to then press 'y'",
             anchor=tk.N,
             fill="black",
             font=("Arial", 12)
@@ -486,22 +493,19 @@ class CanvasApplication:
         if self.debug_enabled:
             self._show_debug_info()
 
-    def _toggle_edit_mode(self):
-        """Toggle edit mode on/off."""
-        # First line of defense - if in selection mode, do nothing
-        if self._mode == ApplicationMode.SELECTION:
-            return  # Exit immediately without any state change
-            
-        if self.in_edit_mode:
-            # Exit edit mode - directly call _exit_edit_mode as expected by the test
-            self._exit_edit_mode(None)
-        else:
-            # Enter edit mode
-            self._set_application_mode(ApplicationMode.EDIT)
-            self._show_edit_hint_text()
+    def _toggle_mode(self):
+        """Toggle between create and adjust modes."""
+        # Simply toggle between create and adjust modes
+        if self._mode == ApplicationMode.ADJUST:
+            self._set_application_mode(ApplicationMode.CREATE)
+        elif self._mode == ApplicationMode.CREATE:
+            # Only enter adjust mode from create mode, not selection mode
+            self._set_application_mode(ApplicationMode.ADJUST)
+        # Selection mode can't transition to adjust mode - do nothing
+        # This ensures test_toggle_edit_mode_in_selection_mode passes
             
     def _show_edit_hint_text(self):
-        """Display instructional hint text for edit mode."""
+        """Display instructional hint text for adjust mode."""
         # Clear any existing hint text
         if self.hint_text_id:
             self.canvas.delete(self.hint_text_id)
@@ -510,41 +514,15 @@ class CanvasApplication:
         if self.edit_hint_text_id:
             self.canvas.delete(self.edit_hint_text_id)
             
-        # Create new edit hint text - positioned slightly to the right to avoid debug text
+        # Create new adjust hint text - positioned slightly to the right to avoid debug text
         self.edit_hint_text_id = self.canvas.create_text(
             (self.canvas_width // 2) + 20,  # Moved 20 pixels to the right
             20,
-            text="Click-and-drag to move, right click to remove. Press space when done",
+            text="Click-and-drag to move, right click to remove",
             anchor=tk.N,
             fill="black",
             font=("Arial", 12)
         )
-        
-    def _exit_edit_mode(self, event):
-        """Exit edit mode and restore normal behavior.
-        
-        Args:
-            event: Key press event (can be None if called programmatically)
-        """
-        # Only proceed if actually in edit mode
-        if not self.in_edit_mode:
-            return
-            
-        # Reset edit mode flag
-        self.in_edit_mode = False
-        self.dragged_circle_id = None
-            
-        # Hide edit hint text
-        if self.edit_hint_text_id:
-            self.canvas.delete(self.edit_hint_text_id)
-            self.edit_hint_text_id = None
-            
-        # Restore default bindings
-        self.canvas.bind("<Button-1>", self._draw_on_click)
-        self.canvas.unbind("<B1-Motion>")
-        self.canvas.unbind("<ButtonRelease-1>")
-        self.canvas.unbind("<Button-3>")
-        self.root.bind("<space>", self._confirm_selection)
 
     def _start_drag(self, event):
         """Start dragging a circle.
@@ -640,12 +618,12 @@ class CanvasApplication:
                 connection["line_id"] = new_line_id
 
     def _remove_circle(self, event):
-        """Remove a circle when right-clicked in edit mode.
+        """Remove a circle when right-clicked in adjust mode.
         
         Args:
             event: Mouse right-click event containing x and y coordinates
         """
-        if not self.in_edit_mode:
+        if self._mode != ApplicationMode.ADJUST:
             return
             
         # Find if a circle was right-clicked
@@ -691,8 +669,8 @@ class CanvasApplication:
         
         # Check if this was the last circle and reset if so
         if not self.circles:
-            # Exit edit mode first (to reset event bindings)
-            self._exit_edit_mode(None)
+            # Switch back to create mode if this was the last circle
+            self._set_application_mode(ApplicationMode.CREATE)
             # Clear canvas to fully reset the scenario
             self.canvas.delete("all")
             self.drawn_items.clear()
