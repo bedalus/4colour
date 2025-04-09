@@ -102,7 +102,7 @@ class TestCanvasApplication(unittest.TestCase):
         self.assertEqual(self.app.next_id, 2)
     
     def test_draw_on_click_second_circle(self):
-        """Test drawing a second circle that connects to the first."""
+        """Test drawing a second circle that enters selection mode."""
         # Setup: Add a first circle
         first_circle = {
             "id": 1,
@@ -122,22 +122,24 @@ class TestCanvasApplication(unittest.TestCase):
         event.x = 100
         event.y = 100
         
-        # Mock the canvas.create_line and create_oval methods
-        self.app.canvas.create_line.return_value = 200
+        # Mock the canvas.create_oval method
         self.app.canvas.create_oval.return_value = 201
         
-        # Mock the color selection
-        with patch.object(self.app, '_get_random_color', return_value='green'):
-            # Call the method
-            self.app._draw_on_click(event)
+        # Mock the show_hint_text method
+        with patch.object(self.app, '_show_hint_text') as mock_show_hint:
+            # Mock the color selection
+            with patch.object(self.app, '_get_random_color', return_value='green'):
+                # Call the method
+                self.app._draw_on_click(event)
+            
+            # Check that show_hint_text was called
+            mock_show_hint.assert_called_once()
         
         # Check that create_oval was called
         self.app.canvas.create_oval.assert_called_once()
         
-        # Check that create_line was called to connect the circles
-        self.app.canvas.create_line.assert_called_once_with(
-            50, 50, 100, 100, width=1
-        )
+        # Check that create_line was NOT called since we now use selection mode
+        self.app.canvas.create_line.assert_not_called()
         
         # Check that circle data was stored correctly
         self.assertEqual(len(self.app.circles), 2)
@@ -146,26 +148,20 @@ class TestCanvasApplication(unittest.TestCase):
         self.assertEqual(second_circle["x"], 100)
         self.assertEqual(second_circle["y"], 100)
         self.assertEqual(second_circle["color"], "green")
-        self.assertEqual(second_circle["connected_to"], [1])
+        self.assertEqual(second_circle["connected_to"], [])  # No connections yet
         
         # Check that circle_lookup is updated
         self.assertIn(2, self.app.circle_lookup)
         self.assertEqual(self.app.circle_lookup[2], second_circle)
         
-        # Check that connections dictionary is updated
-        connection_key = "2_1"
-        self.assertIn(connection_key, self.app.connections)
-        connection = self.app.connections[connection_key]
-        self.assertEqual(connection["from_circle"], 2)
-        self.assertEqual(connection["to_circle"], 1)
-        self.assertEqual(connection["line_id"], 200)  # From the mock return value
+        # Check that newly_placed_circle_id was set
+        self.assertEqual(self.app.newly_placed_circle_id, 2)
         
-        # Check that first circle's connections were updated
-        first_circle = self.app.circles[0]
-        self.assertEqual(first_circle["connected_to"], [2])
+        # Check that selection mode is enabled
+        self.assertTrue(self.app.in_selection_mode)
         
-        # Check that last_circle_id was updated
-        self.assertEqual(self.app.last_circle_id, 2)
+        # Check that last_circle_id was NOT updated yet (will be updated after selection)
+        self.assertEqual(self.app.last_circle_id, 1)
         # Check that next_id was incremented
         self.assertEqual(self.app.next_id, 3)
     
@@ -348,6 +344,242 @@ class TestCanvasApplication(unittest.TestCase):
         # Check that no connections were added
         self.assertEqual(first_circle["connected_to"], [])
         self.assertEqual(self.app.connections, {})
+
+    def test_get_circle_at_coords_found(self):
+        """Test finding a circle at given coordinates."""
+        # Setup: Add a circle
+        circle = {
+            "id": 1,
+            "canvas_id": 100,
+            "x": 50,
+            "y": 50,
+            "color": "blue",
+            "connected_to": []
+        }
+        
+        self.app.circles = [circle]
+        self.app.circle_radius = 10
+        
+        # Test clicking inside the circle
+        result = self.app.get_circle_at_coords(55, 55)  # Inside the circle
+        
+        # Check that the circle was found
+        self.assertEqual(result, 1)
+        
+    def test_get_circle_at_coords_not_found(self):
+        """Test not finding a circle at given coordinates."""
+        # Setup: Add a circle
+        circle = {
+            "id": 1,
+            "canvas_id": 100,
+            "x": 50,
+            "y": 50,
+            "color": "blue",
+            "connected_to": []
+        }
+        
+        self.app.circles = [circle]
+        self.app.circle_radius = 10
+        
+        # Test clicking outside the circle
+        result = self.app.get_circle_at_coords(100, 100)  # Outside the circle
+        
+        # Check that no circle was found
+        self.assertIsNone(result)
+
+    def test_toggle_circle_selection_select(self):
+        """Test selecting a circle."""
+        # Setup: Add two circles
+        first_circle = {
+            "id": 1,
+            "canvas_id": 100,
+            "x": 50,
+            "y": 50,
+            "color": "blue",
+            "connected_to": []
+        }
+        second_circle = {
+            "id": 2,
+            "canvas_id": 101,
+            "x": 100,
+            "y": 100,
+            "color": "red",
+            "connected_to": []
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        self.app.newly_placed_circle_id = 2
+        self.app.selected_circles = []
+        self.app.selection_indicators = {}
+        
+        # Mock the canvas create_line method
+        self.app.canvas.create_line.return_value = 200
+        
+        # Call toggle_circle_selection on the first circle
+        self.app._toggle_circle_selection(1)
+        
+        # Check that circle was selected
+        self.assertIn(1, self.app.selected_circles)
+        
+        # Check that selection indicator was drawn
+        self.app.canvas.create_line.assert_called_once()
+        self.assertIn(1, self.app.selection_indicators)
+        self.assertEqual(self.app.selection_indicators[1], 200)
+        
+    def test_toggle_circle_selection_deselect(self):
+        """Test deselecting a circle."""
+        # Setup: Add a circle that's already selected
+        first_circle = {
+            "id": 1,
+            "canvas_id": 100,
+            "x": 50,
+            "y": 50,
+            "color": "blue",
+            "connected_to": []
+        }
+        
+        self.app.circles = [first_circle]
+        self.app.circle_lookup = {1: first_circle}
+        self.app.selected_circles = [1]
+        self.app.selection_indicators = {1: 200}  # Indicator ID
+        
+        # Call toggle_circle_selection on the circle
+        self.app._toggle_circle_selection(1)
+        
+        # Check that circle was deselected
+        self.assertNotIn(1, self.app.selected_circles)
+        
+        # Check that selection indicator was removed
+        self.app.canvas.delete.assert_called_once_with(200)
+        self.assertNotIn(1, self.app.selection_indicators)
+        
+    def test_toggle_circle_selection_newly_placed(self):
+        """Test that the newly placed circle cannot be selected."""
+        # Setup: Add a circle and set it as newly placed
+        circle = {
+            "id": 1,
+            "canvas_id": 100,
+            "x": 50,
+            "y": 50,
+            "color": "blue",
+            "connected_to": []
+        }
+        
+        self.app.circles = [circle]
+        self.app.circle_lookup = {1: circle}
+        self.app.newly_placed_circle_id = 1
+        self.app.selected_circles = []
+        
+        # Try to select the newly placed circle
+        self.app._toggle_circle_selection(1)
+        
+        # Check that circle was not selected
+        self.assertNotIn(1, self.app.selected_circles)
+        
+        # Check that create_line was not called (no indicator)
+        self.app.canvas.create_line.assert_not_called()
+
+    def test_show_hint_text(self):
+        """Test displaying the hint text in selection mode."""
+        # Setup: Create a mock for the canvas create_text method
+        self.app.canvas.create_text.return_value = 300
+        self.app.canvas_width = 700
+        
+        # Call the show hint text method
+        self.app._show_hint_text()
+        
+        # Check that hint text was created
+        self.app.canvas.create_text.assert_called_once()
+        # Check that the text position and content are correct
+        args, kwargs = self.app.canvas.create_text.call_args
+        self.assertEqual(args[0], 350)  # Half of canvas_width
+        self.assertEqual(args[1], 20)
+        self.assertEqual(kwargs['text'], "Please select which circles to connect to then press space")
+        self.assertEqual(kwargs['anchor'], tk.N)
+        
+        # Check that hint_text_id was saved
+        self.assertEqual(self.app.hint_text_id, 300)
+
+    def test_confirm_selection(self):
+        """Test confirming circle selections with spacebar."""
+        # Setup: Add circles with one as newly placed and others selected
+        first_circle = {
+            "id": 1,
+            "canvas_id": 100,
+            "x": 50,
+            "y": 50,
+            "color": "blue",
+            "connected_to": []
+        }
+        second_circle = {
+            "id": 2,
+            "canvas_id": 101,
+            "x": 100,
+            "y": 100,
+            "color": "red",
+            "connected_to": []
+        }
+        third_circle = {
+            "id": 3,
+            "canvas_id": 102,
+            "x": 150,
+            "y": 150,
+            "color": "green",
+            "connected_to": []
+        }
+        
+        self.app.circles = [first_circle, second_circle, third_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle, 3: third_circle}
+        self.app.newly_placed_circle_id = 3
+        self.app.selected_circles = [1, 2]  # Circles 1 and 2 are selected
+        self.app.selection_indicators = {1: 200, 2: 201}
+        self.app.hint_text_id = 300
+        self.app.in_selection_mode = True
+        
+        # Mock add_connection method
+        with patch.object(self.app, 'add_connection', return_value=True) as mock_add_connection:
+            # Create a mock event for spacebar press
+            event = Mock()
+            
+            # Call the confirm selection method
+            self.app._confirm_selection(event)
+            
+            # Check that connections were added
+            mock_add_connection.assert_any_call(3, 1)
+            mock_add_connection.assert_any_call(3, 2)
+            self.assertEqual(mock_add_connection.call_count, 2)
+            
+        # Check that selection mode was exited
+        self.assertFalse(self.app.in_selection_mode)
+        self.assertEqual(self.app.last_circle_id, 3)
+        self.assertIsNone(self.app.newly_placed_circle_id)
+        
+        # Check that selections were cleared
+        self.assertEqual(self.app.selected_circles, [])
+        
+        # Check that selection indicators were deleted
+        self.app.canvas.delete.assert_any_call(200)
+        self.app.canvas.delete.assert_any_call(201)
+        self.app.canvas.delete.assert_any_call(300)  # hint text
+        self.assertEqual(self.app.selection_indicators, {})
+        self.assertIsNone(self.app.hint_text_id)
+        
+    def test_confirm_selection_not_in_selection_mode(self):
+        """Test that spacebar does nothing when not in selection mode."""
+        # Setup: Not in selection mode
+        self.app.in_selection_mode = False
+        
+        # Create a mock for add_connection
+        with patch.object(self.app, 'add_connection') as mock_add_connection:
+            # Create a mock event for spacebar press
+            event = Mock()
+            
+            # Call confirm selection
+            self.app._confirm_selection(event)
+            
+            # Check that add_connection was not called
+            mock_add_connection.assert_not_called()
 
 if __name__ == "__main__":
     unittest.main()

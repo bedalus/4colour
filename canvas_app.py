@@ -44,6 +44,13 @@ class CanvasApplication:
         self.debug_enabled = False
         self.debug_text = None
         
+        # Selection mode properties
+        self.in_selection_mode = False
+        self.selected_circles = []
+        self.selection_indicators = {}
+        self.hint_text_id = None
+        self.newly_placed_circle_id = None
+        
         self._setup_ui()
         
     def _setup_ui(self):
@@ -72,6 +79,9 @@ class CanvasApplication:
         # Bind mouse events
         self.canvas.bind("<Button-1>", self._draw_on_click)
         
+        # Bind keyboard events
+        self.root.bind("<space>", self._confirm_selection)
+        
         # Store drawn items for potential resize handling
         self.drawn_items = []
         
@@ -84,12 +94,21 @@ class CanvasApplication:
         return random.choice(self.available_colors)
         
     def _draw_on_click(self, event):
-        """Draw a circle at the clicked position.
+        """Draw a circle at the clicked position or select an existing circle.
         
         Args:
             event: Mouse click event containing x and y coordinates
         """
         x, y = event.x, event.y
+        
+        # Selection mode: try to select an existing circle
+        if self.in_selection_mode:
+            circle_id = self.get_circle_at_coords(x, y)
+            if circle_id is not None:
+                self._toggle_circle_selection(circle_id)
+            return
+            
+        # Normal mode: draw a new circle
         color = self._get_random_color()
         
         # Create the circle on canvas
@@ -109,42 +128,32 @@ class CanvasApplication:
             "x": x,
             "y": y,
             "color": color,
-            "connected_to": []  # This remains a list that can grow indefinitely
+            "connected_to": []
         }
-        
-        # Connect to previous circle if it exists
-        if self.last_circle_id is not None:
-            last_circle = self.circle_lookup.get(self.last_circle_id)
-            if last_circle:
-                # Draw a line connecting this circle to the previous one
-                line_id = self.canvas.create_line(
-                    last_circle["x"], 
-                    last_circle["y"], 
-                    x, 
-                    y, 
-                    width=1
-                )
-                
-                # Update connection data
-                circle_data["connected_to"].append(self.last_circle_id)
-                last_circle["connected_to"].append(self.next_id)
-                
-                # Store the connection details
-                connection_key = f"{self.next_id}_{self.last_circle_id}"
-                self.connections[connection_key] = {
-                    "line_id": line_id,
-                    "from_circle": self.next_id,
-                    "to_circle": self.last_circle_id
-                }
         
         # Add circle to the list and lookup dictionary
         self.circles.append(circle_data)
         self.circle_lookup[self.next_id] = circle_data
-        self.last_circle_id = self.next_id
-        self.next_id += 1
         
-        # Store the coordinates of drawn items (for compatibility with existing code)
+        # Special case: If this is the first circle, just add it
+        if self.last_circle_id is None:
+            self.last_circle_id = self.next_id
+            self.next_id += 1
+            self.drawn_items.append((x, y))
+            
+            # Update debug display if enabled
+            if self.debug_enabled:
+                self._show_debug_info()
+            return
+            
+        # For subsequent circles:
+        self.newly_placed_circle_id = self.next_id  # Store the new circle's ID
+        self.next_id += 1
         self.drawn_items.append((x, y))
+        
+        # Enter selection mode
+        self.in_selection_mode = True
+        self._show_hint_text()
         
         # Update debug display if enabled
         if self.debug_enabled:
@@ -241,6 +250,114 @@ class CanvasApplication:
         }
         
         return True
+
+    def get_circle_at_coords(self, x, y):
+        """Find a circle at the given coordinates.
+        
+        Args:
+            x: X coordinate to check
+            y: Y coordinate to check
+            
+        Returns:
+            int or None: ID of the circle if found, None otherwise
+        """
+        for circle in self.circles:
+            # Calculate distance between click and circle center
+            circle_x = circle["x"]
+            circle_y = circle["y"]
+            distance = ((circle_x - x) ** 2 + (circle_y - y) ** 2) ** 0.5
+            
+            # If click is within circle radius, return circle ID
+            if distance <= self.circle_radius:
+                return circle["id"]
+        
+        return None
+
+    def _toggle_circle_selection(self, circle_id):
+        """Toggle selection status of a circle.
+        
+        Args:
+            circle_id: ID of the circle to toggle selection
+        """
+        if circle_id == self.newly_placed_circle_id:
+            # Can't select the newly placed circle
+            return
+            
+        circle = self.circle_lookup.get(circle_id)
+        if not circle:
+            return
+            
+        # Check if circle is already selected
+        if circle_id in self.selected_circles:
+            # Deselect: remove from list and delete the indicator
+            self.selected_circles.remove(circle_id)
+            if circle_id in self.selection_indicators:
+                self.canvas.delete(self.selection_indicators[circle_id])
+                del self.selection_indicators[circle_id]
+        else:
+            # Select: add to list and draw indicator
+            self.selected_circles.append(circle_id)
+            # Draw a small line below the circle as selection indicator
+            indicator_id = self.canvas.create_line(
+                circle["x"] - self.circle_radius,
+                circle["y"] + self.circle_radius + 2,
+                circle["x"] + self.circle_radius,
+                circle["y"] + self.circle_radius + 2,
+                width=2,
+                fill="black"
+            )
+            self.selection_indicators[circle_id] = indicator_id
+
+    def _show_hint_text(self):
+        """Display instructional hint text when in selection mode."""
+        # Clear any existing hint text
+        if self.hint_text_id:
+            self.canvas.delete(self.hint_text_id)
+            
+        # Create new hint text
+        self.hint_text_id = self.canvas.create_text(
+            self.canvas_width // 2,
+            20,
+            text="Please select which circles to connect to then press space",
+            anchor=tk.N,
+            fill="black",
+            font=("Arial", 12)
+        )
+
+    def _confirm_selection(self, event):
+        """Handle spacebar press to confirm circle selections.
+        
+        Args:
+            event: Key press event
+        """
+        if not self.in_selection_mode:
+            return
+            
+        # Connect the newly placed circle to all selected circles
+        for circle_id in self.selected_circles:
+            self.add_connection(self.newly_placed_circle_id, circle_id)
+            
+        # Exit selection mode
+        self.in_selection_mode = False
+        self.last_circle_id = self.newly_placed_circle_id
+        self.newly_placed_circle_id = None
+        
+        # Clear selections
+        self.selected_circles = []
+        
+        # Clear selection indicators
+        for indicator_id in self.selection_indicators.values():
+            self.canvas.delete(indicator_id)
+        self.selection_indicators = {}
+        
+        # Clear hint text
+        if self.hint_text_id:
+            self.canvas.delete(self.hint_text_id)
+            self.hint_text_id = None
+            
+        # Update debug info if enabled
+        if self.debug_enabled:
+            self._show_debug_info()
 
 def main():
     """Application entry point."""

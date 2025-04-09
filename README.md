@@ -25,7 +25,7 @@ NOTE: These guidelines apply only to code in the 4colour repo.
 
 ## Planning
 
-Completed items are marked with `[x]`. New work items should be itemized and preceded by an empty checkbox (`- [ ]`).
+Completed items are marked with `[x]`. New work items should be itemized and preceded by an empty checkbox (`- [ ]`). When implementing features, follow the requirements of the next unmarked checkbox. Once a feature is fully implemented and tested, mark the checkbox as complete to track progress.
 
 ### Coding Plan
 
@@ -70,24 +70,24 @@ This phase introduces more capabilities to the canvas application.
 
 This phase introduces a more interactive way to connect circles.
 
-- [ ] **Modify Connection Trigger:**
+- [x] **Modify Connection Trigger:**
     *   Change the connection logic: Instead of automatically connecting to the *last* circle, connections will be made based on user selection *after* placing a new circle. This new logic applies only *after* the very first circle has been placed.
-- [ ] **Implement Hint Text:**
+- [x] **Implement Hint Text:**
     *   After the first circle is placed, display instructional text near the control buttons (e.g., "Please select which circles to connect to then press space").
     *   This text should only be visible when the application is waiting for the user to select circles for connection.
-- [ ] **Enable Circle Selection Mode:**
+- [x] **Enable Circle Selection Mode:**
     *   After placing a new circle (subsequent to the first one), enter a "selection mode".
     *   In this mode, clicking on the canvas should *not* draw a new circle but instead attempt to select an existing circle.
-- [ ] **Implement Click Detection on Circles:**
+- [x] **Implement Click Detection on Circles:**
     *   Develop a function `get_circle_at_coords(x, y)` that returns the ID of the circle located at the given canvas coordinates (x, y), considering the `circle_radius`.
     *   Return `None` if no circle is found at the clicked location.
     *   Bind the left mouse click event (`<Button-1>`) in selection mode to call this function.
-- [ ] **Visual Selection Indicator:**
+- [x] **Visual Selection Indicator:**
     *   Maintain a list of currently selected circle IDs.
     *   When a user clicks on a circle in selection mode:
         *   If the circle is *not* selected, add its ID to the selection list and draw a visual indicator (e.g., a short horizontal line directly beneath the circle) on the canvas. Store the canvas ID of this indicator line.
         *   If the circle is *already* selected, remove its ID from the selection list and delete its corresponding indicator line from the canvas.
-- [ ] **Confirm Selection with Spacebar:**
+- [x] **Confirm Selection with Spacebar:**
     *   Bind the spacebar key press event (`<space>`) to a confirmation function.
     *   When the spacebar is pressed:
         *   Exit selection mode.
