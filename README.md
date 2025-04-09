@@ -144,11 +144,34 @@ This phase introduces functionality to edit existing circles on the canvas.
 
 This phase focuses on improving the existing implementation by addressing edge cases, reducing redundancy, and enhancing code organization.
 
-- [ ] **Improve Mode Interaction:**
+- [x] **Improve Mode Interaction:**
     *   Implement a proper state management system for application modes.
     *   Ensure that entering one mode (e.g., edit mode) properly exits other modes (e.g., selection mode).
     *   Add explicit checks in each mode-specific handler to verify the application is in the correct mode.
     *   Consider creating a `_set_application_mode(mode_name)` method that handles all transition logic.
+
+### Phase 5 Debugging Notes
+
+During the implementation of the mode management system in Phase 5, several issues were encountered:
+
+1. **Mode State Management Implementation**
+   * Added an `ApplicationMode` enum to represent the three distinct states: NORMAL, SELECTION, and EDIT
+   * Implemented a centralized `_set_application_mode` method to handle mode transitions
+   * Added property getters/setters for `in_edit_mode` and `in_selection_mode` to maintain backward compatibility
+
+2. **Issues Encountered**
+   * **Double Event Binding**: The mode transition system was inadvertently causing hint text to be displayed twice due to calling hint display methods both in the mode transition and in the original handler methods.
+   * **Mode Transition Rules**: The initial implementation didn't properly enforce the rule that edit mode cannot be entered while in selection mode, causing test failures.
+   * **State Management Complexity**: The interaction between the new enum-based state system and the existing boolean flags revealed edge cases where the state could become inconsistent.
+
+3. **Current Status**
+   * The unit tests are still failing, specifically `test_toggle_edit_mode_in_selection_mode`, indicating that our mode transition logic is not properly preventing edit mode activation while in selection mode.
+   * Further investigation suggests that the property setters and the `_set_application_mode` method may have conflicting rules about mode transitions.
+
+4. **Next Steps**
+   * Review and refactor the mode transition logic to ensure consistent behavior
+   * Consider implementing a state machine pattern to make mode transitions more explicit and controllable
+   * Add additional test cases to verify mode transition edge cases
 
 ### Phase 6: Deferred Improvements
 

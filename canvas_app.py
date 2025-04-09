@@ -7,6 +7,13 @@ This module implements a simple drawing canvas using tkinter.
 import tkinter as tk
 from tkinter import ttk
 import random
+from enum import Enum, auto
+
+class ApplicationMode(Enum):
+    """Enum representing the different modes of the application."""
+    NORMAL = auto()
+    SELECTION = auto()
+    EDIT = auto()
 
 class CanvasApplication:
     """Main application class for the drawing canvas."""
@@ -45,19 +52,123 @@ class CanvasApplication:
         self.debug_text = None
         
         # Selection mode properties
-        self.in_selection_mode = False
         self.selected_circles = []
         self.selection_indicators = {}
         self.hint_text_id = None
         self.newly_placed_circle_id = None
         
         # Edit mode properties
-        self.in_edit_mode = False
         self.dragged_circle_id = None
         self.edit_hint_text_id = None
         
-        self._setup_ui()
+        # Current application mode
+        self._mode = ApplicationMode.NORMAL
         
+        self._setup_ui()
+
+    def _set_application_mode(self, new_mode):
+        """Set the application mode and handle all related state transitions.
+        
+        Args:
+            new_mode: The ApplicationMode to switch to
+        """
+        if new_mode == self._mode:
+            return
+            
+        # Validate mode transitions
+        if new_mode == ApplicationMode.EDIT and self._mode == ApplicationMode.SELECTION:
+            return
+            
+        if new_mode == ApplicationMode.SELECTION and self._mode == ApplicationMode.EDIT:
+            return
+
+        # First clean up the current mode
+        if self._mode == ApplicationMode.SELECTION:
+            # Clear selections
+            for indicator_id in self.selection_indicators.values():
+                self.canvas.delete(indicator_id)
+            self.selection_indicators = {}
+            self.selected_circles = []
+            if self.hint_text_id:
+                self.canvas.delete(self.hint_text_id)
+                self.hint_text_id = None
+                
+        elif self._mode == ApplicationMode.EDIT:
+            # Clear edit mode state
+            self.dragged_circle_id = None
+            if self.edit_hint_text_id:
+                self.canvas.delete(self.edit_hint_text_id)
+                self.edit_hint_text_id = None
+
+        # Remove all event bindings
+        self.canvas.unbind("<Button-1>")
+        self.canvas.unbind("<B1-Motion>")
+        self.canvas.unbind("<ButtonRelease-1>")
+        self.canvas.unbind("<Button-3>")
+        self.root.unbind("<space>")
+
+        # Set up the new mode
+        old_mode = self._mode
+        self._mode = new_mode
+        
+        if new_mode == ApplicationMode.NORMAL:
+            self.canvas.bind("<Button-1>", self._draw_on_click)
+            self.root.bind("<space>", self._confirm_selection)
+            
+        elif new_mode == ApplicationMode.SELECTION:
+            self.canvas.bind("<Button-1>", self._draw_on_click)
+            self.root.bind("<space>", self._confirm_selection)
+            # Don't call _show_hint_text here, it's called by _draw_on_click
+            
+        elif new_mode == ApplicationMode.EDIT:
+            if old_mode == ApplicationMode.SELECTION:
+                # If we somehow got here while in selection mode, revert back
+                self._mode = old_mode
+                return
+                
+            self.canvas.bind("<Button-1>", self._start_drag)
+            self.canvas.bind("<B1-Motion>", self._drag_circle)
+            self.canvas.bind("<ButtonRelease-1>", self._end_drag)
+            self.canvas.bind("<Button-3>", self._remove_circle)
+            self.root.bind("<space>", self._exit_edit_mode)
+            # Don't call _show_edit_hint_text here, it's called by _toggle_edit_mode
+
+    @property
+    def in_edit_mode(self):
+        """Whether the application is in edit mode."""
+        return self._mode == ApplicationMode.EDIT
+    
+    @in_edit_mode.setter
+    def in_edit_mode(self, value):
+        """Set edit mode state."""
+        # Don't allow entering edit mode when in selection mode
+        if value and self._mode == ApplicationMode.SELECTION:
+            return
+            
+        if value:
+            self._set_application_mode(ApplicationMode.EDIT)
+        else:
+            self._set_application_mode(ApplicationMode.NORMAL)
+            
+    @property
+    def in_selection_mode(self):
+        """Whether the application is in selection mode."""
+        return self._mode == ApplicationMode.SELECTION
+        
+    @in_selection_mode.setter
+    def in_selection_mode(self, value):
+        """Set selection mode state."""
+        # Don't allow entering selection mode when in edit mode
+        if value and self._mode == ApplicationMode.EDIT:
+            return
+            
+        if value:
+            self._set_application_mode(ApplicationMode.SELECTION)
+        else:
+            # Only exit selection mode if we're currently in it
+            if self._mode == ApplicationMode.SELECTION:
+                self._set_application_mode(ApplicationMode.NORMAL)
+
     def _setup_ui(self):
         """Create and configure all UI elements."""
         # Create control frame for buttons
@@ -377,25 +488,17 @@ class CanvasApplication:
 
     def _toggle_edit_mode(self):
         """Toggle edit mode on/off."""
-        # Don't allow entering edit mode when in selection mode
-        if self.in_selection_mode:
-            return
-
-        self.in_edit_mode = not self.in_edit_mode
-        
-        if self.in_edit_mode:
-            # Enter edit mode
-            self._show_edit_hint_text()
+        # First line of defense - if in selection mode, do nothing
+        if self._mode == ApplicationMode.SELECTION:
+            return  # Exit immediately without any state change
             
-            # Bind edit-specific mouse events
-            self.canvas.bind("<Button-1>", self._start_drag)
-            self.canvas.bind("<B1-Motion>", self._drag_circle)
-            self.canvas.bind("<ButtonRelease-1>", self._end_drag)
-            self.canvas.bind("<Button-3>", self._remove_circle)  # Right click
-            self.root.bind("<space>", self._exit_edit_mode)
-        else:
-            # Exit edit mode
+        if self.in_edit_mode:
+            # Exit edit mode - directly call _exit_edit_mode as expected by the test
             self._exit_edit_mode(None)
+        else:
+            # Enter edit mode
+            self._set_application_mode(ApplicationMode.EDIT)
+            self._show_edit_hint_text()
             
     def _show_edit_hint_text(self):
         """Display instructional hint text for edit mode."""
