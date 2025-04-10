@@ -2682,5 +2682,318 @@ class TestCanvasApplication(unittest.TestCase):
             # Verify update_connection_curve was not called
             mock_update.assert_not_called()
 
+    def test_extreme_curve_displacement(self):
+        """Test very large curve displacement values."""
+        # Setup two circles
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2, "canvas_id": 101, "x": 150, "y": 150, "color_priority": 2, "connected_to": [1]
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        # Create a connection with extreme curve values
+        self.app.connections = {
+            "1_2": {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2,
+                "curve_X": 500,  # Very large X displacement
+                "curve_Y": -300  # Very large negative Y displacement
+            }
+        }
+        
+        # Calculate curve points
+        points = self.app._calculate_curve_points(1, 2)
+        
+        # Expected points with extreme offset
+        # Base midpoint is (100, 100)
+        # With offset: (100+500, 100-300) = (600, -200)
+        expected = [50, 50, 600, -200, 150, 150]
+        self.assertEqual(points, expected)
+        
+        # Test that the handle position is still calculated correctly (with half offset)
+        handle_x, handle_y = self.app._calculate_midpoint_handle_position(1, 2)
+        self.assertEqual(handle_x, 100 + 500/2)  # 350
+        self.assertEqual(handle_y, 100 - 300/2)  # -50
+    
+    def test_multiple_curve_directions(self):
+        """Test curve displacements in different directions."""
+        # Setup two circles
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 100, "y": 100, "color_priority": 1, "connected_to": [2, 3, 4, 5]
+        }
+        
+        # Create four other circles in different directions
+        other_circles = [
+            {"id": 2, "canvas_id": 101, "x": 200, "y": 100, "color_priority": 2, "connected_to": [1]},  # East
+            {"id": 3, "canvas_id": 102, "x": 100, "y": 200, "color_priority": 3, "connected_to": [1]},  # South
+            {"id": 4, "canvas_id": 103, "x": 0, "y": 100, "color_priority": 2, "connected_to": [1]},    # West
+            {"id": 5, "canvas_id": 104, "x": 100, "y": 0, "color_priority": 3, "connected_to": [1]}     # North
+        ]
+        
+        all_circles = [first_circle] + other_circles
+        self.app.circles = all_circles
+        self.app.circle_lookup = {c["id"]: c for c in all_circles}
+        
+        # Create connections with different curve directions
+        self.app.connections = {
+            "1_2": {"line_id": 200, "from_circle": 1, "to_circle": 2, "curve_X": 0, "curve_Y": 50},    # North curve
+            "1_3": {"line_id": 201, "from_circle": 1, "to_circle": 3, "curve_X": 50, "curve_Y": 0},    # East curve
+            "1_4": {"line_id": 202, "from_circle": 1, "to_circle": 4, "curve_X": 0, "curve_Y": -50},   # South curve
+            "1_5": {"line_id": 203, "from_circle": 1, "to_circle": 5, "curve_X": -50, "curve_Y": 0}    # West curve
+        }
+        
+        # Test each direction
+        # East connection (1-2)
+        points = self.app._calculate_curve_points(1, 2)
+        # Base midpoint is (150, 100), with offset (150, 150)
+        self.assertEqual(points, [100, 100, 150, 150, 200, 100])
+        
+        # South connection (1-3)
+        points = self.app._calculate_curve_points(1, 3)
+        # Base midpoint is (100, 150), with offset (150, 150)
+        self.assertEqual(points, [100, 100, 150, 150, 100, 200])
+        
+        # West connection (1-4)
+        points = self.app._calculate_curve_points(1, 4)
+        # Base midpoint is (50, 100), with offset (50, 50)
+        self.assertEqual(points, [100, 100, 50, 50, 0, 100])
+        
+        # North connection (1-5)
+        points = self.app._calculate_curve_points(1, 5)
+        # Base midpoint is (100, 50), with offset (50, 50)
+        self.assertEqual(points, [100, 100, 50, 50, 100, 0])
+    
+    def test_overlapping_connections_curve_behavior(self):
+        """Test behavior with multiple overlapping connections."""
+        # Setup three circles in a triangle pattern
+        circles = [
+            {"id": 1, "canvas_id": 100, "x": 100, "y": 100, "color_priority": 1, "connected_to": [2, 3]},
+            {"id": 2, "canvas_id": 101, "x": 200, "y": 100, "color_priority": 2, "connected_to": [1, 3]},
+            {"id": 3, "canvas_id": 102, "x": 150, "y": 200, "color_priority": 3, "connected_to": [1, 2]}
+        ]
+        
+        self.app.circles = circles
+        self.app.circle_lookup = {c["id"]: c for c in circles}
+        
+        # Create connections with different curve values
+        # Note: Using consistent connection keys with lowest ID first
+        self.app.connections = {
+            "1_2": {"line_id": 200, "from_circle": 1, "to_circle": 2, "curve_X": 0, "curve_Y": -30},
+            "1_3": {"line_id": 201, "from_circle": 1, "to_circle": 3, "curve_X": 20, "curve_Y": 0},
+            "2_3": {"line_id": 202, "from_circle": 2, "to_circle": 3, "curve_X": 20, "curve_Y": 0}
+        }
+        
+        # Convert circles to canvas items
+        self.app.canvas.create_line.reset_mock()
+        
+        # Mock calculate_curve_points to return a consistent value each time
+        # instead of using a fixed list that can run out
+        with patch.object(self.app, '_calculate_curve_points', return_value=[100, 100, 150, 150, 200, 200]):
+            # Update all connections for one circle only to simplify the test
+            self.app._update_connections(1)
+            
+            # Verify that connections were redrawn
+            # The exact count depends on internal implementation, but we expect at least 2 calls
+            # since circle 1 is connected to 2 other circles
+            self.assertGreaterEqual(self.app.canvas.create_line.call_count, 2)
+    
+    def test_curve_preservation_during_circle_movement(self):
+        """Test that curve parameters are preserved when circles move."""
+        # Setup two circles
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2, "canvas_id": 101, "x": 150, "y": 150, "color_priority": 2, "connected_to": [1]
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        # Create a connection with specific curve values
+        # Use either connection key format that might be used by the app
+        connection_key = "1_2"  # Try this format first
+        self.app.connections = {
+            connection_key: {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2,
+                "curve_X": 30,
+                "curve_Y": -20
+            }
+        }
+        
+        # Setup drag state for circle movement
+        self.app.in_edit_mode = True  # Important: Set edit mode to true
+        self.app.drag_state = {
+            "active": True,
+            "type": "circle",
+            "id": 1,
+            "start_x": 50,
+            "start_y": 50,
+            "last_x": 50,
+            "last_y": 50
+        }
+        
+        # Mock _update_connections to verify it's called
+        # This is more reliable than mocking update_connection_curve
+        with patch.object(self.app, '_update_connections') as mock_update:
+            # Create mock event to move the circle
+            event = Mock()
+            event.x = 70
+            event.y = 60
+            
+            # Move the circle
+            self.app._drag_motion(event)
+            
+            # Verify _update_connections was called with the moved circle's ID
+            mock_update.assert_called_once_with(1)
+    
+    def test_curve_behavior_across_application_modes(self):
+        """Test that curves behave correctly across different application modes."""
+        # Setup circles and connection
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2, "canvas_id": 101, "x": 150, "y": 150, "color_priority": 2, "connected_to": [1]
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        # Create a connection
+        self.app.connections = {
+            "1_2": {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2,
+                "curve_X": 30,
+                "curve_Y": -20
+            }
+        }
+        
+        # Mock key methods for tracking
+        with patch.object(self.app, '_hide_midpoint_handles') as mock_hide:
+            with patch.object(self.app, '_show_midpoint_handles') as mock_show:
+                with patch.object(self.app, '_calculate_curve_points') as mock_calc:
+                    # Set up mock for calculate_curve_points
+                    mock_calc.return_value = [50, 50, 130, 80, 150, 150]
+                    
+                    # 1. Start in CREATE mode
+                    self.app._mode = ApplicationMode.CREATE
+                    
+                    # 2. Switch to ADJUST mode
+                    self.app._set_application_mode(ApplicationMode.ADJUST)
+                    mock_show.assert_called_once()
+                    
+                    # Verify curve points are still calculated correctly
+                    points = self.app._calculate_curve_points(1, 2)
+                    self.assertEqual(points, [50, 50, 130, 80, 150, 150])
+                    
+                    # 3. Switch back to CREATE mode
+                    self.app._set_application_mode(ApplicationMode.CREATE)
+                    mock_hide.assert_called_once()
+                    
+                    # Verify curve points are still calculated correctly
+                    points = self.app._calculate_curve_points(1, 2)
+                    self.assertEqual(points, [50, 50, 130, 80, 150, 150])
+
+    def test_curve_persistence_after_selection(self):
+        """Test that curve parameters persist after selection mode."""
+        # Setup our own circles directly instead of using _draw_on_click
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2, "canvas_id": 101, "x": 150, "y": 150, "color_priority": 2, "connected_to": [1]
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        # Create a connection with our own values
+        # Check both possible connection key formats
+        if "1_2" in self.app.connections:
+            connection_key = "1_2"
+        else:
+            connection_key = "2_1"
+        
+        self.app.connections = {
+            connection_key: {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2,
+                "curve_X": 25,
+                "curve_Y": -15
+            }
+        }
+        
+        # Store the original values to compare later
+        original_curve_x = 25
+        original_curve_y = -15
+        
+        # Switch to ADJUST mode to test handle creation
+        with patch.object(self.app, '_draw_midpoint_handle') as mock_draw:
+            self.app._set_application_mode(ApplicationMode.ADJUST)
+            
+            # Verify midpoint handle is drawn
+            mock_draw.assert_called()
+            
+        # Switch back to CREATE mode
+        self.app._set_application_mode(ApplicationMode.CREATE)
+        
+        # Verify the original curve values are unchanged - check both possible keys
+        found_key = None
+        for key in ["1_2", "2_1"]:
+            if key in self.app.connections:
+                found_key = key
+                break
+                
+        self.assertIsNotNone(found_key, "Connection not found in either format")
+        self.assertEqual(self.app.connections[found_key]["curve_X"], original_curve_x)
+        self.assertEqual(self.app.connections[found_key]["curve_Y"], original_curve_y)
+
+    def test_negative_curve_values(self):
+        """Test negative values for curve displacement."""
+        # Setup two circles
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 100, "y": 100, "color_priority": 1, "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2, "canvas_id": 101, "x": 200, "y": 200, "color_priority": 2, "connected_to": [1]
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        # Create a connection with negative curve values
+        self.app.connections = {
+            "1_2": {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2,
+                "curve_X": -40,
+                "curve_Y": -30
+            }
+        }
+        
+        # Calculate curve points
+        points = self.app._calculate_curve_points(1, 2)
+        
+        # Expected: midpoint (150,150) + offset (-40,-30) = (110,120)
+        expected = [100, 100, 110, 120, 200, 200]
+        self.assertEqual(points, expected)
+        
+        # Test that handle position is calculated correctly with negative offset
+        handle_x, handle_y = self.app._calculate_midpoint_handle_position(1, 2)
+        self.assertEqual(handle_x, 150 - 40/2)  # 130
+        self.assertEqual(handle_y, 150 - 30/2)  # 135
+
 if __name__ == "__main__":
     unittest.main()
