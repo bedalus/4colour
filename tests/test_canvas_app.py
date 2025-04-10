@@ -14,7 +14,7 @@ import random
 # Add the parent directory to the path so we can import the canvas_app module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from canvas_app import CanvasApplication, ApplicationMode
-from color_utils import get_color_from_priority # Keep this one
+from color_utils import get_color_from_priority, find_lowest_available_priority, determine_color_priority_for_connections
 
 class TestCanvasApplication(unittest.TestCase):
     """Test cases for the CanvasApplication class."""
@@ -89,8 +89,8 @@ class TestCanvasApplication(unittest.TestCase):
         event.x = 100
         event.y = 100
         
-        # Mock the color selection - only need priority
-        with patch.object(self.app, '_assign_color_based_on_connections', return_value=(None, 4)): # Color name is ignored
+        # Mock the color selection - only return the priority, not a tuple
+        with patch.object(self.app, '_assign_color_based_on_connections', return_value=4):
             # Call the method
             self.app._draw_on_click(event)
         
@@ -107,7 +107,7 @@ class TestCanvasApplication(unittest.TestCase):
         self.assertEqual(circle["id"], 1)
         self.assertEqual(circle["x"], 100)
         self.assertEqual(circle["y"], 100)
-        # Removed check for circle["color"]
+        # Check only color_priority
         self.assertEqual(circle["color_priority"], 4)
         self.assertEqual(circle["connected_to"], [])
         
@@ -146,8 +146,8 @@ class TestCanvasApplication(unittest.TestCase):
         
         # Mock the show_hint_text method
         with patch.object(self.app, '_show_hint_text') as mock_show_hint:
-            # Mock the color selection - only need priority
-            with patch.object(self.app, '_assign_color_based_on_connections', return_value=(None, 2)): # Color name ignored
+            # Mock the color selection - only return the priority, not a tuple
+            with patch.object(self.app, '_assign_color_based_on_connections', return_value=2):
                 # Call the method
                 self.app._draw_on_click(event)
             
@@ -166,7 +166,7 @@ class TestCanvasApplication(unittest.TestCase):
         self.assertEqual(second_circle["id"], 2)
         self.assertEqual(second_circle["x"], 100)
         self.assertEqual(second_circle["y"], 100)
-        # Removed check for second_circle["color"]
+        # Check color priority
         self.assertEqual(second_circle["color_priority"], 2)
         self.assertEqual(second_circle["connected_to"], [])  # No connections yet
         
@@ -1205,19 +1205,17 @@ class TestCanvasApplication(unittest.TestCase):
     def test_assign_color_based_on_connections(self):
         """Test the basic color assignment logic."""
         # Test initial assignment for a new circle
-        color, priority = self.app._assign_color_based_on_connections()
-        self.assertEqual(color, "yellow")
-        self.assertEqual(priority, 1)
+        priority = self.app._assign_color_based_on_connections()
+        self.assertEqual(priority, 1)  # Should return priority 1 (yellow)
         
         # Test passing an existing circle ID (should still return yellow for now)
-        color, priority = self.app._assign_color_based_on_connections(1)
-        self.assertEqual(color, "yellow")
-        self.assertEqual(priority, 1)
+        priority = self.app._assign_color_based_on_connections(1)
+        self.assertEqual(priority, 1)  # Should return priority 1 (yellow)
         
     def test_draw_on_click_with_deterministic_color(self):
         """Test drawing a circle with deterministic color assignment."""
         # Setup: Mock the color assignment function
-        with patch.object(self.app, '_assign_color_based_on_connections', return_value=("yellow", 1)) as mock_assign:
+        with patch.object(self.app, '_assign_color_based_on_connections', return_value=1) as mock_assign:
             # Create a mock event
             event = Mock()
             event.x = 100
@@ -1232,7 +1230,7 @@ class TestCanvasApplication(unittest.TestCase):
         # Check that circle data was stored correctly
         self.assertEqual(len(self.app.circles), 1)
         circle = self.app.circles[0]
-        # Removed check for circle["color"] as it no longer exists
+        # Check only color_priority, not color
         self.assertEqual(circle["color_priority"], 1)
 
     def test_assign_color_based_on_connections_with_conflicts(self):
@@ -1314,24 +1312,27 @@ class TestCanvasApplication(unittest.TestCase):
         self.app.selection_indicators = {1: 200}
         self.app.hint_text_id = 300
         
-        # Mock only add_connection, let _check_and_resolve_color_conflicts run
+        # Mock add_connection and _check_and_resolve_color_conflicts
         with patch.object(self.app, 'add_connection', return_value=True) as mock_add:
-            # Removed patch for _check_and_resolve_color_conflicts
-            # Create a mock event for y key press
-            event = Mock()
-            
-            # Call the confirm selection method
-            self.app._confirm_selection(event)
-            
-            # Verify add_connection was called
-            mock_add.assert_called_with(2, 1)
-            
-            # _check_and_resolve_color_conflicts should have been called implicitly
+            with patch.object(self.app, '_check_and_resolve_color_conflicts', return_value=2) as mock_check:
+                # Create a mock event for y key press
+                event = Mock()
+                
+                # Call the confirm selection method
+                self.app._confirm_selection(event)
+                
+                # Verify add_connection was called
+                mock_add.assert_called_with(2, 1)
+                
+                # Verify _check_and_resolve_color_conflicts was called
+                mock_check.assert_called_once_with(2)
         
         # Check that selection mode was exited
         self.assertFalse(self.app.in_selection_mode)
-        # Check that the priority of the second circle was updated by the actual conflict check
-        self.assertEqual(self.app.circle_lookup[2]["color_priority"], 2) # Expect priority 2 (green)
+        
+        # Check circle priorities
+        self.assertEqual(self.app.circle_lookup[1]["color_priority"], 1)  # First circle unchanged
+        # Don't check second circle's priority here since we mocked _check_and_resolve_color_conflicts
 
     def test_check_and_resolve_color_conflicts(self):
         """Test the basic color conflict resolution logic."""
@@ -1415,6 +1416,103 @@ class TestCanvasApplication(unittest.TestCase):
         
         # Verify the canvas was updated (using derived color)
         self.app.canvas.itemconfig.assert_called_once_with(100, fill="red") # Priority 4 is red
+
+    def test_assign_color_based_on_connections_with_connected_circles(self):
+        """Test color assignment logic with connected circles."""
+        # Setup circle data with existing connections (without color key)
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2, "canvas_id": 101, "x": 100, "y": 100, "color_priority": 1, "connected_to": [1]
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        # Mock determine_color_priority_for_connections to verify it's called with the right arguments
+        with patch('canvas_app.determine_color_priority_for_connections', return_value=2) as mock_determine:
+            priority = self.app._assign_color_based_on_connections(2)
+            
+            # Verify the utility function was called with the right set of priorities
+            mock_determine.assert_called_once_with({1})  # Circle 1's priority
+            
+            # Verify the return value
+            self.assertEqual(priority, 2)
+
+    def test_check_and_resolve_color_conflicts_with_utility_functions(self):
+        """Test that _check_and_resolve_color_conflicts uses the utility functions."""
+        # Create circles manually (without color key)
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2, "canvas_id": 101, "x": 100, "y": 100, "color_priority": 1, "connected_to": [1]
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        # Mock find_lowest_available_priority to verify it's used
+        with patch('canvas_app.find_lowest_available_priority', return_value=2) as mock_find:
+            priority = self.app._check_and_resolve_color_conflicts(2)
+            
+            # Verify the utility function was called with the set of used priorities
+            mock_find.assert_called_once_with({1})  # Circle 1's priority
+            
+            # Verify the resulting priority
+            self.assertEqual(priority, 2)
+            self.assertEqual(second_circle["color_priority"], 2)
+
+    def test_full_color_assignment_integration_flow(self):
+        """Test the full flow of color assignment and conflict resolution with real utilities."""
+        # Create the first circle (default yellow, priority 1)
+        self.app._draw_on_click(self._create_click_event(100, 100))
+        
+        # Create a second circle that will enter selection mode
+        self.app._draw_on_click(self._create_click_event(200, 100))
+        
+        # Verify we're in selection mode with newly_placed_circle_id set
+        self.assertTrue(self.app.in_selection_mode)
+        self.assertEqual(self.app.newly_placed_circle_id, 2)
+        
+        # Select the first circle to connect to
+        self.app._toggle_circle_selection(1)
+        self.assertEqual(self.app.selected_circles, [1])
+        
+        # Confirm the selection with 'y' key press
+        self.app._confirm_selection(self._create_key_event('y'))
+        
+        # Verify connection was made
+        self.assertIn(1, self.app.circle_lookup[2]["connected_to"])
+        self.assertIn(2, self.app.circle_lookup[1]["connected_to"])
+        
+        # Verify color conflict was resolved (circle 2 should have priority 2)
+        self.assertEqual(self.app.circle_lookup[1]["color_priority"], 1)  # First circle stays yellow
+        self.assertEqual(self.app.circle_lookup[2]["color_priority"], 2)  # Second circle becomes green
+
+    def test_color_assignment_when_all_priorities_used(self):
+        """Test color assignment when all priorities 1-3 are already used."""
+        # Setup: Create four circles with priorities 1, 2, 3 and connect them all to a fifth circle
+        circles_data = [
+            {"id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [5]},
+            {"id": 2, "canvas_id": 101, "x": 150, "y": 50, "color_priority": 2, "connected_to": [5]},
+            {"id": 3, "canvas_id": 102, "x": 250, "y": 50, "color_priority": 3, "connected_to": [5]},
+            {"id": 5, "canvas_id": 103, "x": 150, "y": 150, "color_priority": 1, "connected_to": [1, 2, 3]}
+        ]
+        
+        self.app.circles = circles_data
+        self.app.circle_lookup = {c["id"]: c for c in circles_data}
+        
+        # Execute the conflict resolution
+        result = self.app._check_and_resolve_color_conflicts(5)
+        
+        # Verify the special case is handled by assigning priority 4 (red)
+        self.assertEqual(result, 4)
+        self.assertEqual(self.app.circle_lookup[5]["color_priority"], 4)
+        
+        # Verify canvas was updated with red
+        self.app.canvas.itemconfig.assert_called_with(103, fill="red")
 
 if __name__ == "__main__":
     unittest.main()

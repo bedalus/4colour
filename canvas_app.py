@@ -8,7 +8,7 @@ import tkinter as tk
 from tkinter import ttk
 import random
 from enum import Enum, auto
-from color_utils import get_color_from_priority
+from color_utils import get_color_from_priority, find_lowest_available_priority, determine_color_priority_for_connections
 
 class ApplicationMode(Enum):
     """Enum representing the different modes of the application."""
@@ -315,17 +315,16 @@ class CanvasApplication:
             connected_circle = self.circle_lookup.get(connected_id)
             if connected_circle and "color_priority" in connected_circle:
                 used_priorities.add(connected_circle["color_priority"])
-                
-        # Find the lowest unused priority
-        for priority in range(1, 4):  # Try priorities 1, 2, 3 first
-            if priority not in used_priorities:
-                return priority
-                
-        # If all priorities 1-3 are used, this is a special case
-        # Call the network reassignment and use priority 4 (red)
-        self._reassign_color_network(circle_id)
-        return 4
-    
+        
+        # Use the color utility function to determine the appropriate priority
+        priority = determine_color_priority_for_connections(used_priorities)
+        
+        # If all priorities 1-3 are used, handle special case
+        if priority == 4:
+            self._reassign_color_network(circle_id)
+        
+        return priority
+
     def _reassign_color_network(self, circle_id):
         """Placeholder function for advanced color network reassignment.
         
@@ -923,14 +922,11 @@ class CanvasApplication:
             return current_priority
         
         # Find the lowest priority that isn't used by any connected circle
-        available_priorities = []
-        for priority in range(1, 4):  # Priorities 1-3 (yellow, green, blue)
-            if priority not in used_priorities:
-                available_priorities.append(priority)
+        available_priority = find_lowest_available_priority(used_priorities)
         
         # If there are available priorities, use the lowest one
-        if available_priorities:
-            new_priority = min(available_priorities)
+        if available_priority is not None:
+            new_priority = available_priority
         else:
             # If all lower priorities are used, call network reassignment
             return self._reassign_color_network(circle_id)
