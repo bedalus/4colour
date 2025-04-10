@@ -218,13 +218,19 @@ This phase includes improvements deferred from previous phases.
     *   Consolidate the circle and connection removal code into a reusable helper method.
     *   Create a separate method for handling the "last circle removed" scenario.
     *   Ensure consistent cleanup when removing circles, whether through edit mode or through clearing the canvas.
-- [ ] **Enhance UI Element Positioning:**
-    *   Implement dynamic positioning of UI elements to avoid overlaps.
-    *   Create a layout manager for hint text and debug information to ensure proper spacing.
-    *   Define UI regions for different types of information (e.g., hints, debug, controls).
-    *   Add configuration options for spacing and positioning of UI elements.
-- [ ] **Add Error Handling and Validation:**
-    *   Implement input validation for user interactions.
-    *   Add error handling for edge cases (e.g., circle dragged outside of canvas).
-    *   Create informative user feedback for invalid operations.
-    *   Ensure all user actions produce appropriate visual feedback.
+
+### Phase 8: Deterministic coloring
+
+This phase introduces circle coloring logic based on rules. This will replace the random coloring logic.
+
+- [ ] **Replacement of the random coloring function:**
+    *   This is the most critical feature of this app. Extra care must be taken ensure the logic is robust and that the new code for this feature is accurately documented with detailed comments. For this feature, this advice supercedes the general project directive for concise commentary.
+    *   Whereever _get_random_color() is called, instead call a new function _assign_color_based_on_connections()
+    *   When _get_random_color() is no longer needed, remove it, and remember to remove the associated unit test
+    *   This new replacement function decides on how to assign color based on the other circles the user connects it to. The function will need to represent the following decision logic:
+        *   The four unique colors already in use should be encoded with numeric priority indicator: 1 for yellow, 2 for green, 3 for blue, 4 for red
+        *   Edit the circle data tracking dictionary to track this numeric indicator instead of the color. When debug mode is active, show both the indicator number, and the name of associated color.
+        *   When a new circle is initially placed by the user, make it the lowest priority color.
+        *   The new circle must not have the same priority as any other circle that it is connected to. When the user connects it to another circle, an assessment of the relevant sets of priorities will need to be performed.
+        *   When assessing, the function should assign the lowest priority color that is available. A color priority is considered available if none of the other connected circles have that color.
+        *   When assessing, allow for a specific scenario: colors with priorities 1, 2, and 3 are already in use by other connected circles. This means that only the highest priority color (red: 4) is available. Assign the color, and call a separate function called _reassign_colors(). This function is a placeholder for now. Make it display a 'placeholder' warning.
