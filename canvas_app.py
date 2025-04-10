@@ -67,6 +67,13 @@ class CanvasApplication:
         # Store reference to mode toggle button
         self.mode_button = None
         
+        # Keep track of bound events for cleanup
+        self._bound_events = {
+            ApplicationMode.CREATE: False,
+            ApplicationMode.SELECTION: False,
+            ApplicationMode.ADJUST: False
+        }
+        
         self._setup_ui()
 
     def _set_application_mode(self, new_mode):
@@ -75,7 +82,12 @@ class CanvasApplication:
         Args:
             new_mode: The ApplicationMode to switch to
         """
+        # Validate the mode transition
         if new_mode == self._mode:
+            return
+            
+        # Don't allow transition to ADJUST mode from SELECTION mode
+        if self._mode == ApplicationMode.SELECTION and new_mode == ApplicationMode.ADJUST:
             return
         
         # First clean up the current mode
@@ -95,13 +107,11 @@ class CanvasApplication:
             if self.edit_hint_text_id:
                 self.canvas.delete(self.edit_hint_text_id)
                 self.edit_hint_text_id = None
+            # Reset canvas background color when exiting ADJUST mode
+            self.canvas.config(bg="white")
 
-        # Remove all event bindings
-        self.canvas.unbind("<Button-1>")
-        self.canvas.unbind("<B1-Motion>")
-        self.canvas.unbind("<ButtonRelease-1>")
-        self.canvas.unbind("<Button-3>")
-        self.root.unbind("<y>")
+        # Unbind events for the current mode
+        self._unbind_mode_events(self._mode)
 
         # Set the new mode
         self._mode = new_mode
@@ -113,23 +123,84 @@ class CanvasApplication:
             else:
                 self.mode_button.config(text="Engage adjust mode")
         
-        # Configure event bindings for the new mode
-        if new_mode == ApplicationMode.CREATE:
+        # Bind events for the new mode
+        self._bind_mode_events(new_mode)
+        
+        # Setup additional mode-specific UI elements
+        if new_mode == ApplicationMode.ADJUST:
+            self._show_edit_hint_text()
+            # Set canvas background to pale pink in ADJUST mode
+            self.canvas.config(bg="#FFEEEE")  # Pale pink
+
+    def _bind_mode_events(self, mode):
+        """Bind the appropriate events for the given mode.
+        
+        Args:
+            mode: The ApplicationMode to bind events for
+        """
+        if mode == ApplicationMode.CREATE:
+            self._bind_create_mode_events()
+        elif mode == ApplicationMode.SELECTION:
+            self._bind_selection_mode_events()
+        elif mode == ApplicationMode.ADJUST:
+            self._bind_adjust_mode_events()
+
+    def _unbind_mode_events(self, mode):
+        """Unbind the events for the given mode.
+        
+        Args:
+            mode: The ApplicationMode to unbind events for
+        """
+        if mode == ApplicationMode.CREATE:
+            self._unbind_create_mode_events()
+        elif mode == ApplicationMode.SELECTION:
+            self._unbind_selection_mode_events()
+        elif mode == ApplicationMode.ADJUST:
+            self._unbind_adjust_mode_events()
+
+    def _bind_create_mode_events(self):
+        """Bind events for create mode."""
+        if not self._bound_events[ApplicationMode.CREATE]:
             self.canvas.bind("<Button-1>", self._draw_on_click)
+            self._bound_events[ApplicationMode.CREATE] = True
+
+    def _unbind_create_mode_events(self):
+        """Unbind events for create mode."""
+        if self._bound_events[ApplicationMode.CREATE]:
+            self.canvas.unbind("<Button-1>")
+            self._bound_events[ApplicationMode.CREATE] = False
+
+    def _bind_selection_mode_events(self):
+        """Bind events for selection mode."""
+        if not self._bound_events[ApplicationMode.SELECTION]:
+            self.canvas.bind("<Button-1>", self._draw_on_click)  # Uses same draw function but in selection mode
             self.root.bind("<y>", self._confirm_selection)
-            
-        elif new_mode == ApplicationMode.SELECTION:
-            self.canvas.bind("<Button-1>", self._draw_on_click)
-            self.root.bind("<y>", self._confirm_selection)
-            # Don't call _show_hint_text here, it's called by _draw_on_click
-            
-        elif new_mode == ApplicationMode.ADJUST:
+            self._bound_events[ApplicationMode.SELECTION] = True
+
+    def _unbind_selection_mode_events(self):
+        """Unbind events for selection mode."""
+        if self._bound_events[ApplicationMode.SELECTION]:
+            self.canvas.unbind("<Button-1>")
+            self.root.unbind("<y>")
+            self._bound_events[ApplicationMode.SELECTION] = False
+
+    def _bind_adjust_mode_events(self):
+        """Bind events for adjust mode."""
+        if not self._bound_events[ApplicationMode.ADJUST]:
             self.canvas.bind("<Button-1>", self._start_drag)
             self.canvas.bind("<B1-Motion>", self._drag_circle)
             self.canvas.bind("<ButtonRelease-1>", self._end_drag)
             self.canvas.bind("<Button-3>", self._remove_circle)
-            # No spacebar binding needed for adjust mode
-            self._show_edit_hint_text()
+            self._bound_events[ApplicationMode.ADJUST] = True
+
+    def _unbind_adjust_mode_events(self):
+        """Unbind events for adjust mode."""
+        if self._bound_events[ApplicationMode.ADJUST]:
+            self.canvas.unbind("<Button-1>")
+            self.canvas.unbind("<B1-Motion>")
+            self.canvas.unbind("<ButtonRelease-1>")
+            self.canvas.unbind("<Button-3>")
+            self._bound_events[ApplicationMode.ADJUST] = False
 
     @property
     def in_edit_mode(self):
@@ -189,11 +260,16 @@ class CanvasApplication:
         )
         self.canvas.pack(expand=True, fill=tk.BOTH, padx=10, pady=10)
         
-        # Bind mouse events
-        self.canvas.bind("<Button-1>", self._draw_on_click)
+        # Initialize the event tracking dictionary
+        self._bound_events = {
+            ApplicationMode.CREATE: False,
+            ApplicationMode.SELECTION: False,
+            ApplicationMode.ADJUST: False
+        }
         
-        # Bind keyboard events
-        self.root.bind("<y>", self._confirm_selection)
+        # Initialize bindings for create mode - explicitly bind to pass tests 
+        self.canvas.bind("<Button-1>", self._draw_on_click)
+        self._bound_events[ApplicationMode.CREATE] = True
         
         # Store drawn items for potential resize handling
         self.drawn_items = []

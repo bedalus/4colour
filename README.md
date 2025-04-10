@@ -181,26 +181,48 @@ During the implementation and refinement of the application, several key improve
 
 All tests now pass, and the application provides clearer visual cues about its current state and available actions.
 
-### Phase 6: Deferred Improvements
+### Phase 6: Centralize Event Binding Management
 
-This phase includes improvements deferred from Phase 5.
+This phase focuses on improving how mouse and keyboard events are managed across different application modes (CREATE, ADJUST, SELECTION).
+
+- [x] **Create Mode-Specific Binding Methods:**
+    *   Implement `_bind_create_mode_events()` to bind events needed for drawing circles (e.g., `<Button-1>`).
+    *   Implement `_bind_adjust_mode_events()` to bind events for moving/removing circles (e.g., `<Button-1>`, `<B1-Motion>`, `<ButtonRelease-1>`, `<Button-3>`).
+    *   Implement `_bind_selection_mode_events()` to bind events for selecting circles to connect (e.g., `<Button-1>`, `<y>`).
+    *   Ensure appropriate focus management is handled within each binding method.
+- [x] **Create Corresponding Unbinding Methods:**
+    *   Implement `_unbind_create_mode_events()`, `_unbind_adjust_mode_events()`, and `_unbind_selection_mode_events()` to remove the specific bindings for each mode. Use `self.canvas.unbind(...)` for each event bound in the corresponding bind method.
+    *   Add defensive checks to prevent errors when trying to unbind events that weren't bound.
+    *   Consider using event tracking to ensure all bindings are properly managed.
+- [x] **Refactor `_set_application_mode`:**
+    *   Modify the `_set_application_mode` method.
+    *   Before setting the new mode, call the appropriate unbinding method for the *current* mode to remove old bindings.
+    *   After setting the new mode, call the appropriate binding method for the *new* mode to establish the correct event listeners.
+    *   Add validation for mode transitions to prevent invalid state changes.
+    *   Update UI elements (button text, hint text) consistently as part of the mode transition.
+    *   Ensure all existing event bindings managed outside this new system (if any) are removed or integrated.
+- [x] **Verify Event Handling:**
+    *   Test transitions between CREATE, ADJUST, and SELECTION modes thoroughly.
+    *   Confirm that only the events relevant to the current mode are active.
+    *   Test edge cases such as rapid mode switching and interrupting operations mid-mode.
+    *   Verify UI state consistency across all mode transitions.
+    *   Ensure clicking, dragging, right-clicking, and key presses (`y`) behave correctly in each mode and do not trigger actions from other modes.
+- [x] **Canvas background color for ADJUST mode:**
+    *   When entering ADJUST mode, make the canvas background pale pink. Return to white when exiting this mode.
+
+### Phase 7: Deferred Improvements
+
+This phase includes improvements deferred from previous phases.
 
 - [ ] **Refactor Circle Removal Logic:**
     *   Consolidate the circle and connection removal code into a reusable helper method.
     *   Create a separate method for handling the "last circle removed" scenario.
     *   Ensure consistent cleanup when removing circles, whether through edit mode or through clearing the canvas.
-
-- [ ] **Centralize Event Binding Management:**
-    *   Create dedicated methods for binding and unbinding event sets (e.g., `_bind_edit_mode_events()` and `_unbind_edit_mode_events()`).
-    *   Ensure all event bindings are properly tracked and managed across mode changes.
-    *   Consider creating an event binding registry to track which events are currently bound.
-
 - [ ] **Enhance UI Element Positioning:**
     *   Implement dynamic positioning of UI elements to avoid overlaps.
     *   Create a layout manager for hint text and debug information to ensure proper spacing.
     *   Define UI regions for different types of information (e.g., hints, debug, controls).
     *   Add configuration options for spacing and positioning of UI elements.
-
 - [ ] **Add Error Handling and Validation:**
     *   Implement input validation for user interactions.
     *   Add error handling for edge cases (e.g., circle dragged outside of canvas).

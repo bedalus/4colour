@@ -966,20 +966,29 @@ class TestCanvasApplication(unittest.TestCase):
     # Update test for key binding change from space to y key
     def test_y_key_binding(self):
         """Test y key binding for confirming selection."""
-        # Setup: Switch to selection mode
-        self.app._mode = ApplicationMode.SELECTION
+        # Setup: Switch to selection mode and reset mocks
+        self.app._mode = ApplicationMode.CREATE  # Start from known state
+        self.app.root.bind.reset_mock()
         
-        # Call _set_application_mode to bind events
-        self.app._set_application_mode(ApplicationMode.SELECTION)
+        # Call bind_selection_mode_events directly instead of _set_application_mode
+        self.app._bind_selection_mode_events()
         
         # Check that root binds y key to _confirm_selection
-        self.app.root.bind.assert_any_call("<y>", self.app._confirm_selection)
+        self.app.root.bind.assert_called_with("<y>", self.app._confirm_selection)
 
     def test_exit_adjust_mode_with_toggle(self):
         """Test exiting adjust mode using the toggle functionality."""
         # Setup: Enable adjust mode directly and set hint text
         self.app._mode = ApplicationMode.ADJUST  # Set mode directly
         self.app.edit_hint_text_id = 100
+        self.app.canvas.bind.reset_mock()  # Reset mock to clear previous calls
+        
+        # Ensure bound events tracking shows CREATE mode is not bound
+        self.app._bound_events = {
+            ApplicationMode.CREATE: False,
+            ApplicationMode.SELECTION: False,
+            ApplicationMode.ADJUST: True
+        }
         
         # Mock canvas.delete to avoid needing to check its call
         self.app.canvas.delete = MagicMock()
@@ -991,8 +1000,131 @@ class TestCanvasApplication(unittest.TestCase):
         self.assertEqual(self.app._mode, ApplicationMode.CREATE)
         self.assertFalse(self.app.in_edit_mode)
         
-        # Check that event bindings were updated
-        self.app.canvas.bind.assert_any_call("<Button-1>", self.app._draw_on_click)
+        # Check that event bindings were updated with the correct method
+        self.app.canvas.bind.assert_called_with("<Button-1>", self.app._draw_on_click)
+        
+    def test_bind_create_mode_events(self):
+        """Test binding events for create mode."""
+        # Reset bound events tracking
+        self.app._bound_events = {
+            ApplicationMode.CREATE: False,
+            ApplicationMode.SELECTION: False,
+            ApplicationMode.ADJUST: False
+        }
+        
+        # Call the bind method
+        self.app._bind_create_mode_events()
+        
+        # Check that events were bound
+        self.app.canvas.bind.assert_called_with("<Button-1>", self.app._draw_on_click)
+        self.assertTrue(self.app._bound_events[ApplicationMode.CREATE])
+        
+        # Call again to test that duplicate bindings aren't made
+        self.app.canvas.bind.reset_mock()
+        self.app._bind_create_mode_events()
+        self.app.canvas.bind.assert_not_called()
+        
+    def test_bind_selection_mode_events(self):
+        """Test binding events for selection mode."""
+        # Reset bound events tracking
+        self.app._bound_events = {
+            ApplicationMode.CREATE: False,
+            ApplicationMode.SELECTION: False,
+            ApplicationMode.ADJUST: False
+        }
+        
+        # Call the bind method
+        self.app._bind_selection_mode_events()
+        
+        # Check that events were bound
+        self.app.canvas.bind.assert_called_with("<Button-1>", self.app._draw_on_click)
+        self.app.root.bind.assert_called_with("<y>", self.app._confirm_selection)
+        self.assertTrue(self.app._bound_events[ApplicationMode.SELECTION])
+        
+    def test_bind_adjust_mode_events(self):
+        """Test binding events for adjust mode."""
+        # Reset bound events tracking
+        self.app._bound_events = {
+            ApplicationMode.CREATE: False,
+            ApplicationMode.SELECTION: False,
+            ApplicationMode.ADJUST: False
+        }
+        
+        # Call the bind method
+        self.app._bind_adjust_mode_events()
+        
+        # Check that events were bound
+        self.app.canvas.bind.assert_any_call("<Button-1>", self.app._start_drag)
+        self.app.canvas.bind.assert_any_call("<B1-Motion>", self.app._drag_circle)
+        self.app.canvas.bind.assert_any_call("<ButtonRelease-1>", self.app._end_drag)
+        self.app.canvas.bind.assert_any_call("<Button-3>", self.app._remove_circle)
+        self.assertTrue(self.app._bound_events[ApplicationMode.ADJUST])
+        
+    def test_unbind_events(self):
+        """Test unbinding events for all modes."""
+        # Setup: Mark all modes as bound
+        self.app._bound_events = {
+            ApplicationMode.CREATE: True,
+            ApplicationMode.SELECTION: True,
+            ApplicationMode.ADJUST: True
+        }
+        
+        # Test unbinding create mode events
+        self.app._unbind_create_mode_events()
+        self.app.canvas.unbind.assert_called_with("<Button-1>")
+        self.assertFalse(self.app._bound_events[ApplicationMode.CREATE])
+        
+        # Reset mock and test unbinding selection mode events
+        self.app.canvas.unbind.reset_mock()
+        self.app._unbind_selection_mode_events()
+        self.app.canvas.unbind.assert_called_with("<Button-1>")
+        self.app.root.unbind.assert_called_with("<y>")
+        self.assertFalse(self.app._bound_events[ApplicationMode.SELECTION])
+        
+        # Reset mocks and test unbinding adjust mode events
+        self.app.canvas.unbind.reset_mock()
+        self.app._unbind_adjust_mode_events()
+        self.app.canvas.unbind.assert_any_call("<Button-1>")
+        self.app.canvas.unbind.assert_any_call("<B1-Motion>")
+        self.app.canvas.unbind.assert_any_call("<ButtonRelease-1>")
+        self.app.canvas.unbind.assert_any_call("<Button-3>")
+        self.assertFalse(self.app._bound_events[ApplicationMode.ADJUST])
+        
+    def test_mode_transition_validation(self):
+        """Test validation of mode transitions."""
+        # Test that we can't transition from SELECTION to ADJUST
+        self.app._mode = ApplicationMode.SELECTION
+        self.app._set_application_mode(ApplicationMode.ADJUST)
+        self.assertEqual(self.app._mode, ApplicationMode.SELECTION)  # Should remain in SELECTION
+        
+        # Test that we can transition from SELECTION to CREATE
+        self.app._set_application_mode(ApplicationMode.CREATE)
+        self.assertEqual(self.app._mode, ApplicationMode.CREATE)
+        
+        # Test that we can't transition to the same mode
+        self.app.canvas.bind.reset_mock()
+        self.app._set_application_mode(ApplicationMode.CREATE)
+        self.app.canvas.bind.assert_not_called()  # Should not rebind events
+
+    def test_canvas_background_color(self):
+        """Test that canvas background color changes with modes."""
+        # Setup: Ensure we start in CREATE mode
+        self.app._mode = ApplicationMode.CREATE
+        
+        # Switch to ADJUST mode
+        self.app._set_application_mode(ApplicationMode.ADJUST)
+        
+        # Check that canvas background was set to pale pink
+        self.app.canvas.config.assert_any_call(bg="#FFEEEE")
+        
+        # Reset the mock call history
+        self.app.canvas.config.reset_mock()
+        
+        # Switch back to CREATE mode
+        self.app._set_application_mode(ApplicationMode.CREATE)
+        
+        # Check that canvas background was reset to white
+        self.app.canvas.config.assert_any_call(bg="white")
 
 if __name__ == "__main__":
     unittest.main()
