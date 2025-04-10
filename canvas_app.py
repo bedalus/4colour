@@ -33,6 +33,7 @@ class CanvasApplication:
         self.canvas_width = 800
         self.canvas_height = 500
         self.circle_radius = 10
+        self.midpoint_radius = 5  # Size of the midpoint handle
         
         # Store circle data
         self.circles = []
@@ -44,6 +45,9 @@ class CanvasApplication:
         
         # Dictionary to store connection information
         self.connections = {}
+        
+        # Dictionary to store midpoint handles (key: connection_key, value: canvas_id)
+        self.midpoint_handles = {}
         
         # Debug overlay
         self.debug_enabled = False
@@ -100,6 +104,9 @@ class CanvasApplication:
                 self.hint_text_id = None
                 
         elif self._mode == ApplicationMode.ADJUST:  # Updated name
+            # Hide midpoint handles when exiting ADJUST mode
+            self._hide_midpoint_handles()
+            
             # Clear adjust mode state
             self.dragged_circle_id = None
             if self.edit_hint_text_id:
@@ -129,6 +136,8 @@ class CanvasApplication:
             self._show_edit_hint_text()
             # Set canvas background to pale pink in ADJUST mode
             self.canvas.config(bg="#FFEEEE")  # Pale pink
+            # Show midpoint handles in ADJUST mode
+            self._show_midpoint_handles()
 
     def _bind_mode_events(self, mode):
         """Bind the appropriate events for the given mode.
@@ -452,6 +461,7 @@ class CanvasApplication:
             self.circles.clear()
             self.circle_lookup.clear()
             self.connections.clear()
+            self.midpoint_handles.clear()
             self.last_circle_id = None
             self.next_id = 1
             
@@ -775,8 +785,15 @@ class CanvasApplication:
             
             connection = self.connections.get(key1) or self.connections.get(key2)
             if connection:
+                # Get the actual connection key used
+                connection_key = key1 if key1 in self.connections else key2
+                
                 # Delete the old line
                 self.canvas.delete(connection["line_id"])
+                
+                # Also delete the midpoint handle if it exists
+                if connection_key in self.midpoint_handles:
+                    self.canvas.delete(self.midpoint_handles[connection_key])
                 
                 # Preserve existing curve values
                 curve_x = connection.get("curve_X", 0)
@@ -798,6 +815,12 @@ class CanvasApplication:
                 connection["line_id"] = new_line_id
                 connection["curve_X"] = curve_x  # Maintain curve data
                 connection["curve_Y"] = curve_y  # Maintain curve data
+                
+                # Redraw midpoint handle if in adjust mode
+                if self._mode == ApplicationMode.ADJUST:
+                    mid_x, mid_y = points[2], points[3]
+                    handle_id = self._draw_midpoint_handle(connection_key, mid_x, mid_y)
+                    self.midpoint_handles[connection_key] = handle_id
 
     def _remove_circle(self, event):
         """Remove a circle when right-clicked in adjust mode.
@@ -870,20 +893,28 @@ class CanvasApplication:
                 if circle_id in connected_circle["connected_to"]:
                     connected_circle["connected_to"].remove(circle_id)
                 
-                # Find and remove the connection line
+                # Find and remove the connection line and midpoint handle
                 key1 = f"{circle_id}_{connected_id}"
                 key2 = f"{connected_id}_{circle_id}"
                 
                 # Remove the connection from either direction
                 connection = self.connections.get(key1)
+                connection_key = key1
+                
                 if connection:
                     self.canvas.delete(connection["line_id"])
                     del self.connections[key1]
                 else:
                     connection = self.connections.get(key2)
+                    connection_key = key2
                     if connection:
                         self.canvas.delete(connection["line_id"])
                         del self.connections[key2]
+                
+                # Remove midpoint handle if exists
+                if connection_key in self.midpoint_handles:
+                    self.canvas.delete(self.midpoint_handles[connection_key])
+                    del self.midpoint_handles[connection_key]
     
     def _handle_last_circle_removed(self):
         """Handle the special case when the last circle is removed."""
@@ -1075,7 +1106,84 @@ class CanvasApplication:
         # Update the curve offsets
         connection["curve_X"] = curve_x
         connection["curve_Y"] = curve_y
+        
+        # Get the actual connection key used
+        connection_key = key1 if key1 in self.connections else key2
+        
+        # If in adjust mode, update the midpoint handle position
+        if self._mode == ApplicationMode.ADJUST and connection_key in self.midpoint_handles:
+            # Delete old handle
+            self.canvas.delete(self.midpoint_handles[connection_key])
+            
+            # Calculate new points with updated curve
+            points = self._calculate_curve_points(from_id, to_id)
+            if len(points) >= 6:
+                # Get the midpoint coordinates (index 2 and 3 in the points list)
+                mid_x, mid_y = points[2], points[3]
+                
+                # Create new handle at updated position
+                handle_id = self._draw_midpoint_handle(connection_key, mid_x, mid_y)
+                
+                # Update reference
+                self.midpoint_handles[connection_key] = handle_id
+        
         return True
+
+    def _draw_midpoint_handle(self, connection_key, x, y):
+        """Draw a handle at the midpoint of a connection.
+        
+        Args:
+            connection_key: The key for the connection
+            x: X coordinate of the midpoint
+            y: Y coordinate of the midpoint
+            
+        Returns:
+            int: Canvas ID of the created handle
+        """
+        # Draw a small black square at the midpoint
+        handle_id = self.canvas.create_rectangle(
+            x - self.midpoint_radius,
+            y - self.midpoint_radius,
+            x + self.midpoint_radius,
+            y + self.midpoint_radius,
+            fill="black",  # Black square
+            outline="white",  # White outline for visibility
+            width=1,
+            tags=("midpoint_handle", connection_key)
+        )
+        
+        return handle_id
+    
+    def _show_midpoint_handles(self):
+        """Show handles at the midpoint of each connection."""
+        # Clear any existing handles
+        self._hide_midpoint_handles()
+        
+        # Create handles for all connections
+        for connection_key, connection in self.connections.items():
+            from_id = connection["from_circle"]
+            to_id = connection["to_circle"]
+            
+            # Calculate the points for this connection
+            points = self._calculate_curve_points(from_id, to_id)
+            if len(points) >= 6:
+                # Get the midpoint coordinates (index 2 and 3 in the points list)
+                mid_x, mid_y = points[2], points[3]
+                
+                # Create the handle
+                handle_id = self._draw_midpoint_handle(connection_key, mid_x, mid_y)
+                
+                # Store reference to the handle
+                self.midpoint_handles[connection_key] = handle_id
+    
+    def _hide_midpoint_handles(self):
+        """Hide all midpoint handles."""
+        # Delete all handles from the canvas
+        for handle_id in self.midpoint_handles.values():
+            self.canvas.delete(handle_id)
+            
+        # Clear the dictionary
+        self.midpoint_handles.clear()
 
 def main():
     """Application entry point."""

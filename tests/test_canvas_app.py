@@ -1624,12 +1624,26 @@ class TestCanvasApplication(unittest.TestCase):
         # Mock create_line to return a new ID
         self.app.canvas.create_line.return_value = 201
         
-        # Update the connections
-        self.app._update_connections(1)
-        
-        # Verify curve data was preserved
-        self.assertEqual(self.app.connections["1_2"]["curve_X"], 25)
-        self.assertEqual(self.app.connections["1_2"]["curve_Y"], -15)
+        # Mock _calculate_curve_points to return a fixed set of points
+        with patch.object(self.app, '_calculate_curve_points', return_value=[50, 50, 75, 75, 100, 100]):
+            # Call the update connections method
+            self.app._update_connections(1)
+            
+            # Check that the old line was deleted
+            self.app.canvas.delete.assert_called_once_with(200)
+            
+            # Check that a new curved line was created with the expected points and parameters
+            self.app.canvas.create_line.assert_called_once_with(
+                [50, 50, 75, 75, 100, 100],  # List of points for curved line
+                width=1,
+                smooth=True  # Curved lines use smooth=True
+            )
+            
+            # Check that the connection was updated with the new line ID
+            connection = self.app.connections["1_2"]
+            self.assertEqual(connection["line_id"], 201)
+            self.assertEqual(connection["curve_X"], 25)
+            self.assertEqual(connection["curve_Y"], -15)
 
     def test_calculate_curve_points(self):
         """Test calculating points for a curved line."""
@@ -1743,6 +1757,285 @@ class TestCanvasApplication(unittest.TestCase):
             self.assertEqual(args[0], [50, 50, 120, 85, 150, 150])
             self.assertEqual(kwargs['width'], 1)
             self.assertEqual(kwargs['smooth'], True)
+
+    def test_draw_midpoint_handle(self):
+        """Test drawing a midpoint handle."""
+        # Setup connection
+        self.app.midpoint_radius = 5
+        self.app.canvas.create_rectangle.return_value = 300
+        
+        # Call the method
+        handle_id = self.app._draw_midpoint_handle("1_2", 100, 100)
+        
+        # Check that create_rectangle was called with the right parameters
+        self.app.canvas.create_rectangle.assert_called_once()
+        args, kwargs = self.app.canvas.create_rectangle.call_args
+        
+        # Check coordinates
+        self.assertEqual(args[0], 95)  # x1 = x - radius
+        self.assertEqual(args[1], 95)  # y1 = y - radius
+        self.assertEqual(args[2], 105)  # x2 = x + radius
+        self.assertEqual(args[3], 105)  # y2 = y + radius
+        
+        # Check styling
+        self.assertEqual(kwargs['fill'], "black")  # Black fill
+        self.assertEqual(kwargs['outline'], "white")  # White outline
+        self.assertEqual(kwargs['width'], 1)
+        self.assertEqual(kwargs['tags'], ("midpoint_handle", "1_2"))
+        
+        # Check return value
+        self.assertEqual(handle_id, 300)
+        
+    def test_show_midpoint_handles(self):
+        """Test showing midpoint handles for all connections."""
+        # Setup connections
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2, "canvas_id": 101, "x": 150, "y": 150, "color_priority": 2, "connected_to": [1]
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        self.app.connections = {
+            "1_2": {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2,
+                "curve_X": 10,
+                "curve_Y": -5
+            }
+        }
+        
+        # Mock _calculate_curve_points and _draw_midpoint_handle
+        with patch.object(self.app, '_calculate_curve_points', 
+                         return_value=[50, 50, 110, 95, 150, 150]) as mock_calc:
+            with patch.object(self.app, '_draw_midpoint_handle', 
+                             return_value=300) as mock_draw:
+                
+                # Call the method
+                self.app._show_midpoint_handles()
+                
+                # Verify curve points were calculated
+                mock_calc.assert_called_once_with(1, 2)
+                
+                # Verify handle was drawn at midpoint
+                mock_draw.assert_called_once_with("1_2", 110, 95)
+                
+                # Check that handle was stored
+                self.assertEqual(self.app.midpoint_handles["1_2"], 300)
+    
+    def test_hide_midpoint_handles(self):
+        """Test hiding all midpoint handles."""
+        # Setup midpoint handles
+        self.app.midpoint_handles = {
+            "1_2": 300,
+            "2_3": 301,
+            "3_4": 302
+        }
+        
+        # Call the method
+        self.app._hide_midpoint_handles()
+        
+        # Check that all handles were deleted
+        self.app.canvas.delete.assert_any_call(300)
+        self.app.canvas.delete.assert_any_call(301)
+        self.app.canvas.delete.assert_any_call(302)
+        
+        # Check that midpoint_handles was cleared
+        self.assertEqual(len(self.app.midpoint_handles), 0)
+        
+    def test_show_handles_in_adjust_mode(self):
+        """Test that midpoint handles are shown when entering adjust mode."""
+        # Setup
+        self.app._mode = ApplicationMode.CREATE
+        
+        # Mock _show_midpoint_handles
+        with patch.object(self.app, '_show_midpoint_handles') as mock_show_handles:
+            # Switch to adjust mode
+            self.app._set_application_mode(ApplicationMode.ADJUST)
+            
+            # Verify handles were shown
+            mock_show_handles.assert_called_once()
+    
+    def test_hide_handles_when_exiting_adjust_mode(self):
+        """Test that midpoint handles are hidden when exiting adjust mode."""
+        # Setup
+        self.app._mode = ApplicationMode.ADJUST
+        
+        # Mock _hide_midpoint_handles
+        with patch.object(self.app, '_hide_midpoint_handles') as mock_hide_handles:
+            # Switch to create mode
+            self.app._set_application_mode(ApplicationMode.CREATE)
+            
+            # Verify handles were hidden
+            mock_hide_handles.assert_called_once()
+    
+    def test_update_connection_curve_updates_handle(self):
+        """Test that updating a curve also updates its midpoint handle in adjust mode."""
+        # Setup
+        self.app._mode = ApplicationMode.ADJUST
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2, "canvas_id": 101, "x": 150, "y": 150, "color_priority": 2, "connected_to": [1]
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        self.app.connections = {
+            "1_2": {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2,
+                "curve_X": 0,
+                "curve_Y": 0
+            }
+        }
+        
+        # Add a midpoint handle
+        self.app.midpoint_handles = {"1_2": 300}
+        
+        # Mock canvas delete and _calculate_curve_points and _draw_midpoint_handle
+        with patch.object(self.app.canvas, 'delete') as mock_delete:
+            with patch.object(self.app, '_calculate_curve_points', 
+                             return_value=[50, 50, 120, 90, 150, 150]) as mock_calc:
+                with patch.object(self.app, '_draw_midpoint_handle', 
+                                 return_value=301) as mock_draw:
+                    
+                    # Call the method
+                    result = self.app.update_connection_curve(1, 2, 20, -10)
+                    
+                    # Verify result
+                    self.assertTrue(result)
+                    
+                    # Verify curve values were updated
+                    self.assertEqual(self.app.connections["1_2"]["curve_X"], 20)
+                    self.assertEqual(self.app.connections["1_2"]["curve_Y"], -10)
+                    
+                    # Verify old handle was deleted
+                    mock_delete.assert_called_once_with(300)
+                    
+                    # Verify curve points were calculated
+                    mock_calc.assert_called_once_with(1, 2)
+                    
+                    # Verify new handle was drawn
+                    mock_draw.assert_called_once_with("1_2", 120, 90)
+                    
+                    # Verify handle was updated in dictionary
+                    self.assertEqual(self.app.midpoint_handles["1_2"], 301)
+    
+    def test_update_connections_with_midpoint_handles(self):
+        """Test updating connections redraws midpoint handles in adjust mode."""
+        # Setup
+        self.app._mode = ApplicationMode.ADJUST
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2, "canvas_id": 101, "x": 150, "y": 150, "color_priority": 2, "connected_to": [1]
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        # Create connection
+        self.app.connections = {
+            "1_2": {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2,
+                "curve_X": 10,
+                "curve_Y": -5
+            }
+        }
+        
+        # Add a midpoint handle
+        self.app.midpoint_handles = {"1_2": 300}
+        
+        # Mock canvas delete/create and _draw_midpoint_handle
+        with patch.object(self.app.canvas, 'delete') as mock_delete:
+            with patch.object(self.app.canvas, 'create_line', return_value=201) as mock_create_line:
+                with patch.object(self.app, '_calculate_curve_points', 
+                                return_value=[50, 50, 110, 95, 150, 150]) as mock_calc:
+                    with patch.object(self.app, '_draw_midpoint_handle', 
+                                    return_value=301) as mock_draw:
+                        
+                        # Call the method
+                        self.app._update_connections(1)
+                        
+                        # Verify old line and handle were deleted
+                        mock_delete.assert_any_call(200)
+                        mock_delete.assert_any_call(300)
+                        
+                        # Verify new midpoint handle was drawn
+                        mock_draw.assert_called_once_with("1_2", 110, 95)
+                        
+                        # Verify midpoint handle was updated in dictionary
+                        self.assertEqual(self.app.midpoint_handles["1_2"], 301)
+
+    def test_clear_canvas_removes_midpoint_handles(self):
+        """Test that clearing the canvas also removes midpoint handles."""
+        # Setup: Ensure we're not in ADJUST mode
+        self.app._mode = ApplicationMode.CREATE
+        
+        # Add a circle so that self.circles is not empty
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": []
+        }
+        self.app.circles = [first_circle]
+        
+        # Setup midpoint handles
+        self.app.midpoint_handles = {
+            "1_2": 300,
+            "2_3": 301
+        }
+        
+        # Call the clear method
+        self.app._clear_canvas()
+        
+        # Check that midpoint_handles was cleared
+        self.assertEqual(len(self.app.midpoint_handles), 0)
+
+    def test_remove_circle_connections_removes_midpoint_handles(self):
+        """Test that removing circle connections also removes their midpoint handles."""
+        # Setup
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2, "canvas_id": 101, "x": 150, "y": 150, "color_priority": 2, "connected_to": [1]
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        # Create connection
+        self.app.connections = {
+            "1_2": {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2
+            }
+        }
+        
+        # Add midpoint handle
+        self.app.midpoint_handles = {"1_2": 300}
+        
+        # Call remove connections
+        self.app._remove_circle_connections(1)
+        
+        # Verify line and handle were deleted
+        self.app.canvas.delete.assert_any_call(200)  # Line
+        self.app.canvas.delete.assert_any_call(300)  # Handle
+        
+        # Verify connections and handles dictionaries were cleared
+        self.assertEqual(len(self.app.connections), 0)
+        self.assertEqual(len(self.app.midpoint_handles), 0)
 
 if __name__ == "__main__":
     unittest.main()

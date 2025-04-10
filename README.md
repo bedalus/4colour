@@ -73,7 +73,7 @@ This phase focuses on enhancing connections between circles by allowing lines to
     *   Update the canvas rendering to display curved lines.
     *   Write tests to verify curve rendering with various displacement values.
 
-- [ ] **Add Midpoint Visualization:**
+- [x] **Add Midpoint Visualization:**
     *   Create a visual representation for the adjustable midpoint (small handle or dot).
     *   Implement conditional display logic to show midpoints only in Adjust mode.
     *   Add appropriate styling to make midpoints visually distinct from circles.
