@@ -45,67 +45,104 @@ New work items should be itemized and preceded by an empty checkbox (`- [ ]`). W
 
 The initial development phases (1-7) established the core functionality of the canvas application. This included setting up the Tkinter UI, implementing basic circle drawing and random coloring on click, adding data storage for circle properties (ID, coordinates, color, connections), and introducing a mechanism to connect circles. A selection mode was implemented, allowing users to place a circle and then select existing circles to connect to, confirming with the 'y' key. An "adjust" mode was added to allow moving circles via drag-and-drop and removing circles via right-click. Significant refactoring occurred, including centralizing event binding management based on application modes (CREATE, ADJUST, SELECTION), improving mode transitions, enhancing UI feedback (button text, hint text, canvas background color changes), and consolidating circle removal logic.
 
-### Phase 8: Deterministic Coloring
+### Phase 8-9: Summary
 
-This phase introduces rule-based circle coloring to replace random coloring. Colors are assigned based on connections between circles to ensure connected circles never share the same color. This phase introduces the most critical functionality of the app, the coloring logic. In this phase, ensure all new code is thoroughly documented with detailed comments.
+Phases 8 and 9 focused on implementing deterministic coloring based on the Four Color Theorem, followed by optimization and refactoring. A color priority system (1=yellow, 2=green, 3=blue, 4=red) was established with utility functions to convert between priorities and color names. The application now assigns colors based on connections—when two connected circles have the same color, a conflict resolution algorithm assigns the lowest available priority color to ensure connected circles never share the same color. A placeholder for advanced network color reassignment was added for cases when all lower priorities are used. The codebase was then optimized by removing redundant color fields, since colors are now derived directly from priorities. Utility functions were extracted to a separate module to improve reusability and testability. Comprehensive unit tests were added for all the new functionality, ensuring the coloring logic works correctly across various scenarios.
 
-- [x] **Implement Color Priority System:**
-    *   Define color priorities: 1=yellow (lowest), 2=green, 3=blue, 4=red (highest)
-    *   Update circle data structure to store both color name and priority number
-    *   Update debug display to show both color name and priority number
-    *   Create a color utility module with functions to convert between priority numbers and color names
-    *   Add unit tests for the new color utility functions
+### Phase 10: Allow lines to curve
 
-- [x] **Implement Basic Color Assignment Logic:**
-    *   Create a new function `_assign_color_based_on_connections()` to replace `_get_random_color()`
-    *   When placing a new circle, initially assign priority 1 (yellow)
-    *   Ensure this function is designed so that the priority assignment logic can be extended in the future
-    *   Add appropriate unit tests for this basic functionality
+This phase focuses on enhancing connections between circles by allowing lines to curve. Instead of implementing complex Bezier mathematics, we'll utilize Tkinter's built-in line smoothing capabilities (`create_line()` with `smooth=True`). Each connection will have an adjustable midpoint that users can drag to define the curve's shape. In Adjust mode, users will see and be able to interact with this midpoint, dragging it to create the desired curvature. The system will store the displacement vector (distance and direction) from the original midpoint and maintain these relationships when circles are moved.
 
-- [x] **Cleanup:**
-    *   Remove the now-unused `_get_random_color()` function and its associated unit test
+- [x] **Design Simple Curve Data Structure:**
+    *   Define how to store displacement data for each line's midpoint (x and y offsets from center):
+        *   Enhance self.connections data storage capabilities so that x and y offsets from the center can be captured for any line that has been curved by the user, e.g. curve_X, curve_Y
+    *   Determine how to integrate this displacement data with existing connection information:
+        *   The values for curve_X and curve_Y offsets will be added to the existing data since each line has a unique connection_key
+    *   Document the data structure for implementation reference:
+        *   curve_X and curve_Y offsets are integer values that always exist in pairs.
 
-- [x] **Implement Connection-Aware Color Assignment:**
-    *   Note: a color conflict is when two connected circles have the same color.
-    *   When connections are confirmed in selection mode, check if color conflicts exist
-    *   If a conflict exists, reassign the newly placed circle's color using these rules:
-        - Find all colors used by directly connected circles
-        - Assign the lowest priority color that isn't used by any connected circle
-        - If all lower priorities are used (priorities 1-3), treat this as a special case and call a separate function called `_reassign_color_network()`. Initially this function will just assign priority 4 (red), but will be extended later.
-    *   Update the circle's visual appearance when its color changes
-    *   Add unit tests for connection-based color reassignment
+- [x] **Implement Line Storage and Persistence:**
+    *   Extend existing data structures to include X/Y displacement values for each connection in line with the above design.
+    *   Create a method to calculate the default midpoint (straight line) between connected circles.
+    *   Ensure displacement data is saved and loaded with other application data.
+    *   Write utility functions to access and update the displacement data.
 
-### Phase 8: debugging
+- [ ] **Implement Curved Line Drawing:**
+    *   Update line drawing code to use Tkinter's `create_line()` with `smooth=True`.
+    *   Create a function to calculate the three points needed for each curved line (start, middle+displacement, end).
+    *   Update the canvas rendering to display curved lines.
+    *   Write tests to verify curve rendering with various displacement values.
 
-This section addresses discrepancies found during the review of the Phase 8 implementation.
+- [ ] **Add Midpoint Visualization:**
+    *   Create a visual representation for the adjustable midpoint (small handle or dot).
+    *   Implement conditional display logic to show midpoints only in Adjust mode.
+    *   Add appropriate styling to make midpoints visually distinct from circles.
+    *   Write tests to verify midpoint visualization behavior.
 
-- [x] **Refactor Conflict Check Trigger:**
-    *   Modify `_confirm_selection` to perform the color conflict check (`_check_and_resolve_color_conflicts`) only *once* after all selected connections for the `newly_placed_circle_id` have been added in the loop.
-    *   Remove the redundant call to `_assign_color_based_on_connections` and `_update_circle_color` after the loop in `_confirm_selection`, as the conflict resolution should handle the final color assignment.
-- [x] **Implement `_reassign_color_network` Call:**
-    *   Modify `_check_and_resolve_color_conflicts` to call the `_reassign_color_network` function when priorities 1-3 are all used by connected circles, as specified in the requirements.
-    *   Ensure `_reassign_color_network` correctly assigns priority 4 (red) for now.
-- [x] **Update Unit Tests:**
-    *   Review and update `test_confirm_selection`, `test_check_and_resolve_color_conflicts`, and any related tests in `test_canvas_app.py` to accurately reflect the corrected conflict check timing and the call to `_reassign_color_network`.
+- [ ] **Implement Midpoint Interaction:**
+    *   Add event handlers for midpoint selection and dragging.
+    *   Create a mechanism to identify which line's midpoint was clicked.
+    *   Implement real-time line updates during midpoint movement.
+    *   Update the displacement vector data when drag is completed.
+    *   Write unit tests to verify midpoint interaction behavior.
 
-### Phase 9: Refactoring and Optimization
+- [ ] **Update Circle Movement Logic:**
+    *   Modify circle movement logic to maintain proper curved connections.
+    *   Ensure that when circles move, the line midpoints maintain their relative position based on stored displacement.
+    *   Write unit tests to verify line integrity during circle movement.
 
-This phase focuses on removing redundant code related to color handling now that the priority system is the source of truth, and improving overall efficiency.
+- [ ] **Create Comprehensive Unit Tests:**
+    *   Develop test cases for midpoint displacement in different directions.
+    *   Test the interaction with the midpoint handle and resulting line shapes.
+    *   Add tests for edge cases (extreme displacements, overlapping lines).
+    *   Create tests to validate curved line behavior across different application modes.
 
-- [x] **Remove Redundant `color` Field:**
-    *   Remove the `color` key from the `circle_data` dictionary definition and all instances where it's assigned or read in `canvas_app.py`. Color will be derived solely from `color_priority` using `get_color_from_priority`.
-    *   Update `_draw_on_click` in `canvas_app.py` to only store `color_priority`.
-    *   Update `_update_circle_color` in `canvas_app.py`: remove the `color` parameter, update only `color_priority`, and use `get_color_from_priority` to set the canvas item's fill.
-    *   Update `_check_and_resolve_color_conflicts` in `canvas_app.py` to use `get_color_from_priority` for setting the fill color and remove any logic setting the `color` field.
-    *   Update `_reassign_color_network` in `canvas_app.py` similarly.
-- [x] **Update Debug Information:**
-    *   Modify `_show_debug_info` in `canvas_app.py` to derive the color name for display by calling `get_color_from_priority(latest_circle['color_priority'])`.
-- [x] **Remove Unused Color Utilities:**
-    *   Remove the `get_priority_from_color` function from `color_utils.py`.
-    *   Remove the import of `get_priority_from_color` from `canvas_app.py` and `tests/test_canvas_app.py`.
-    *   Remove the `available_colors` attribute and its initialization using `get_all_colors` in `CanvasApplication.__init__` as it's no longer used.
-- [x] **Update Unit Tests:**
-    *   Modify tests in `tests/test_canvas_app.py` to no longer check for the `color` key in `circle_data`.
-    *   Remove tests related to `get_priority_from_color` in `tests/test_color_utils.py`.
-    *   Ensure tests for `_show_debug_info` verify the color name is correctly derived from the priority.
-    *   Adjust any other tests affected by the removal of the `color` field or `get_priority_from_color`.
+- [ ] **Update Documentation:**
+    *   Add comments explaining the curve implementation and displacement calculations.
+    *   Document the midpoint adjustment feature in user documentation.
+    *   Update any relevant API documentation.
+
+### Phase 11: Advanced Color Network Reassignment
+
+This phase focuses on developing a sophisticated algorithm for reassigning colors throughout the network of connected circles when simple conflict resolution is insufficient. Currently, the application assigns priority 4 (red) as a fallback, but a more optimal solution would rearrange existing colors to maintain the Four Color Theorem guarantee.
+
+- [ ] **Design Network Reassignment Algorithm:**
+    *   Define a graph traversal approach for analyzing the network of connected circles
+    *   Develop strategy for identifying color reassignment opportunities (e.g., swapping colors between distant circles)
+    *   Determine stopping conditions to prevent infinite loops during recursive traversal
+    *   Document the algorithm design with clear pseudocode or diagrams for implementation reference
+
+- [ ] **Implement Network Analysis Functions:**
+    *   Create helper functions in `color_utils.py` to analyze graph properties relevant for coloring
+    *   Implement functions to identify color domains, conflict regions, and potential reassignment candidates
+    *   Add utility functions to test whether a proposed coloring solution is valid
+    *   Write unit tests for these utility functions with various graph configurations
+
+- [ ] **Implement Core Reassignment Logic:**
+    *   Replace the placeholder implementation in `_reassign_color_network()` with the new algorithm
+    *   Develop a recursive function that can traverse the circle network and test different color assignments
+    *   Implement backtracking capability to revert unsuccessful color assignments during traversal
+    *   Ensure the implementation prioritizes using colors 1-3 (yellow, green, blue) and minimizes use of color 4 (red)
+    *   Add appropriate error handling for edge cases (circular references, disconnected components)
+
+- [ ] **Add Performance Optimizations:**
+    *   Implement memoization or caching to avoid redundant calculations during traversal
+    *   Add early termination conditions for branches that cannot lead to valid solutions
+    *   Optimize the algorithm to prefer minimal color changes when resolving conflicts
+    *   Consider adding a complexity threshold beyond which a simpler fallback solution is used
+
+- [ ] **Update UI Feedback for Reassignment:**
+    *   Implement visual feedback when network reassignment occurs (e.g., brief animation, status message)
+    *   Add optional debugging overlay to visualize the reassignment process for educational purposes
+    *   Ensure all circle colors update smoothly after network reassignment
+
+- [ ] **Create Comprehensive Unit Tests:**
+    *   Develop test cases for various network configurations (linear chains, loops, complete graphs, etc.)
+    *   Add tests for edge cases like maximum connections and highly constrained networks
+    *   Implement tests to verify the algorithm's performance characteristics
+    *   Create tests that validate the four-color theorem is maintained across the application
+
+- [ ] **Update Documentation:**
+    *   Add detailed comments explaining the network reassignment algorithm
+    *   Include high-level description of the algorithm in code documentation
+    *   Document any limitations or known edge cases for future reference

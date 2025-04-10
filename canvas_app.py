@@ -534,12 +534,14 @@ class CanvasApplication:
         from_circle["connected_to"].append(to_id)
         to_circle["connected_to"].append(from_id)
         
-        # Store connection details
+        # Store connection details with default curve values (0,0)
         connection_key = f"{from_id}_{to_id}"
         self.connections[connection_key] = {
             "line_id": line_id,
             "from_circle": from_id,
-            "to_circle": to_id
+            "to_circle": to_id,
+            "curve_X": 0,  # Default: no curve offset in X direction
+            "curve_Y": 0   # Default: no curve offset in Y direction
         }
         
         return True
@@ -771,6 +773,10 @@ class CanvasApplication:
                 # Delete the old line
                 self.canvas.delete(connection["line_id"])
                 
+                # Preserve existing curve values
+                curve_x = connection.get("curve_X", 0)
+                curve_y = connection.get("curve_Y", 0)
+                
                 # Create a new line
                 new_line_id = self.canvas.create_line(
                     circle["x"], circle["y"],
@@ -780,6 +786,8 @@ class CanvasApplication:
                 
                 # Update connection data
                 connection["line_id"] = new_line_id
+                connection["curve_X"] = curve_x  # Maintain curve data
+                connection["curve_Y"] = curve_y  # Maintain curve data
 
     def _remove_circle(self, event):
         """Remove a circle when right-clicked in adjust mode.
@@ -964,6 +972,69 @@ class CanvasApplication:
             # Also update visual appearance
             self.canvas.itemconfig(circle_data["canvas_id"], fill=new_color_name)
         return new_priority
+
+    def _calculate_midpoint(self, from_circle, to_circle):
+        """Calculate the midpoint between two circles.
+        
+        Args:
+            from_circle: Dictionary containing the first circle's data
+            to_circle: Dictionary containing the second circle's data
+            
+        Returns:
+            tuple: (x, y) coordinates of the midpoint
+        """
+        # Simple midpoint formula: (x1+x2)/2, (y1+y2)/2
+        mid_x = (from_circle["x"] + to_circle["x"]) / 2
+        mid_y = (from_circle["y"] + to_circle["y"]) / 2
+        return (mid_x, mid_y)
+        
+    def get_connection_curve_offset(self, from_id, to_id):
+        """Get the curve offset for a connection between two circles.
+        
+        Args:
+            from_id: ID of the first circle
+            to_id: ID of the second circle
+            
+        Returns:
+            tuple: (curve_X, curve_Y) offset values or (0, 0) if not found
+        """
+        # Check both possible connection key orientations
+        key1 = f"{from_id}_{to_id}"
+        key2 = f"{to_id}_{from_id}"
+        
+        connection = self.connections.get(key1) or self.connections.get(key2)
+        if not connection:
+            return (0, 0)
+            
+        # Return the curve offsets, defaulting to 0 if not set
+        curve_x = connection.get("curve_X", 0)
+        curve_y = connection.get("curve_Y", 0)
+        return (curve_x, curve_y)
+    
+    def update_connection_curve(self, from_id, to_id, curve_x, curve_y):
+        """Update the curve offset for a connection.
+        
+        Args:
+            from_id: ID of the first circle
+            to_id: ID of the second circle
+            curve_x: X offset from the midpoint
+            curve_y: Y offset from the midpoint
+            
+        Returns:
+            bool: True if the update was successful, False otherwise
+        """
+        # Check both possible connection key orientations
+        key1 = f"{from_id}_{to_id}"
+        key2 = f"{to_id}_{from_id}"
+        
+        connection = self.connections.get(key1) or self.connections.get(key2)
+        if not connection:
+            return False
+            
+        # Update the curve offsets
+        connection["curve_X"] = curve_x
+        connection["curve_Y"] = curve_y
+        return True
 
 def main():
     """Application entry point."""

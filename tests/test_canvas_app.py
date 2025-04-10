@@ -1085,20 +1085,10 @@ class TestCanvasApplication(unittest.TestCase):
         """Test the centralized circle removal method."""
         # Setup: Add two connected circles
         first_circle = {
-            "id": 1,
-            "canvas_id": 100,
-            "x": 50,
-            "y": 50,
-            "color": "blue",
-            "connected_to": [2]
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [2]
         }
         second_circle = {
-            "id": 2,
-            "canvas_id": 101,
-            "x": 100,
-            "y": 100,
-            "color": "red",
-            "connected_to": [1]
+            "id": 2, "canvas_id": 101, "x": 100, "y": 100, "color_priority": 2, "connected_to": [1]
         }
         
         self.app.circles = [first_circle, second_circle]
@@ -1140,20 +1130,10 @@ class TestCanvasApplication(unittest.TestCase):
         """Test removing circle connections."""
         # Setup: Add two connected circles
         first_circle = {
-            "id": 1,
-            "canvas_id": 100,
-            "x": 50,
-            "y": 50,
-            "color": "blue",
-            "connected_to": [2]
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [2]
         }
         second_circle = {
-            "id": 2,
-            "canvas_id": 101,
-            "x": 100,
-            "y": 100,
-            "color": "red",
-            "connected_to": [1]
+            "id": 2, "canvas_id": 101, "x": 100, "y": 100, "color_priority": 2, "connected_to": [1]
         }
         
         self.app.circles = [first_circle, second_circle]
@@ -1513,6 +1493,139 @@ class TestCanvasApplication(unittest.TestCase):
         
         # Verify canvas was updated with red
         self.app.canvas.itemconfig.assert_called_with(103, fill="red")
+
+    # Add new tests for curve functionality
+    def test_calculate_midpoint(self):
+        """Test calculating the midpoint between two circles."""
+        # Create two test circles
+        circle1 = {"x": 50, "y": 50}
+        circle2 = {"x": 150, "y": 150}
+        
+        # Calculate midpoint
+        mid_x, mid_y = self.app._calculate_midpoint(circle1, circle2)
+        
+        # Check result
+        self.assertEqual(mid_x, 100)
+        self.assertEqual(mid_y, 100)
+        
+    def test_add_connection_with_curve_data(self):
+        """Test that adding a connection includes default curve data."""
+        # Create two circles
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": []
+        }
+        second_circle = {
+            "id": 2, "canvas_id": 101, "x": 150, "y": 150, "color_priority": 2, "connected_to": []
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        self.app.canvas.create_line.return_value = 200
+        
+        # Add the connection
+        result = self.app.add_connection(1, 2)
+        
+        # Verify result
+        self.assertTrue(result)
+        
+        # Verify connection data includes curve values
+        connection = self.app.connections.get("1_2")
+        self.assertIsNotNone(connection)
+        self.assertEqual(connection["curve_X"], 0)
+        self.assertEqual(connection["curve_Y"], 0)
+        
+    def test_get_connection_curve_offset(self):
+        """Test getting curve offset for a connection."""
+        # Setup a connection with curve data
+        self.app.connections = {
+            "1_2": {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2,
+                "curve_X": 15,
+                "curve_Y": -10
+            }
+        }
+        
+        # Test getting the data
+        curve_x, curve_y = self.app.get_connection_curve_offset(1, 2)
+        self.assertEqual(curve_x, 15)
+        self.assertEqual(curve_y, -10)
+        
+        # Test with reversed ids
+        curve_x, curve_y = self.app.get_connection_curve_offset(2, 1)
+        self.assertEqual(curve_x, 15)
+        self.assertEqual(curve_y, -10)
+        
+        # Test with nonexistent connection
+        curve_x, curve_y = self.app.get_connection_curve_offset(3, 4)
+        self.assertEqual(curve_x, 0)
+        self.assertEqual(curve_y, 0)
+        
+    def test_update_connection_curve(self):
+        """Test updating curve offset for a connection."""
+        # Setup a connection with default curve data
+        self.app.connections = {
+            "1_2": {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2,
+                "curve_X": 0,
+                "curve_Y": 0
+            }
+        }
+        
+        # Update the curve
+        result = self.app.update_connection_curve(1, 2, 25, -15)
+        
+        # Verify result
+        self.assertTrue(result)
+        self.assertEqual(self.app.connections["1_2"]["curve_X"], 25)
+        self.assertEqual(self.app.connections["1_2"]["curve_Y"], -15)
+        
+        # Test with reversed ids
+        result = self.app.update_connection_curve(2, 1, 30, -20)
+        self.assertTrue(result)
+        self.assertEqual(self.app.connections["1_2"]["curve_X"], 30)
+        self.assertEqual(self.app.connections["1_2"]["curve_Y"], -20)
+        
+        # Test with nonexistent connection
+        result = self.app.update_connection_curve(3, 4, 10, 10)
+        self.assertFalse(result)
+        
+    def test_update_connections_preserves_curve_data(self):
+        """Test that updating connections preserves curve data."""
+        # Setup circles
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2, "canvas_id": 101, "x": 150, "y": 150, "color_priority": 2, "connected_to": [1]
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        # Create a connection with custom curve values
+        self.app.connections = {
+            "1_2": {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2,
+                "curve_X": 25,
+                "curve_Y": -15
+            }
+        }
+        
+        # Mock create_line to return a new ID
+        self.app.canvas.create_line.return_value = 201
+        
+        # Update the connections
+        self.app._update_connections(1)
+        
+        # Verify curve data was preserved
+        self.assertEqual(self.app.connections["1_2"]["curve_X"], 25)
+        self.assertEqual(self.app.connections["1_2"]["curve_Y"], -15)
 
 if __name__ == "__main__":
     unittest.main()
