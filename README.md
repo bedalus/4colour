@@ -240,17 +240,11 @@ This phase introduces rule-based circle coloring to replace random coloring. Col
     *   Remove the now-unused `_get_random_color()` function and its associated unit test
 
 - [ ] **Implement Connection-Aware Color Assignment:**
+    *   Note: a color conflict is when two connected circles have the same color.
     *   When connections are confirmed in selection mode, check if color conflicts exist
     *   If a conflict exists, reassign the newly placed circle's color using these rules:
         - Find all colors used by directly connected circles
         - Assign the lowest priority color that isn't used by any connected circle
-        - If all lower priority colors are used (priorities 1-3), assign priority 4 (red)
+        - If all lower priority colors are used (priorities 1-3), treat this as a special case and call a separate function called `_reassign_color_network()`. Initially this function will just assign priority 4 (red), but will be extended later.
     *   Update the circle's visual appearance when its color changes
     *   Add unit tests for connection-based color reassignment
-
-- [ ] **Add Advanced Color Reassignment (Optional/Placeholder):**
-    *   Create a placeholder function `_reassign_colors()` that displays a warning when called
-    *   Call this function only when a circle must be assigned priority 4 (red)
-    *   Add tests to verify the placeholder function is called in the appropriate scenarios
-    *   Note: Full implementation of color graph reassignment will be addressed in a future phase
-
