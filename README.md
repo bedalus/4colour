@@ -79,14 +79,14 @@ This phase focuses on enhancing connections between circles by allowing lines to
     *   Add appropriate styling to make midpoints visually distinct from circles.
     *   Write tests to verify midpoint visualization behavior.
 
-- [ ] **Implement Midpoint Interaction:**
+- [x] **Implement Midpoint Interaction:**
     *   Add event handlers for midpoint selection and dragging.
     *   Create a mechanism to identify which line's midpoint was clicked.
     *   Implement real-time line updates during midpoint movement.
     *   Update the displacement vector data when drag is completed.
     *   Write unit tests to verify midpoint interaction behavior.
 
-- [ ] **Update Circle Movement Logic:**
+- [x] **Update Circle Movement Logic:**
     *   Modify circle movement logic to maintain proper curved connections.
     *   Ensure that when circles move, the line midpoints maintain their relative position based on stored displacement.
     *   Write unit tests to verify line integrity during circle movement.

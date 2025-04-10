@@ -49,6 +49,11 @@ class CanvasApplication:
         # Dictionary to store midpoint handles (key: connection_key, value: canvas_id)
         self.midpoint_handles = {}
         
+        # Midpoint dragging properties
+        self.dragged_midpoint_key = None  # Connection key for the midpoint being dragged
+        self.midpoint_start_x = 0         # Starting X position for midpoint drag
+        self.midpoint_start_y = 0         # Starting Y position for midpoint drag
+        
         # Debug overlay
         self.debug_enabled = False
         self.debug_text = None
@@ -74,6 +79,17 @@ class CanvasApplication:
             ApplicationMode.CREATE: False,
             ApplicationMode.SELECTION: False,
             ApplicationMode.ADJUST: False
+        }
+        
+        # Drag state management
+        self.drag_state = {
+            "active": False,          # Whether any drag is active
+            "type": None,             # "circle" or "midpoint"
+            "id": None,               # Circle ID or connection key
+            "start_x": 0,             # Starting X position
+            "start_y": 0,             # Starting Y position
+            "last_x": 0,              # Last X position during drag
+            "last_y": 0               # Last Y position during drag
         }
         
         self._setup_ui()
@@ -194,9 +210,10 @@ class CanvasApplication:
     def _bind_adjust_mode_events(self):
         """Bind events for adjust mode."""
         if not self._bound_events[ApplicationMode.ADJUST]:
-            self.canvas.bind("<Button-1>", self._start_drag)
-            self.canvas.bind("<B1-Motion>", self._drag_circle)
-            self.canvas.bind("<ButtonRelease-1>", self._end_drag)
+            # Use our unified event handlers instead of separate ones
+            self.canvas.bind("<Button-1>", self._drag_start)
+            self.canvas.bind("<B1-Motion>", self._drag_motion)
+            self.canvas.bind("<ButtonRelease-1>", self._drag_end)
             self.canvas.bind("<Button-3>", self._remove_circle)
             self._bound_events[ApplicationMode.ADJUST] = True
 
@@ -705,122 +722,153 @@ class CanvasApplication:
             font=("Arial", 12)
         )
 
-    def _start_drag(self, event):
-        """Start dragging a circle.
+    def _reset_drag_state(self):
+        """Reset the drag state to its default values."""
+        self.drag_state = {
+            "active": False,
+            "type": None,
+            "id": None,
+            "start_x": 0,
+            "start_y": 0,
+            "last_x": 0,
+            "last_y": 0
+        }
+    
+    def _drag_start(self, event):
+        """Start dragging an object (circle or midpoint).
         
         Args:
             event: Mouse press event containing x and y coordinates
         """
         if not self.in_edit_mode:
             return
+        
+        # Reset any existing drag state first
+        self._reset_drag_state()
+        
+        # Save the starting coordinates
+        self.drag_state["start_x"] = event.x
+        self.drag_state["last_x"] = event.x
+        self.drag_state["start_y"] = event.y
+        self.drag_state["last_y"] = event.y
             
-        # Find if a circle was clicked
+        # Check if we're clicking on a midpoint handle first
+        clicked_item = self.canvas.find_closest(event.x, event.y)
+        if clicked_item:
+            tags = self.canvas.gettags(clicked_item[0])
+            if "midpoint_handle" in tags:
+                # Find which connection this midpoint belongs to
+                for tag in tags:
+                    if "_" in tag and tag in self.midpoint_handles:
+                        self.drag_state["active"] = True
+                        self.drag_state["type"] = "midpoint"
+                        self.drag_state["id"] = tag
+                        return
+        
+        # If not a midpoint, check if it's a circle
         circle_id = self.get_circle_at_coords(event.x, event.y)
         if circle_id is not None:
-            self.dragged_circle_id = circle_id
-            
-    def _drag_circle(self, event):
-        """Drag a circle to a new position.
+            self.drag_state["active"] = True
+            self.drag_state["type"] = "circle"
+            self.drag_state["id"] = circle_id
+    
+    def _drag_motion(self, event):
+        """Handle drag motion for all draggable objects.
         
         Args:
             event: Mouse motion event containing x and y coordinates
         """
-        if not self.in_edit_mode or self.dragged_circle_id is None:
+        if not self.in_edit_mode or not self.drag_state["active"]:
             return
-            
-        # Get the circle being dragged
-        circle = self.circle_lookup.get(self.dragged_circle_id)
+        
+        # Calculate the movement delta from last position
+        dx = event.x - self.drag_state["last_x"]
+        dy = event.y - self.drag_state["last_y"]
+        
+        # Update the last position
+        self.drag_state["last_x"] = event.x
+        self.drag_state["last_y"] = event.y
+        
+        if self.drag_state["type"] == "circle":
+            self._drag_circle_motion(event.x, event.y, dx, dy)
+        elif self.drag_state["type"] == "midpoint":
+            self._drag_midpoint_motion(event.x, event.y)
+    
+    def _drag_end(self, event):
+        """End dragging any object.
+        
+        Args:
+            event: Mouse release event
+        """
+        if not self.in_edit_mode or not self.drag_state["active"]:
+            return
+        
+        # Just reset the drag state
+        self._reset_drag_state()
+    
+    def _drag_circle_motion(self, x, y, dx, dy):
+        """Handle circle dragging motion.
+        
+        Args:
+            x: Current X coordinate
+            y: Current Y coordinate
+            dx: X movement delta
+            dy: Y movement delta
+        """
+        circle_id = self.drag_state["id"]
+        circle = self.circle_lookup.get(circle_id)
         if not circle:
             return
-            
-        # Calculate movement
-        dx = event.x - circle["x"]
-        dy = event.y - circle["y"]
         
         # Update circle position on canvas
         self.canvas.move(circle["canvas_id"], dx, dy)
         
         # Update circle data
-        circle["x"] = event.x
-        circle["y"] = event.y
+        circle["x"] += dx
+        circle["y"] += dy
         
         # Update connecting lines in real-time
-        self._update_connections(self.dragged_circle_id)
+        self._update_connections(circle_id)
         
         # Update debug info if enabled
         if self.debug_enabled:
             self._show_debug_info()
-            
-    def _end_drag(self, event):
-        """End dragging a circle.
+    
+    def _drag_midpoint_motion(self, x, y):
+        """Handle midpoint dragging motion.
         
         Args:
-            event: Mouse release event
+            x: Current X coordinate
+            y: Current Y coordinate
         """
-        if not self.in_edit_mode or self.dragged_circle_id is None:
+        connection_key = self.drag_state["id"]
+        connection = self.connections.get(connection_key)
+        if not connection:
             return
-            
-        # Reset dragged circle ID
-        self.dragged_circle_id = None
         
-    def _update_connections(self, circle_id):
-        """Update all lines connected to a circle.
+        # Get the circle IDs for this connection
+        from_id = connection["from_circle"]
+        to_id = connection["to_circle"]
         
-        Args:
-            circle_id: ID of the circle whose connections should be updated
-        """
-        circle = self.circle_lookup.get(circle_id)
-        if not circle:
+        # Get the circles
+        from_circle = self.circle_lookup.get(from_id)
+        to_circle = self.circle_lookup.get(to_id)
+        if not from_circle or not to_circle:
             return
-            
-        # Update all connections for this circle
-        for connected_id in circle["connected_to"]:
-            connected_circle = self.circle_lookup.get(connected_id)
-            if not connected_circle:
-                continue
-                
-            # Find connection key (could be in either order)
-            key1 = f"{circle_id}_{connected_id}"
-            key2 = f"{connected_id}_{circle_id}"
-            
-            connection = self.connections.get(key1) or self.connections.get(key2)
-            if connection:
-                # Get the actual connection key used
-                connection_key = key1 if key1 in self.connections else key2
-                
-                # Delete the old line
-                self.canvas.delete(connection["line_id"])
-                
-                # Also delete the midpoint handle if it exists
-                if connection_key in self.midpoint_handles:
-                    self.canvas.delete(self.midpoint_handles[connection_key])
-                
-                # Preserve existing curve values
-                curve_x = connection.get("curve_X", 0)
-                curve_y = connection.get("curve_Y", 0)
-                
-                # Calculate points for the curved line
-                from_id = connection["from_circle"]
-                to_id = connection["to_circle"]
-                points = self._calculate_curve_points(from_id, to_id)
-                
-                # Create a new curved line
-                new_line_id = self.canvas.create_line(
-                    points,  # All points for the curved line
-                    width=1,
-                    smooth=True  # Enable line smoothing for curves
-                )
-                
-                # Update connection data
-                connection["line_id"] = new_line_id
-                connection["curve_X"] = curve_x  # Maintain curve data
-                connection["curve_Y"] = curve_y  # Maintain curve data
-                
-                # Redraw midpoint handle if in adjust mode
-                if self._mode == ApplicationMode.ADJUST:
-                    mid_x, mid_y = points[2], points[3]
-                    handle_id = self._draw_midpoint_handle(connection_key, mid_x, mid_y)
-                    self.midpoint_handles[connection_key] = handle_id
+        
+        # Calculate the base midpoint (without any curve offset)
+        base_mid_x, base_mid_y = self._calculate_midpoint(from_circle, to_circle)
+        
+        # Calculate the new curve offset based on the current position
+        # Double the offset to make the curve follow the handle correctly
+        new_curve_x = (x - base_mid_x) * 2
+        new_curve_y = (y - base_mid_y) * 2
+        
+        # Update the connection curve with the new offset
+        self.update_connection_curve(from_id, to_id, new_curve_x, new_curve_y)
+        
+        # Stop event propagation
+        return "break"
 
     def _remove_circle(self, event):
         """Remove a circle when right-clicked in adjust mode.
@@ -1110,22 +1158,33 @@ class CanvasApplication:
         # Get the actual connection key used
         connection_key = key1 if key1 in self.connections else key2
         
+        # Calculate points for the curved line - we need them for the line
+        points = self._calculate_curve_points(from_id, to_id)
+        if not points or len(points) < 6:
+            return False
+        
+        # Delete and redraw the connection line
+        self.canvas.delete(connection["line_id"])
+        new_line_id = self.canvas.create_line(
+            points,  # All points for the curved line
+            width=1,
+            smooth=True  # Enable line smoothing for curves
+        )
+        connection["line_id"] = new_line_id
+        
         # If in adjust mode, update the midpoint handle position
         if self._mode == ApplicationMode.ADJUST and connection_key in self.midpoint_handles:
             # Delete old handle
             self.canvas.delete(self.midpoint_handles[connection_key])
             
-            # Calculate new points with updated curve
-            points = self._calculate_curve_points(from_id, to_id)
-            if len(points) >= 6:
-                # Get the midpoint coordinates (index 2 and 3 in the points list)
-                mid_x, mid_y = points[2], points[3]
-                
-                # Create new handle at updated position
-                handle_id = self._draw_midpoint_handle(connection_key, mid_x, mid_y)
-                
-                # Update reference
-                self.midpoint_handles[connection_key] = handle_id
+            # Calculate the position for this handle using the new method
+            handle_x, handle_y = self._calculate_midpoint_handle_position(from_id, to_id)
+            
+            # Create new handle at updated position
+            handle_id = self._draw_midpoint_handle(connection_key, handle_x, handle_y)
+            
+            # Update reference
+            self.midpoint_handles[connection_key] = handle_id
         
         return True
 
@@ -1140,7 +1199,7 @@ class CanvasApplication:
         Returns:
             int: Canvas ID of the created handle
         """
-        # Draw a small black square at the midpoint
+        # Draw a small black square at the midpoint with the connection key as part of its tags
         handle_id = self.canvas.create_rectangle(
             x - self.midpoint_radius,
             y - self.midpoint_radius,
@@ -1164,18 +1223,41 @@ class CanvasApplication:
             from_id = connection["from_circle"]
             to_id = connection["to_circle"]
             
-            # Calculate the points for this connection
-            points = self._calculate_curve_points(from_id, to_id)
-            if len(points) >= 6:
-                # Get the midpoint coordinates (index 2 and 3 in the points list)
-                mid_x, mid_y = points[2], points[3]
-                
-                # Create the handle
-                handle_id = self._draw_midpoint_handle(connection_key, mid_x, mid_y)
-                
-                # Store reference to the handle
-                self.midpoint_handles[connection_key] = handle_id
-    
+            # Calculate the position for this handle using the new helper method
+            handle_x, handle_y = self._calculate_midpoint_handle_position(from_id, to_id)
+            
+            # Create the handle
+            handle_id = self._draw_midpoint_handle(connection_key, handle_x, handle_y)
+            
+            # Store reference to the handle
+            self.midpoint_handles[connection_key] = handle_id
+
+    def _calculate_midpoint_handle_position(self, from_id, to_id):
+        """Calculate the position for the midpoint handle between two circles.
+        
+        Args:
+            from_id: ID of the first circle
+            to_id: ID of the second circle
+            
+        Returns:
+            tuple: (x, y) coordinates for the midpoint handle
+        """
+        from_circle = self.circle_lookup.get(from_id)
+        to_circle = self.circle_lookup.get(to_id)
+        
+        if not from_circle or not to_circle:
+            return (0, 0)
+            
+        # Get the base midpoint
+        base_mid_x, base_mid_y = self._calculate_midpoint(from_circle, to_circle)
+        
+        # Apply HALF the curve offset for the handle position
+        curve_x, curve_y = self.get_connection_curve_offset(from_id, to_id)
+        handle_x = base_mid_x + (curve_x / 2)
+        handle_y = base_mid_y + (curve_y / 2)
+        
+        return (handle_x, handle_y)
+
     def _hide_midpoint_handles(self):
         """Hide all midpoint handles."""
         # Delete all handles from the canvas
@@ -1184,6 +1266,38 @@ class CanvasApplication:
             
         # Clear the dictionary
         self.midpoint_handles.clear()
+
+    def _update_connections(self, circle_id):
+        """Update all lines connected to a circle.
+        
+        Args:
+            circle_id: ID of the circle whose connections should be updated
+        """
+        circle = self.circle_lookup.get(circle_id)
+        if not circle:
+            return
+            
+        # Update all connections for this circle
+        for connected_id in circle["connected_to"]:
+            connected_circle = self.circle_lookup.get(connected_id)
+            if not connected_circle:
+                continue
+                
+            # Find connection key (could be in either order)
+            key1 = f"{circle_id}_{connected_id}"
+            key2 = f"{connected_id}_{circle_id}"
+            
+            connection = self.connections.get(key1) or self.connections.get(key2)
+            if connection:
+                # Get the actual connection key used
+                connection_key = key1 if key1 in self.connections else key2
+                
+                # Preserve existing curve values
+                curve_x = connection.get("curve_X", 0)
+                curve_y = connection.get("curve_Y", 0)
+                
+                # Update connection using these values - this will redraw everything
+                self.update_connection_curve(connection["from_circle"], connection["to_circle"], curve_x, curve_y)
 
 def main():
     """Application entry point."""
