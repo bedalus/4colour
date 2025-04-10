@@ -710,20 +710,24 @@ class TestCanvasApplication(unittest.TestCase):
         # Mock create_line to return a new line ID
         self.app.canvas.create_line.return_value = 201
         
-        # Call the update connections method
-        self.app._update_connections(1)
-        
-        # Check that the old line was deleted
-        self.app.canvas.delete.assert_called_once_with(200)
-        
-        # Check that a new line was created
-        self.app.canvas.create_line.assert_called_once_with(
-            50, 50, 100, 100, width=1
-        )
-        
-        # Check that the connection was updated with the new line ID
-        connection = self.app.connections["1_2"]
-        self.assertEqual(connection["line_id"], 201)
+        # Mock _calculate_curve_points to return a fixed set of points
+        with patch.object(self.app, '_calculate_curve_points', return_value=[50, 50, 75, 75, 100, 100]):
+            # Call the update connections method
+            self.app._update_connections(1)
+            
+            # Check that the old line was deleted
+            self.app.canvas.delete.assert_called_once_with(200)
+            
+            # Check that a new curved line was created with the expected points and parameters
+            self.app.canvas.create_line.assert_called_once_with(
+                [50, 50, 75, 75, 100, 100],  # List of points for curved line
+                width=1,
+                smooth=True  # Curved lines use smooth=True
+            )
+            
+            # Check that the connection was updated with the new line ID
+            connection = self.app.connections["1_2"]
+            self.assertEqual(connection["line_id"], 201)
 
     def test_remove_circle(self):
         """Test removing a circle with right-click in edit mode."""
@@ -1626,6 +1630,119 @@ class TestCanvasApplication(unittest.TestCase):
         # Verify curve data was preserved
         self.assertEqual(self.app.connections["1_2"]["curve_X"], 25)
         self.assertEqual(self.app.connections["1_2"]["curve_Y"], -15)
+
+    def test_calculate_curve_points(self):
+        """Test calculating points for a curved line."""
+        # Setup two circles
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2, "canvas_id": 101, "x": 150, "y": 150, "color_priority": 2, "connected_to": [1]
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        # Case 1: With no curve offset
+        self.app.connections = {
+            "1_2": {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2,
+                "curve_X": 0,
+                "curve_Y": 0
+            }
+        }
+        
+        # Get curve points
+        points = self.app._calculate_curve_points(1, 2)
+        
+        # Expected: [from_x, from_y, mid_x, mid_y, to_x, to_y]
+        expected = [50, 50, 100, 100, 150, 150]
+        self.assertEqual(points, expected)
+        
+        # Case 2: With curve offset
+        self.app.connections["1_2"]["curve_X"] = 20
+        self.app.connections["1_2"]["curve_Y"] = -15
+        
+        # Get curve points with offset
+        points = self.app._calculate_curve_points(1, 2)
+        
+        # Expected with offset applied to midpoint
+        expected = [50, 50, 120, 85, 150, 150]
+        self.assertEqual(points, expected)
+        
+    def test_add_connection_with_curve(self):
+        """Test that adding a connection creates a curved line."""
+        # Setup two circles
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": []
+        }
+        second_circle = {
+            "id": 2, "canvas_id": 101, "x": 150, "y": 150, "color_priority": 2, "connected_to": []
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        # Mock curve points calculation to return consistent results
+        with patch.object(self.app, '_calculate_curve_points', return_value=[50, 50, 100, 100, 150, 150]):
+            # Add connection
+            result = self.app.add_connection(1, 2)
+            
+            # Verify result
+            self.assertTrue(result)
+            
+            # Verify line was created with correct parameters
+            self.app.canvas.create_line.assert_called_once()
+            args, kwargs = self.app.canvas.create_line.call_args
+            
+            # Verify points and smooth parameter
+            self.assertEqual(args[0], [50, 50, 100, 100, 150, 150])
+            self.assertEqual(kwargs['width'], 1)
+            self.assertEqual(kwargs['smooth'], True)
+    
+    def test_update_connections_with_curve(self):
+        """Test updating connections maintains the curve."""
+        # Setup two connected circles
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2, "canvas_id": 101, "x": 150, "y": 150, "color_priority": 2, "connected_to": [1]
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        # Create a connection with curve
+        self.app.connections = {
+            "1_2": {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2,
+                "curve_X": 20,
+                "curve_Y": -15
+            }
+        }
+        
+        # Mock curve points calculation
+        with patch.object(self.app, '_calculate_curve_points', return_value=[50, 50, 120, 85, 150, 150]):
+            # Update the connections
+            self.app._update_connections(1)
+            
+            # Verify the old line was deleted
+            self.app.canvas.delete.assert_called_once_with(200)
+            
+            # Verify a new curved line was created
+            self.app.canvas.create_line.assert_called_once()
+            args, kwargs = self.app.canvas.create_line.call_args
+            
+            # Verify points and smooth parameter
+            self.assertEqual(args[0], [50, 50, 120, 85, 150, 150])
+            self.assertEqual(kwargs['width'], 1)
+            self.assertEqual(kwargs['smooth'], True)
 
 if __name__ == "__main__":
     unittest.main()

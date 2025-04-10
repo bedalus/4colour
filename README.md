@@ -67,7 +67,7 @@ This phase focuses on enhancing connections between circles by allowing lines to
     *   Ensure displacement data is saved and loaded with other application data.
     *   Write utility functions to access and update the displacement data.
 
-- [ ] **Implement Curved Line Drawing:**
+- [x] **Implement Curved Line Drawing:**
     *   Update line drawing code to use Tkinter's `create_line()` with `smooth=True`.
     *   Create a function to calculate the three points needed for each curved line (start, middle+displacement, end).
     *   Update the canvas rendering to display curved lines.

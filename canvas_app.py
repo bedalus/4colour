@@ -522,12 +522,17 @@ class CanvasApplication:
         # Check if connection already exists
         if to_id in from_circle["connected_to"] or from_id in to_circle["connected_to"]:
             return False
+        
+        # Calculate points for the curved line
+        points = self._calculate_curve_points(from_id, to_id)
+        if not points:
+            return False
             
-        # Draw the line
+        # Draw the curved line
         line_id = self.canvas.create_line(
-            from_circle["x"], from_circle["y"], 
-            to_circle["x"], to_circle["y"], 
-            width=1
+            points,  # All points for the curved line
+            width=1,
+            smooth=True  # Enable line smoothing for curves
         )
         
         # Update connection data
@@ -777,11 +782,16 @@ class CanvasApplication:
                 curve_x = connection.get("curve_X", 0)
                 curve_y = connection.get("curve_Y", 0)
                 
-                # Create a new line
+                # Calculate points for the curved line
+                from_id = connection["from_circle"]
+                to_id = connection["to_circle"]
+                points = self._calculate_curve_points(from_id, to_id)
+                
+                # Create a new curved line
                 new_line_id = self.canvas.create_line(
-                    circle["x"], circle["y"],
-                    connected_circle["x"], connected_circle["y"],
-                    width=1
+                    points,  # All points for the curved line
+                    width=1,
+                    smooth=True  # Enable line smoothing for curves
                 )
                 
                 # Update connection data
@@ -987,6 +997,37 @@ class CanvasApplication:
         mid_x = (from_circle["x"] + to_circle["x"]) / 2
         mid_y = (from_circle["y"] + to_circle["y"]) / 2
         return (mid_x, mid_y)
+
+    def _calculate_curve_points(self, from_id, to_id):
+        """Calculate the points needed to draw a curved line between two circles.
+        
+        Args:
+            from_id: ID of the first circle
+            to_id: ID of the second circle
+            
+        Returns:
+            list: [x1, y1, midx, midy, x2, y2] coordinates for the curved line
+        """
+        from_circle = self.circle_lookup.get(from_id)
+        to_circle = self.circle_lookup.get(to_id)
+        
+        if not from_circle or not to_circle:
+            return []
+            
+        # Get the base midpoint
+        mid_x, mid_y = self._calculate_midpoint(from_circle, to_circle)
+        
+        # Apply the curve offset if any
+        curve_x, curve_y = self.get_connection_curve_offset(from_id, to_id)
+        mid_x += curve_x
+        mid_y += curve_y
+        
+        # Return coordinates for all three points
+        return [
+            from_circle["x"], from_circle["y"],  # Start point
+            mid_x, mid_y,                       # Middle point with offset
+            to_circle["x"], to_circle["y"]      # End point
+        ]
         
     def get_connection_curve_offset(self, from_id, to_id):
         """Get the curve offset for a connection between two circles.
