@@ -8,6 +8,7 @@ import tkinter as tk
 from tkinter import ttk
 import random
 from enum import Enum, auto
+from color_utils import get_color_from_priority, get_priority_from_color, get_all_colors
 
 class ApplicationMode(Enum):
     """Enum representing the different modes of the application."""
@@ -33,8 +34,8 @@ class CanvasApplication:
         self.canvas_height = 500
         self.circle_radius = 10
         
-        # Available colors for circles
-        self.available_colors = ["green", "blue", "red", "yellow"]
+        # Available colors for circles - use the utility function
+        self.available_colors = get_all_colors()
         
         # Store circle data
         self.circles = []
@@ -312,6 +313,7 @@ class CanvasApplication:
             
         # Normal mode: draw a new circle
         color = self._get_random_color()
+        color_priority = get_priority_from_color(color)
         
         # Create the circle on canvas
         circle_id = self.canvas.create_oval(
@@ -323,13 +325,14 @@ class CanvasApplication:
             outline="black"
         )
         
-        # Store circle data
+        # Store circle data - now with priority
         circle_data = {
             "id": self.next_id,
             "canvas_id": circle_id,
             "x": x,
             "y": y,
             "color": color,
+            "color_priority": color_priority,
             "connected_to": []
         }
         
@@ -408,10 +411,11 @@ class CanvasApplication:
             info_text = "No circles drawn yet"
         else:
             latest_circle = self.circles[-1]
+            # Include color priority in debug info
             info_text = (
                 f"Circle ID: {latest_circle['id']}\n"
                 f"Position: ({latest_circle['x']}, {latest_circle['y']})\n"
-                f"Color: {latest_circle['color']}\n"
+                f"Color: {latest_circle['color']} (priority: {latest_circle['color_priority']})\n"
                 f"Connected to: {', '.join(map(str, latest_circle['connected_to']))}"
             )
             

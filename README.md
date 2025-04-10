@@ -219,18 +219,39 @@ This phase includes improvements deferred from previous phases.
     *   Create a separate method for handling the "last circle removed" scenario.
     *   Ensure consistent cleanup when removing circles, whether through edit mode or through clearing the canvas.
 
-### Phase 8: Deterministic coloring
+### Phase 8: Deterministic Coloring
 
-This phase introduces circle coloring logic based on rules. This will replace the random coloring logic.
+This phase introduces rule-based circle coloring to replace random coloring. Colors are assigned based on connections between circles to ensure connected circles never share the same color.
 
-- [ ] **Replacement of the random coloring function:**
-    *   This is the most critical feature of this app. Extra care must be taken ensure the logic is robust and that the new code for this feature is accurately documented with detailed comments. For this feature, this advice supercedes the general project directive for concise commentary.
-    *   Whereever _get_random_color() is called, instead call a new function _assign_color_based_on_connections()
-    *   When _get_random_color() is no longer needed, remove it, and remember to remove the associated unit test
-    *   This new replacement function decides on how to assign color based on the other circles the user connects it to. The function will need to represent the following decision logic:
-        *   The four unique colors already in use should be encoded with numeric priority indicator: 1 for yellow, 2 for green, 3 for blue, 4 for red
-        *   Edit the circle data tracking dictionary to track this numeric indicator instead of the color. When debug mode is active, show both the indicator number, and the name of associated color.
-        *   When a new circle is initially placed by the user, make it the lowest priority color.
-        *   The new circle must not have the same priority as any other circle that it is connected to. When the user connects it to another circle, an assessment of the relevant sets of priorities will need to be performed.
-        *   When assessing, the function should assign the lowest priority color that is available. A color priority is considered available if none of the other connected circles have that color.
-        *   When assessing, allow for a specific scenario: colors with priorities 1, 2, and 3 are already in use by other connected circles. This means that only the highest priority color (red: 4) is available. Assign the color, and call a separate function called _reassign_colors(). This function is a placeholder for now. Make it display a 'placeholder' warning.
+- [x] **Implement Color Priority System:**
+    *   Define color priorities: 1=yellow (lowest), 2=green, 3=blue, 4=red (highest)
+    *   Update circle data structure to store both color name and priority number
+    *   Update debug display to show both color name and priority number
+    *   Create a color utility module with functions to convert between priority numbers and color names
+    *   Add unit tests for the new color utility functions
+
+- [ ] **Implement Basic Color Assignment Logic:**
+    *   Create a new function `_assign_color_based_on_connections()` to replace `_get_random_color()`
+    *   When placing the first circle, always assign priority 1 (yellow)
+    *   When placing subsequent circles, initially assign priority 1 (yellow)
+    *   Update the circles' visual appearance to match their assigned colors
+    *   Add appropriate unit tests for this basic functionality
+
+- [ ] **Implement Connection-Aware Color Assignment:**
+    *   When connections are confirmed in selection mode, check if color conflicts exist
+    *   If a conflict exists, reassign the newly placed circle's color using these rules:
+        - Find all colors used by directly connected circles
+        - Assign the lowest priority color that isn't used by any connected circle
+        - If all lower priority colors are used (priorities 1-3), assign priority 4 (red)
+    *   Update the circle's visual appearance when its color changes
+    *   Add unit tests for connection-based color reassignment
+
+- [ ] **Add Advanced Color Reassignment (Optional/Placeholder):**
+    *   Create a placeholder function `_reassign_colors()` that displays a warning when called
+    *   Call this function only when a circle must be assigned priority 4 (red)
+    *   Add tests to verify the placeholder function is called in the appropriate scenarios
+    *   Note: Full implementation of color graph reassignment will be addressed in a future phase
+
+- [ ] **Cleanup:**
+    *   Remove the now-unused `_get_random_color()` function and its associated unit test
+    *   Ensure all new code is thoroughly documented with detailed comments

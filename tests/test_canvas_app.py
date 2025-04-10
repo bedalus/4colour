@@ -14,6 +14,7 @@ import random
 # Add the parent directory to the path so we can import the canvas_app module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from canvas_app import CanvasApplication, ApplicationMode
+from color_utils import get_priority_from_color
 
 class TestCanvasApplication(unittest.TestCase):
     """Test cases for the CanvasApplication class."""
@@ -42,7 +43,7 @@ class TestCanvasApplication(unittest.TestCase):
         self.assertEqual(self.app.canvas_width, 800)  # Updated to match new value
         self.assertEqual(self.app.canvas_height, 500)
         self.assertEqual(self.app.circle_radius, 10)
-        self.assertEqual(self.app.available_colors, ["green", "blue", "red", "yellow"])
+        self.assertEqual(set(self.app.available_colors), {"green", "blue", "red", "yellow"})
         self.assertEqual(self.app.circles, [])
         self.assertEqual(self.app.next_id, 1)
         self.assertIsNone(self.app.last_circle_id)
@@ -92,6 +93,7 @@ class TestCanvasApplication(unittest.TestCase):
         self.assertEqual(circle["x"], 100)
         self.assertEqual(circle["y"], 100)
         self.assertEqual(circle["color"], "red")
+        self.assertEqual(circle["color_priority"], get_priority_from_color("red"))
         self.assertEqual(circle["connected_to"], [])
         
         # Check that circle_lookup is updated
