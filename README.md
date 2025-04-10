@@ -18,7 +18,7 @@ NOTE: These guidelines apply only to code in the 4colour repo.
 - Use `PascalCase` for classes.
 - Ensure all code passes linting and formatting checks before committing.
 - Use lowercase names for folders.
-- Even though I am English, use the American spelling of colour, i.e. color
+- Even though I am English, use the American spelling of colour, i.e. color, except for the title '4colour'.
 
 ## Commit Messages
 - Use descriptive commit messages.
@@ -49,53 +49,9 @@ The initial development phases (1-7) established the core functionality of the c
 
 Phases 8 and 9 focused on implementing deterministic coloring based on the Four Color Theorem, followed by optimization and refactoring. A color priority system (1=yellow, 2=green, 3=blue, 4=red) was established with utility functions to convert between priorities and color names. The application now assigns colors based on connections—when two connected circles have the same color, a conflict resolution algorithm assigns the lowest available priority color to ensure connected circles never share the same color. A placeholder for advanced network color reassignment was added for cases when all lower priorities are used. The codebase was then optimized by removing redundant color fields, since colors are now derived directly from priorities. Utility functions were extracted to a separate module to improve reusability and testability. Comprehensive unit tests were added for all the new functionality, ensuring the coloring logic works correctly across various scenarios.
 
-### Phase 10: Allow lines to curve
+### Phase 10: Summary
 
-This phase focuses on enhancing connections between circles by allowing lines to curve. Instead of implementing complex Bezier mathematics, we'll utilize Tkinter's built-in line smoothing capabilities (`create_line()` with `smooth=True`). Each connection will have an adjustable midpoint that users can drag to define the curve's shape. In Adjust mode, users will see and be able to interact with this midpoint, dragging it to create the desired curvature. The system will store the displacement vector (distance and direction) from the original midpoint and maintain these relationships when circles are moved.
-
-- [x] **Design Simple Curve Data Structure:**
-    *   Define how to store displacement data for each line's midpoint (x and y offsets from center):
-        *   Enhance self.connections data storage capabilities so that x and y offsets from the center can be captured for any line that has been curved by the user, e.g. curve_X, curve_Y
-    *   Determine how to integrate this displacement data with existing connection information:
-        *   The values for curve_X and curve_Y offsets will be added to the existing data since each line has a unique connection_key
-    *   Document the data structure for implementation reference:
-        *   curve_X and curve_Y offsets are integer values that always exist in pairs.
-
-- [x] **Implement Line Storage and Persistence:**
-    *   Extend existing data structures to include X/Y displacement values for each connection in line with the above design.
-    *   Create a method to calculate the default midpoint (straight line) between connected circles.
-    *   Ensure displacement data is saved and loaded with other application data.
-    *   Write utility functions to access and update the displacement data.
-
-- [x] **Implement Curved Line Drawing:**
-    *   Update line drawing code to use Tkinter's `create_line()` with `smooth=True`.
-    *   Create a function to calculate the three points needed for each curved line (start, middle+displacement, end).
-    *   Update the canvas rendering to display curved lines.
-    *   Write tests to verify curve rendering with various displacement values.
-
-- [x] **Add Midpoint Visualization:**
-    *   Create a visual representation for the adjustable midpoint (small handle or dot).
-    *   Implement conditional display logic to show midpoints only in Adjust mode.
-    *   Add appropriate styling to make midpoints visually distinct from circles.
-    *   Write tests to verify midpoint visualization behavior.
-
-- [x] **Implement Midpoint Interaction:**
-    *   Add event handlers for midpoint selection and dragging.
-    *   Create a mechanism to identify which line's midpoint was clicked.
-    *   Implement real-time line updates during midpoint movement.
-    *   Update the displacement vector data when drag is completed.
-    *   Write unit tests to verify midpoint interaction behavior.
-
-- [x] **Update Circle Movement Logic:**
-    *   Modify circle movement logic to maintain proper curved connections.
-    *   Ensure that when circles move, the line midpoints maintain their relative position based on stored displacement.
-    *   Write unit tests to verify line integrity during circle movement.
-
-- [x] **Create Comprehensive Unit Tests:**
-    *   Develop test cases for midpoint displacement in different directions.
-    *   Test the interaction with the midpoint handle and resulting line shapes.
-    *   Add tests for edge cases (extreme displacements, overlapping lines).
-    *   Create tests to validate curved line behavior across different application modes.
+In this phase, connections between circles were enhanced with curved lines using Tkinter's built-in line smoothing capabilities. The implementation added adjustable midpoints that users can drag to define the curve's shape. These midpoints appear as small draggable handles in Adjust mode, allowing users to customize the curve's appearance. The system stores displacement vectors (X/Y offsets) for each connection, maintaining these curves when circles are moved. Comprehensive unit testing was added to verify curve behavior in different scenarios, including extreme displacements, different curve directions, overlapping connections, and interactions across different application modes.
 
 ### Phase 11: Advanced Color Network Reassignment
 
