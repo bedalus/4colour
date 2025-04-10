@@ -87,3 +87,25 @@ This section addresses discrepancies found during the review of the Phase 8 impl
     *   Ensure `_reassign_color_network` correctly assigns priority 4 (red) for now.
 - [x] **Update Unit Tests:**
     *   Review and update `test_confirm_selection`, `test_check_and_resolve_color_conflicts`, and any related tests in `test_canvas_app.py` to accurately reflect the corrected conflict check timing and the call to `_reassign_color_network`.
+
+### Phase 9: Refactoring and Optimization
+
+This phase focuses on removing redundant code related to color handling now that the priority system is the source of truth, and improving overall efficiency.
+
+- [x] **Remove Redundant `color` Field:**
+    *   Remove the `color` key from the `circle_data` dictionary definition and all instances where it's assigned or read in `canvas_app.py`. Color will be derived solely from `color_priority` using `get_color_from_priority`.
+    *   Update `_draw_on_click` in `canvas_app.py` to only store `color_priority`.
+    *   Update `_update_circle_color` in `canvas_app.py`: remove the `color` parameter, update only `color_priority`, and use `get_color_from_priority` to set the canvas item's fill.
+    *   Update `_check_and_resolve_color_conflicts` in `canvas_app.py` to use `get_color_from_priority` for setting the fill color and remove any logic setting the `color` field.
+    *   Update `_reassign_color_network` in `canvas_app.py` similarly.
+- [x] **Update Debug Information:**
+    *   Modify `_show_debug_info` in `canvas_app.py` to derive the color name for display by calling `get_color_from_priority(latest_circle['color_priority'])`.
+- [x] **Remove Unused Color Utilities:**
+    *   Remove the `get_priority_from_color` function from `color_utils.py`.
+    *   Remove the import of `get_priority_from_color` from `canvas_app.py` and `tests/test_canvas_app.py`.
+    *   Remove the `available_colors` attribute and its initialization using `get_all_colors` in `CanvasApplication.__init__` as it's no longer used.
+- [x] **Update Unit Tests:**
+    *   Modify tests in `tests/test_canvas_app.py` to no longer check for the `color` key in `circle_data`.
+    *   Remove tests related to `get_priority_from_color` in `tests/test_color_utils.py`.
+    *   Ensure tests for `_show_debug_info` verify the color name is correctly derived from the priority.
+    *   Adjust any other tests affected by the removal of the `color` field or `get_priority_from_color`.
