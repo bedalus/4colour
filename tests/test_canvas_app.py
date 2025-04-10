@@ -1363,22 +1363,18 @@ class TestCanvasApplication(unittest.TestCase):
         
         # Mock the necessary methods
         with patch.object(self.app, 'add_connection', return_value=True) as mock_add:
-            with patch.object(self.app, '_assign_color_based_on_connections', return_value=("green", 2)) as mock_assign:
-                with patch.object(self.app, '_update_circle_color') as mock_update:
-                    # Create a mock event for y key press
-                    event = Mock()
-                    
-                    # Call the confirm selection method
-                    self.app._confirm_selection(event)
-                    
-                    # Verify add_connection was called
-                    mock_add.assert_called_with(2, 1)
-                    
-                    # Verify color assignment was called
-                    mock_assign.assert_called_with(2)
-                    
-                    # Verify color update was called with new color
-                    mock_update.assert_called_with(2, "green", 2)
+            with patch.object(self.app, '_check_and_resolve_color_conflicts', return_value=2) as mock_check:
+                # Create a mock event for y key press
+                event = Mock()
+                
+                # Call the confirm selection method
+                self.app._confirm_selection(event)
+                
+                # Verify add_connection was called
+                mock_add.assert_called_with(2, 1)
+                
+                # Verify color conflict check was called only once after all connections
+                mock_check.assert_called_once_with(2)
         
         # Check that selection mode was exited
         self.assertFalse(self.app.in_selection_mode)
@@ -1428,6 +1424,90 @@ class TestCanvasApplication(unittest.TestCase):
         self.assertEqual(priority, 2)  # Priority should be 2
         self.assertEqual(self.app.circle_lookup[2]["color_priority"], 2)  # Should be green (priority 2)
         self.assertEqual(self.app.circle_lookup[2]["color"], "green")
+
+    def test_reassign_color_network_call(self):
+        """Test that _check_and_resolve_color_conflicts calls _reassign_color_network when needed."""
+        # Setup: Create 4 circles with all color priorities
+        circles = [
+            {
+                "id": 1,
+                "canvas_id": 100,
+                "x": 50, 
+                "y": 50,
+                "color": "yellow",
+                "color_priority": 1,
+                "connected_to": [4]
+            },
+            {
+                "id": 2,
+                "canvas_id": 101,
+                "x": 100,
+                "y": 50,
+                "color": "green",
+                "color_priority": 2,
+                "connected_to": [4]
+            },
+            {
+                "id": 3,
+                "canvas_id": 102,
+                "x": 150,
+                "y": 50,
+                "color": "blue",
+                "color_priority": 3,
+                "connected_to": [4]
+            },
+            {
+                "id": 4,
+                "canvas_id": 103,
+                "x": 100,
+                "y": 100,
+                "color": "yellow",  # Will need to be changed as all other colors are used
+                "color_priority": 1,
+                "connected_to": [1, 2, 3]
+            }
+        ]
+        
+        # Add circles to lookup
+        self.app.circles = circles
+        self.app.circle_lookup = {c["id"]: c for c in circles}
+        
+        # Mock the _reassign_color_network method
+        with patch.object(self.app, '_reassign_color_network', return_value=4) as mock_reassign:
+            # Check and resolve conflicts for circle 4
+            priority = self.app._check_and_resolve_color_conflicts(4)
+            
+            # Verify _reassign_color_network was called
+            mock_reassign.assert_called_once_with(4)
+            
+            # Verify the return value was passed through
+            self.assertEqual(priority, 4)
+
+    def test_reassign_color_network(self):
+        """Test the _reassign_color_network function."""
+        # Setup: Add a circle
+        circle = {
+            "id": 1,
+            "canvas_id": 100,
+            "x": 50,
+            "y": 50,
+            "color": "yellow",
+            "color_priority": 1,
+            "connected_to": []
+        }
+        
+        self.app.circles = [circle]
+        self.app.circle_lookup = {1: circle}
+        
+        # Call the reassign function
+        priority = self.app._reassign_color_network(1)
+        
+        # Verify the circle was updated with priority 4 (red)
+        self.assertEqual(priority, 4)
+        self.assertEqual(circle["color_priority"], 4)
+        self.assertEqual(circle["color"], "red")
+        
+        # Verify the canvas was updated
+        self.app.canvas.itemconfig.assert_called_once_with(100, fill="red")
 
 if __name__ == "__main__":
     unittest.main()

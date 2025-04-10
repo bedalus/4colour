@@ -544,9 +544,6 @@ class CanvasApplication:
             "to_circle": to_id
         }
         
-        # After establishing the connection, check and resolve any color conflicts
-        priority = self._check_and_resolve_color_conflicts(from_id)
-        
         return True
 
     def get_circle_at_coords(self, x, y):
@@ -635,13 +632,10 @@ class CanvasApplication:
         for circle_id in self.selected_circles:
             self.add_connection(self.newly_placed_circle_id, circle_id)
         
-        # After connections are made, check for color conflicts and resolve them
+        # After all connections are made, check for color conflicts and resolve them once
         if self.newly_placed_circle_id and self.selected_circles:
-            # Get new color based on connections
-            priority = self._assign_color_based_on_connections(self.newly_placed_circle_id)[1]
-            # Update the circle's color if it changed
-            color = get_color_from_priority(priority)
-            self._update_circle_color(self.newly_placed_circle_id, color, priority)
+            # Check and resolve color conflicts for the newly placed circle
+            priority = self._check_and_resolve_color_conflicts(self.newly_placed_circle_id)
             
         # Exit selection mode
         self.in_selection_mode = False
@@ -939,8 +933,8 @@ class CanvasApplication:
         if available_priorities:
             new_priority = min(available_priorities)
         else:
-            # If all lower priorities are used, use 4 (red)
-            new_priority = 4
+            # If all lower priorities are used, call network reassignment
+            return self._reassign_color_network(circle_id)
         
         # Update the circle with the new priority
         new_color = get_color_from_priority(new_priority)
@@ -961,17 +955,19 @@ class CanvasApplication:
             circle_id (int): The ID of the circle to reassign color for
             
         Returns:
-            str: The newly assigned color name
+            int: The newly assigned color priority (4 for red)
         """
         # For now, this function just assigns red (highest priority)
-        new_color = "red"
+        new_priority = 4
+        new_color = get_color_from_priority(new_priority)
+        
         circle_data = self.circle_lookup.get(circle_id)
         if circle_data:
             circle_data["color"] = new_color
-            circle_data["color_priority"] = 4
+            circle_data["color_priority"] = new_priority
             # Also update visual appearance
             self.canvas.itemconfig(circle_data["canvas_id"], fill=new_color)
-        return new_color
+        return new_priority
 
 def main():
     """Application entry point."""
