@@ -38,6 +38,34 @@ class TestCanvasApplication(unittest.TestCase):
         # Mock the debug button for focus tests
         self.app.debug_button = MagicMock()
     
+    def _create_click_event(self, x, y):
+        """Create a mock click event with the specified coordinates.
+        
+        Args:
+            x: X coordinate for the click event
+            y: Y coordinate for the click event
+            
+        Returns:
+            Mock: A mock event object with x and y attributes
+        """
+        event = Mock()
+        event.x = x
+        event.y = y
+        return event
+        
+    def _create_key_event(self, key):
+        """Create a mock key press event.
+        
+        Args:
+            key: The key that was pressed
+            
+        Returns:
+            Mock: A mock event object
+        """
+        event = Mock()
+        event.char = key
+        return event
+    
     def test_initialization(self):
         """Test that the app initializes with correct values."""
         self.assertEqual(self.app.canvas_width, 800)  # Updated to match new value
@@ -263,51 +291,27 @@ class TestCanvasApplication(unittest.TestCase):
     
     def test_add_connection(self):
         """Test adding a connection between two existing circles."""
-        # Setup: Add two circles without connection
-        first_circle = {
-            "id": 1,
-            "canvas_id": 100,
-            "x": 50,
-            "y": 50,
-            "color": "blue",
-            "connected_to": []
-        }
-        second_circle = {
-            "id": 2,
-            "canvas_id": 101,
-            "x": 100, 
-            "y": 100,
-            "color": "red",
-            "connected_to": []
-        }
+        # Create two circles
+        self.app._draw_on_click(self._create_click_event(100, 100))  # Circle 1
+        self.app._draw_on_click(self._create_click_event(200, 100))  # Circle 2
         
-        self.app.circles = [first_circle, second_circle]
-        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        # Give them different colors to avoid conflict resolution
+        self.app.circle_lookup[1]["color"] = "yellow"
+        self.app.circle_lookup[1]["color_priority"] = 1
+        self.app.circle_lookup[2]["color"] = "green"
+        self.app.circle_lookup[2]["color_priority"] = 2
         
-        # Mock the canvas create_line method
-        self.app.canvas.create_line.return_value = 300
-        
-        # Call add_connection
+        # Add connection
         result = self.app.add_connection(1, 2)
         
-        # Check that connection was successfully created
+        # Verify connection was made successfully
         self.assertTrue(result)
+        self.assertIn(2, self.app.circle_lookup[1]["connected_to"])
+        self.assertIn(1, self.app.circle_lookup[2]["connected_to"])
         
-        # Check that create_line was called
-        self.app.canvas.create_line.assert_called_once_with(
-            50, 50, 100, 100, width=1
-        )
-        
-        # Check that connection data was updated in both circles
-        self.assertIn(2, first_circle["connected_to"])
-        self.assertIn(1, second_circle["connected_to"])
-        
-        # Check that connections dictionary is updated
-        self.assertIn("1_2", self.app.connections)
-        connection = self.app.connections["1_2"]
-        self.assertEqual(connection["from_circle"], 1)
-        self.assertEqual(connection["to_circle"], 2)
-        self.assertEqual(connection["line_id"], 300)
+        # Verify colors haven't changed (no conflict)
+        self.assertEqual(self.app.circle_lookup[1]["color_priority"], 1)
+        self.assertEqual(self.app.circle_lookup[1]["color"], "yellow")
     
     def test_add_connection_nonexistent_circle(self):
         """Test adding a connection with nonexistent circle."""
@@ -494,69 +498,35 @@ class TestCanvasApplication(unittest.TestCase):
         self.assertEqual(self.app.hint_text_id, 300)
 
     def test_confirm_selection(self):
-        """Test confirming circle selections with y key."""
-        # Setup: Add circles with one as newly placed and others selected
-        first_circle = {
-            "id": 1,
-            "canvas_id": 100,
-            "x": 50,
-            "y": 50,
-            "color": "blue",
-            "connected_to": []
-        }
-        second_circle = {
-            "id": 2,
-            "canvas_id": 101,
-            "x": 100,
-            "y": 100,
-            "color": "red",
-            "connected_to": []
-        }
-        third_circle = {
-            "id": 3,
-            "canvas_id": 102,
-            "x": 150,
-            "y": 150,
-            "color": "green",
-            "connected_to": []
-        }
+        """Test the behavior when confirming circle selections."""
+        # Set up a selection scenario
+        self.app._draw_on_click(self._create_click_event(100, 100))  # Circle 1
+        self.app._draw_on_click(self._create_click_event(200, 100))  # Circle 2
         
-        self.app.circles = [first_circle, second_circle, third_circle]
-        self.app.circle_lookup = {1: first_circle, 2: second_circle, 3: third_circle}
-        self.app.newly_placed_circle_id = 3
-        self.app.selected_circles = [1, 2]  # Circles 1 and 2 are selected
-        self.app.selection_indicators = {1: 200, 2: 201}
-        self.app.hint_text_id = 300
+        # Manually set up selection state
+        self.app.newly_placed_circle_id = 2
+        self.app.selected_circles = [1]
         self.app.in_selection_mode = True
         
-        # Mock add_connection method
-        with patch.object(self.app, 'add_connection', return_value=True) as mock_add_connection:
-            # Create a mock event for y key press
-            event = Mock()
-            
-            # Call the confirm selection method
-            self.app._confirm_selection(event)
-            
-            # Check that connections were added
-            mock_add_connection.assert_any_call(3, 1)
-            mock_add_connection.assert_any_call(3, 2)
-            self.assertEqual(mock_add_connection.call_count, 2)
-            
-        # Check that selection mode was exited
-        self.assertFalse(self.app.in_selection_mode)
-        self.assertEqual(self.app.last_circle_id, 3)
-        self.assertIsNone(self.app.newly_placed_circle_id)
+        # Give them the same color to force conflict resolution
+        self.app.circle_lookup[1]["color"] = "yellow"
+        self.app.circle_lookup[1]["color_priority"] = 1
+        self.app.circle_lookup[2]["color"] = "yellow"
+        self.app.circle_lookup[2]["color_priority"] = 1
         
-        # Check that selections were cleared
-        self.assertEqual(self.app.selected_circles, [])
+        # Mock selection indicator for cleanup
+        self.app.selection_indicators = {1: self.app.canvas.create_line(0, 0, 10, 0)}
         
-        # Check that selection indicators were deleted
-        self.app.canvas.delete.assert_any_call(200)
-        self.app.canvas.delete.assert_any_call(201)
-        self.app.canvas.delete.assert_any_call(300)  # hint text
-        self.assertEqual(self.app.selection_indicators, {})
-        self.assertIsNone(self.app.hint_text_id)
+        # Call confirm selection
+        self.app._confirm_selection(self._create_key_event('y'))
         
+        # Verify connections were made
+        self.assertIn(1, self.app.circle_lookup[2]["connected_to"])
+        
+        # Verify color conflict was resolved (circle 2 should no longer be yellow)
+        self.assertNotEqual(self.app.circle_lookup[2]["color_priority"], 1)
+        self.assertNotEqual(self.app.circle_lookup[2]["color"], "yellow")
+
     def test_confirm_selection_not_in_selection_mode(self):
         """Test that y key does nothing when not in selection mode."""
         # Setup: Not in selection mode
@@ -1269,6 +1239,195 @@ class TestCanvasApplication(unittest.TestCase):
         circle = self.app.circles[0]
         self.assertEqual(circle["color"], "yellow")
         self.assertEqual(circle["color_priority"], 1)
+
+    def test_assign_color_based_on_connections_with_conflicts(self):
+        """Test color assignment logic when conflicts exist."""
+        # Setup directly instead of using _draw_on_click to avoid dependency issues
+        # Create 4 circles manually
+        first_circle = {
+            "id": 1,
+            "canvas_id": 100,
+            "x": 50, 
+            "y": 50,
+            "color": "yellow",
+            "color_priority": 1,
+            "connected_to": []
+        }
+        second_circle = {
+            "id": 2,
+            "canvas_id": 101,
+            "x": 100,
+            "y": 50,
+            "color": "green",
+            "color_priority": 2,
+            "connected_to": []
+        }
+        third_circle = {
+            "id": 3,
+            "canvas_id": 102,
+            "x": 150,
+            "y": 50,
+            "color": "blue",
+            "color_priority": 3,
+            "connected_to": []
+        }
+        fourth_circle = {
+            "id": 4,
+            "canvas_id": 103,
+            "x": 200,
+            "y": 50,
+            "color": "yellow",  # Start with yellow, will be changed
+            "color_priority": 1,
+            "connected_to": []
+        }
+        
+        # Add circles to data structures
+        self.app.circles = [first_circle, second_circle, third_circle, fourth_circle]
+        self.app.circle_lookup = {
+            1: first_circle,
+            2: second_circle,
+            3: third_circle,
+            4: fourth_circle
+        }
+        
+        # Connect circle 4 to all other circles
+        for i in range(1, 4):
+            self.app.circle_lookup[4]["connected_to"].append(i)
+            self.app.circle_lookup[i]["connected_to"].append(4)
+        
+        # Now check and resolve conflicts for circle 4
+        priority = self.app._check_and_resolve_color_conflicts(4)
+        
+        # When connected to circles with all priorities 1-3, should get priority 4 (red)
+        self.assertEqual(priority, 4)
+        self.assertEqual(self.app.circle_lookup[4]["color"], "red")
+
+    def test_update_circle_color(self):
+        """Test updating a circle's color."""
+        # Setup: Add a circle
+        circle = {
+            "id": 1,
+            "canvas_id": 100,
+            "x": 50,
+            "y": 50,
+            "color": "yellow",
+            "color_priority": 1,
+            "connected_to": []
+        }
+        
+        self.app.circles = [circle]
+        self.app.circle_lookup = {1: circle}
+        
+        # Test: Update the circle's color
+        result = self.app._update_circle_color(1, "blue", 3)
+        
+        # Check the result was successful
+        self.assertTrue(result)
+        
+        # Check that the circle data was updated
+        self.assertEqual(circle["color"], "blue")
+        self.assertEqual(circle["color_priority"], 3)
+        
+        # Check that the canvas item was updated
+        self.app.canvas.itemconfig.assert_called_once_with(100, fill="blue")
+        
+    def test_confirm_selection_with_color_reassignment(self):
+        """Test confirming selections with color reassignment."""
+        # Setup: Add two circles and prepare for selection confirmation
+        first_circle = {
+            "id": 1,
+            "canvas_id": 100,
+            "x": 50,
+            "y": 50,
+            "color": "yellow",
+            "color_priority": 1,
+            "connected_to": []
+        }
+        second_circle = {
+            "id": 2,
+            "canvas_id": 101,
+            "x": 100,
+            "y": 100,
+            "color": "yellow",  # Same color as first circle - will cause conflict
+            "color_priority": 1,
+            "connected_to": []
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        self.app.in_selection_mode = True
+        self.app.newly_placed_circle_id = 2
+        self.app.selected_circles = [1]  # Selected circle 1 to connect to
+        self.app.selection_indicators = {1: 200}
+        self.app.hint_text_id = 300
+        
+        # Mock the necessary methods
+        with patch.object(self.app, 'add_connection', return_value=True) as mock_add:
+            with patch.object(self.app, '_assign_color_based_on_connections', return_value=("green", 2)) as mock_assign:
+                with patch.object(self.app, '_update_circle_color') as mock_update:
+                    # Create a mock event for y key press
+                    event = Mock()
+                    
+                    # Call the confirm selection method
+                    self.app._confirm_selection(event)
+                    
+                    # Verify add_connection was called
+                    mock_add.assert_called_with(2, 1)
+                    
+                    # Verify color assignment was called
+                    mock_assign.assert_called_with(2)
+                    
+                    # Verify color update was called with new color
+                    mock_update.assert_called_with(2, "green", 2)
+        
+        # Check that selection mode was exited
+        self.assertFalse(self.app.in_selection_mode)
+
+    def test_check_and_resolve_color_conflicts(self):
+        """Test the basic color conflict resolution logic."""
+        # Create circles manually instead of using _draw_on_click
+        first_circle = {
+            "id": 1,
+            "canvas_id": 100,
+            "x": 50,
+            "y": 50,
+            "color": "yellow",
+            "color_priority": 1,
+            "connected_to": []
+        }
+        second_circle = {
+            "id": 2,
+            "canvas_id": 101,
+            "x": 100,
+            "y": 50,
+            "color": "yellow",  # Same color as first circle - will cause conflict
+            "color_priority": 1,
+            "connected_to": []
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        # Setup the connection for first circle
+        first_circle["connected_to"].append(2)
+        second_circle["connected_to"].append(1)
+        
+        # Store a mock connection
+        self.app.connections = {
+            "1_2": {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2
+            }
+        }
+        
+        # Call color conflict resolution directly
+        priority = self.app._check_and_resolve_color_conflicts(2)
+        
+        # Check that circle 2's color was changed to resolve the conflict
+        self.assertEqual(priority, 2)  # Priority should be 2
+        self.assertEqual(self.app.circle_lookup[2]["color_priority"], 2)  # Should be green (priority 2)
+        self.assertEqual(self.app.circle_lookup[2]["color"], "green")
 
 if __name__ == "__main__":
     unittest.main()

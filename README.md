@@ -6,6 +6,7 @@ NOTE: These guidelines apply only to code in the 4colour repo.
 - Follow [PEP 8](https://peps.python.org/pep-0008/) for Python or equivalent standards for other languages.
 - Use meaningful variable and function names.
 - Write modular, reusable, and succinctly documented code. To avoid clutter, do not document self-explanatary code.
+- The preference is for precision, not creativity.
 
 ## General Rules
 - Always include comments for complex logic.
@@ -23,10 +24,6 @@ NOTE: These guidelines apply only to code in the 4colour repo.
 - Use descriptive commit messages.
 - Follow the format: `<type>: <short description>` (e.g., `feat: add user authentication`).
 
-## Planning
-
-Completed items are marked with `[x]`. New work items should be itemized and preceded by an empty checkbox (`- [ ]`). When implementing features, follow the requirements of the next unmarked checkbox. Once a feature is fully implemented and tested, mark the checkbox as complete to track progress.
-
 ## Test-Driven Development
 
 To ensure smooth development and avoid regressions:
@@ -38,7 +35,13 @@ To ensure smooth development and avoid regressions:
 - All new features must have corresponding tests in the `tests` directory.
 - Consider writing tests before implementing a feature to clarify expected behavior.
 
-### Coding Plan
+## Planning
+
+Completed items are marked with `[x]`. These completed items provide valuable context that document the genesis of the existing code base.
+
+New work items should be itemized and preceded by an empty checkbox (`- [ ]`). When engaging in a new coding session to implement new features and improvements, follow the requirements in sequential order starting at the first unmarked checkbox. Once the feature and corresponding unit tests are written or updated to the required specification, mark the checkbox as complete to track progress. Always remember to complete this step.
+
+### Phase 1: Setup base Code
 
 The initial phase focuses on creating the user interface using `tkinter`.
 
@@ -239,7 +242,7 @@ This phase introduces rule-based circle coloring to replace random coloring. Col
 - [x] **Cleanup:**
     *   Remove the now-unused `_get_random_color()` function and its associated unit test
 
-- [ ] **Implement Connection-Aware Color Assignment:**
+- [x] **Implement Connection-Aware Color Assignment:**
     *   Note: a color conflict is when two connected circles have the same color.
     *   When connections are confirmed in selection mode, check if color conflicts exist
     *   If a conflict exists, reassign the newly placed circle's color using these rules:
