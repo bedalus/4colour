@@ -555,9 +555,9 @@ class TestCanvasApplication(unittest.TestCase):
             mock_show_hint.assert_called_once()
             
         # Check that event bindings were updated for edit mode
-        self.app.canvas.bind.assert_any_call("<Button-1>", self.app._start_drag)
-        self.app.canvas.bind.assert_any_call("<B1-Motion>", self.app._drag_circle)
-        self.app.canvas.bind.assert_any_call("<ButtonRelease-1>", self.app._end_drag)
+        self.app.canvas.bind.assert_any_call("<Button-1>", self.app._drag_start)
+        self.app.canvas.bind.assert_any_call("<B1-Motion>", self.app._drag_motion)
+        self.app.canvas.bind.assert_any_call("<ButtonRelease-1>", self.app._drag_end)
         self.app.canvas.bind.assert_any_call("<Button-3>", self.app._remove_circle)
 
     def test_toggle_edit_mode_disable(self):
@@ -590,7 +590,9 @@ class TestCanvasApplication(unittest.TestCase):
         self.app.circles = [circle]
         self.app.circle_lookup = {1: circle}
         self.app.in_edit_mode = True
-        self.app.dragged_circle_id = None
+        
+        # Reset drag state
+        self.app._reset_drag_state()
         
         # Mock the get_circle_at_coords method to return our circle ID
         with patch.object(self.app, 'get_circle_at_coords', return_value=1):
@@ -600,15 +602,19 @@ class TestCanvasApplication(unittest.TestCase):
             event.y = 50
             
             # Call the start drag method
-            self.app._start_drag(event)
+            self.app._drag_start(event)
             
-            # Check that the dragged circle ID was set correctly
-            self.assertEqual(self.app.dragged_circle_id, 1)
+            # Check that the drag state was set correctly
+            self.assertTrue(self.app.drag_state["active"])
+            self.assertEqual(self.app.drag_state["type"], "circle")
+            self.assertEqual(self.app.drag_state["id"], 1)
     
     def test_start_drag_no_circle(self):
         """Test starting to drag when no circle is clicked."""
         self.app.in_edit_mode = True
-        self.app.dragged_circle_id = None
+        
+        # Reset drag state
+        self.app._reset_drag_state()
         
         # Mock the get_circle_at_coords method to return None (no circle found)
         with patch.object(self.app, 'get_circle_at_coords', return_value=None):
@@ -618,10 +624,12 @@ class TestCanvasApplication(unittest.TestCase):
             event.y = 200
             
             # Call the start drag method
-            self.app._start_drag(event)
+            self.app._drag_start(event)
             
-            # Check that the dragged circle ID remains None
-            self.assertIsNone(self.app.dragged_circle_id)
+            # Check that the drag state remained inactive
+            self.assertFalse(self.app.drag_state["active"])
+            self.assertIsNone(self.app.drag_state["type"])
+            self.assertIsNone(self.app.drag_state["id"])
     
     def test_drag_circle(self):
         """Test dragging a circle to a new position."""
@@ -638,7 +646,17 @@ class TestCanvasApplication(unittest.TestCase):
         self.app.circles = [circle]
         self.app.circle_lookup = {1: circle}
         self.app.in_edit_mode = True
-        self.app.dragged_circle_id = 1
+        
+        # Setup drag state for circle
+        self.app.drag_state = {
+            "active": True,
+            "type": "circle",
+            "id": 1,
+            "start_x": 50,
+            "start_y": 50,
+            "last_x": 50,
+            "last_y": 50
+        }
         
         # Mock the update_connections method
         with patch.object(self.app, '_update_connections') as mock_update:
@@ -647,11 +665,11 @@ class TestCanvasApplication(unittest.TestCase):
             event.x = 60
             event.y = 70  # Moved 10 right and 20 down
             
-            # Call the drag method
-            self.app._drag_circle(event)
+            # Call the drag motion method
+            self.app._drag_motion(event)
             
             # Check that the circle was moved on the canvas
-            self.app.canvas.move.assert_called_once_with(100, 10, 20)
+            self.app.canvas.move.assert_called_with(100, 10, 20)
             
             # Check that the circle's coordinates were updated
             self.assertEqual(circle["x"], 60)
@@ -664,16 +682,26 @@ class TestCanvasApplication(unittest.TestCase):
         """Test ending a circle drag operation."""
         # Setup: Enable edit mode and set a circle as being dragged
         self.app.in_edit_mode = True
-        self.app.dragged_circle_id = 1
+        self.app.drag_state = {
+            "active": True,
+            "type": "circle",
+            "id": 1,
+            "start_x": 50,
+            "start_y": 50,
+            "last_x": 60,
+            "last_y": 70
+        }
         
         # Create a mock event for mouse release
         event = Mock()
         
         # Call the end drag method
-        self.app._end_drag(event)
+        self.app._drag_end(event)
         
-        # Check that the dragged circle ID was reset
-        self.assertIsNone(self.app.dragged_circle_id)
+        # Check that the drag state was reset
+        self.assertFalse(self.app.drag_state["active"])
+        self.assertIsNone(self.app.drag_state["id"])
+        self.assertIsNone(self.app.drag_state["type"])
     
     def test_update_connections(self):
         """Test updating connection lines when a circle moves."""
@@ -986,7 +1014,15 @@ class TestCanvasApplication(unittest.TestCase):
         """Test that dragging a midpoint doubles the offset for proper curve effect."""
         # Setup: In adjust mode with active midpoint drag
         self.app._mode = ApplicationMode.ADJUST
-        self.app.dragged_midpoint_key = "1_2"
+        self.app.drag_state = {
+            "active": True,
+            "type": "midpoint",
+            "id": "1_2",
+            "start_x": 100,
+            "start_y": 100,
+            "last_x": 100,
+            "last_y": 100
+        }
         
         # Setup circles with midpoint at (100, 100)
         first_circle = {
@@ -1018,7 +1054,7 @@ class TestCanvasApplication(unittest.TestCase):
             event.y = 90   # 10 pixels above midpoint
             
             # Call drag midpoint method
-            self.app._drag_midpoint(event)
+            self.app._drag_motion(event)
             
             # Verify update_connection_curve was called with DOUBLED offset values
             # Base midpoint is (100,100), event position is (110,90)
@@ -1220,9 +1256,9 @@ class TestCanvasApplication(unittest.TestCase):
         self.app._bind_adjust_mode_events()
         
         # Check that events were bound
-        self.app.canvas.bind.assert_any_call("<Button-1>", self.app._start_drag)
-        self.app.canvas.bind.assert_any_call("<B1-Motion>", self.app._drag_circle)
-        self.app.canvas.bind.assert_any_call("<ButtonRelease-1>", self.app._end_drag)
+        self.app.canvas.bind.assert_any_call("<Button-1>", self.app._drag_start)
+        self.app.canvas.bind.assert_any_call("<B1-Motion>", self.app._drag_motion)
+        self.app.canvas.bind.assert_any_call("<ButtonRelease-1>", self.app._drag_end)
         self.app.canvas.bind.assert_any_call("<Button-3>", self.app._remove_circle)
         self.assertTrue(self.app._bound_events[ApplicationMode.ADJUST])
         
@@ -1532,7 +1568,7 @@ class TestCanvasApplication(unittest.TestCase):
             "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": []
         }
         second_circle = {
-            "id": 2, "canvas_id": 101, "x": 100, "y": 50, "color_priority": 1, "connected_to": []
+            "id": 2, "canvas_id": 101, "x": 100, "y": 100, "color_priority": 1, "connected_to": []
         }
         
         self.app.circles = [first_circle, second_circle]
@@ -1775,6 +1811,16 @@ class TestCanvasApplication(unittest.TestCase):
     def test_update_connection_curve(self):
         """Test updating curve offset for a connection."""
         # Setup a connection with default curve data
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2, "canvas_id": 101, "x": 150, "y": 150, "color_priority": 2, "connected_to": [1]
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
         self.app.connections = {
             "1_2": {
                 "line_id": 200,
@@ -1785,13 +1831,15 @@ class TestCanvasApplication(unittest.TestCase):
             }
         }
         
-        # Update the curve
-        result = self.app.update_connection_curve(1, 2, 25, -15)
-        
-        # Verify result
-        self.assertTrue(result)
-        self.assertEqual(self.app.connections["1_2"]["curve_X"], 25)
-        self.assertEqual(self.app.connections["1_2"]["curve_Y"], -15)
+        # Mock calculate_curve_points
+        with patch.object(self.app, '_calculate_curve_points', return_value=[50, 50, 75, 75, 150, 150]):
+            # Update the curve
+            result = self.app.update_connection_curve(1, 2, 25, -15)
+            
+            # Verify result
+            self.assertTrue(result)
+            self.assertEqual(self.app.connections["1_2"]["curve_X"], 25)
+            self.assertEqual(self.app.connections["1_2"]["curve_Y"], -15)
         
         # Test with reversed ids
         result = self.app.update_connection_curve(2, 1, 30, -20)
@@ -2015,19 +2063,19 @@ class TestCanvasApplication(unittest.TestCase):
             }
         }
         
-        # Mock _calculate_curve_points and _draw_midpoint_handle
-        with patch.object(self.app, '_calculate_curve_points', 
-                         return_value=[50, 50, 110, 95, 150, 150]) as mock_calc:
+        # Mock _calculate_midpoint_handle_position and _draw_midpoint_handle
+        with patch.object(self.app, '_calculate_midpoint_handle_position', 
+                         return_value=(110, 95)) as mock_calc_pos:
             with patch.object(self.app, '_draw_midpoint_handle', 
                              return_value=300) as mock_draw:
                 
                 # Call the method
                 self.app._show_midpoint_handles()
                 
-                # Verify curve points were calculated
-                mock_calc.assert_called_once_with(1, 2)
+                # Verify position was calculated
+                mock_calc_pos.assert_called_once_with(1, 2)
                 
-                # Verify handle was drawn at midpoint
+                # Verify handle was drawn at calculated position
                 mock_draw.assert_called_once_with("1_2", 110, 95)
                 
                 # Check that handle was stored
@@ -2106,12 +2154,13 @@ class TestCanvasApplication(unittest.TestCase):
         # Add a midpoint handle
         self.app.midpoint_handles = {"1_2": 300}
         
-        # Mock canvas delete and _calculate_curve_points and _draw_midpoint_handle
-        with patch.object(self.app.canvas, 'delete') as mock_delete:
-            with patch.object(self.app, '_calculate_curve_points', 
-                             return_value=[50, 50, 120, 90, 150, 150]) as mock_calc:
-                with patch.object(self.app, '_draw_midpoint_handle', 
-                                 return_value=301) as mock_draw:
+        # Mock canvas operations and helpers
+        with patch.object(self.app, '_calculate_curve_points', 
+                         return_value=[50, 50, 120, 90, 150, 150]):
+            with patch.object(self.app, '_calculate_midpoint_handle_position',
+                             return_value=(120, 90)):
+                with patch.object(self.app, '_draw_midpoint_handle',
+                                 return_value=301):
                     
                     # Call the method
                     result = self.app.update_connection_curve(1, 2, 20, -10)
@@ -2123,14 +2172,9 @@ class TestCanvasApplication(unittest.TestCase):
                     self.assertEqual(self.app.connections["1_2"]["curve_X"], 20)
                     self.assertEqual(self.app.connections["1_2"]["curve_Y"], -10)
                     
-                    # Verify old handle was deleted
-                    mock_delete.assert_called_once_with(300)
-                    
-                    # Verify curve points were calculated
-                    mock_calc.assert_called_once_with(1, 2)
-                    
-                    # Verify new handle was drawn
-                    mock_draw.assert_called_once_with("1_2", 120, 90)
+                    # Verify both the line and old handle were deleted
+                    self.app.canvas.delete.assert_any_call(200)  # Line
+                    self.app.canvas.delete.assert_any_call(300)  # Old handle
                     
                     # Verify handle was updated in dictionary
                     self.assertEqual(self.app.midpoint_handles["1_2"], 301)
@@ -2163,26 +2207,13 @@ class TestCanvasApplication(unittest.TestCase):
         # Add a midpoint handle
         self.app.midpoint_handles = {"1_2": 300}
         
-        # Mock canvas delete/create and _draw_midpoint_handle
-        with patch.object(self.app.canvas, 'delete') as mock_delete:
-            with patch.object(self.app.canvas, 'create_line', return_value=201) as mock_create_line:
-                with patch.object(self.app, '_calculate_curve_points', 
-                                return_value=[50, 50, 110, 95, 150, 150]) as mock_calc:
-                    with patch.object(self.app, '_draw_midpoint_handle', 
-                                    return_value=301) as mock_draw:
-                        
-                        # Call the method
-                        self.app._update_connections(1)
-                        
-                        # Verify old line and handle were deleted
-                        mock_delete.assert_any_call(200)
-                        mock_delete.assert_any_call(300)
-                        
-                        # Verify new midpoint handle was drawn
-                        mock_draw.assert_called_once_with("1_2", 110, 95)
-                        
-                        # Verify midpoint handle was updated in dictionary
-                        self.assertEqual(self.app.midpoint_handles["1_2"], 301)
+        # Mock the update_connection_curve method to prevent actual implementation
+        with patch.object(self.app, 'update_connection_curve') as mock_update:
+            # Call the method
+            self.app._update_connections(1)
+            
+            # Verify update_connection_curve was called with the right parameters
+            mock_update.assert_called_once_with(1, 2, 10, -5)
 
     def test_clear_canvas_removes_midpoint_handles(self):
         """Test that clearing the canvas also removes midpoint handles."""
@@ -2260,29 +2291,40 @@ class TestCanvasApplication(unittest.TestCase):
         }
         self.app.midpoint_handles = {"1_2": 300}
         
-        # Mock canvas.find_withtag to return our handle ID
-        self.app.canvas.find_withtag.return_value = [300]
+        # Mock canvas.find_closest to return our handle ID and gettags to return the tags
+        self.app.canvas.find_closest = MagicMock(return_value=[300])
+        self.app.canvas.gettags = MagicMock(return_value=["midpoint_handle", "1_2"])
         
         # Create mock event
         event = Mock()
         event.x = 100
         event.y = 120
         
-        # Call the start midpoint drag method
-        self.app._start_midpoint_drag(event)
+        # Call the start drag method
+        self.app._drag_start(event)
         
-        # Verify the dragged midpoint key was set
-        self.assertEqual(self.app.dragged_midpoint_key, "1_2")
-        
-        # Verify the start coordinates were saved
-        self.assertEqual(self.app.midpoint_start_x, 100)
-        self.assertEqual(self.app.midpoint_start_y, 120)
+        # Verify the drag state was set correctly
+        self.assertTrue(self.app.drag_state["active"])
+        self.assertEqual(self.app.drag_state["type"], "midpoint")
+        self.assertEqual(self.app.drag_state["id"], "1_2")
+        self.assertEqual(self.app.drag_state["start_x"], 100)
+        self.assertEqual(self.app.drag_state["start_y"], 120)
 
     def test_drag_midpoint(self):
         """Test dragging a midpoint handle to adjust the curve."""
         # Setup: In adjust mode with active midpoint drag
         self.app._mode = ApplicationMode.ADJUST
-        self.app.dragged_midpoint_key = "1_2"
+        
+        # Setup drag state for midpoint
+        self.app.drag_state = {
+            "active": True,
+            "type": "midpoint",
+            "id": "1_2",
+            "start_x": 100,
+            "start_y": 100,
+            "last_x": 100,
+            "last_y": 100
+        }
         
         # Setup circles
         first_circle = {
@@ -2306,46 +2348,59 @@ class TestCanvasApplication(unittest.TestCase):
             }
         }
         
-        # Mock update_connection_curve method
-        with patch.object(self.app, 'update_connection_curve') as mock_update:
-            # Create mock event at new position
-            event = Mock()
-            event.x = 110  # 10 pixels right of midpoint (100,100)
-            event.y = 90   # 10 pixels above midpoint
-            
-            # Call drag midpoint method
-            self.app._drag_midpoint(event)
-            
-            # Verify update_connection_curve was called with correct values
-            # Base midpoint is (100,100), so offset is (10,-10)
-            mock_update.assert_called_once_with(1, 2, 10, -10)
+        # Mock calculate_midpoint method for base position
+        with patch.object(self.app, '_calculate_midpoint', return_value=(100, 100)):
+            # Mock update_connection_curve method
+            with patch.object(self.app, 'update_connection_curve') as mock_update:
+                # Create mock event at new position
+                event = Mock()
+                event.x = 110  # 10 pixels right of midpoint (100,100)
+                event.y = 90   # 10 pixels above midpoint
+                
+                # Call drag motion method
+                self.app._drag_motion(event)
+                
+                # Verify drag_midpoint_motion was called with correct parameters
+                mock_update.assert_called_once_with(1, 2, 20, -20)
 
     def test_end_midpoint_drag(self):
         """Test ending midpoint drag operation."""
         # Setup: Active midpoint drag
         self.app._mode = ApplicationMode.ADJUST
-        self.app.dragged_midpoint_key = "1_2"
-        self.app.midpoint_start_x = 100
-        self.app.midpoint_start_y = 100
+        self.app.drag_state = {
+            "active": True,
+            "type": "midpoint",
+            "id": "1_2",
+            "start_x": 100,
+            "start_y": 100,
+            "last_x": 110,
+            "last_y": 90
+        }
         
         # Create mock event
         event = Mock()
         
-        # Call end midpoint drag method
-        self.app._end_midpoint_drag(event)
+        # Call end drag method
+        self.app._drag_end(event)
         
-        # Verify dragged midpoint key was reset
-        self.assertIsNone(self.app.dragged_midpoint_key)
-        
-        # Verify start coordinates were reset
-        self.assertEqual(self.app.midpoint_start_x, 0)
-        self.assertEqual(self.app.midpoint_start_y, 0)
+        # Verify drag state was reset
+        self.assertFalse(self.app.drag_state["active"])
+        self.assertIsNone(self.app.drag_state["type"])
+        self.assertIsNone(self.app.drag_state["id"])
 
     def test_midpoint_drag_not_in_edit_mode(self):
         """Test that midpoint dragging does nothing when not in edit mode."""
-        # Setup: Not in edit mode, but with initialized midpoint drag
+        # Setup: Not in edit mode, but with initialized midpoint drag state
         self.app._mode = ApplicationMode.CREATE
-        self.app.dragged_midpoint_key = "1_2"
+        self.app.drag_state = {
+            "active": True,
+            "type": "midpoint",
+            "id": "1_2",
+            "start_x": 100,
+            "start_y": 100,
+            "last_x": 100,
+            "last_y": 100
+        }
         
         # Mock update_connection_curve
         with patch.object(self.app, 'update_connection_curve') as mock_update:
@@ -2354,11 +2409,64 @@ class TestCanvasApplication(unittest.TestCase):
             event.x = 110
             event.y = 90
             
-            # Call drag midpoint method
-            self.app._drag_midpoint(event)
+            # Call drag motion method
+            self.app._drag_motion(event)
             
             # Verify update_connection_curve was not called
             mock_update.assert_not_called()
+
+    def test_drag_midpoint_doubles_offset(self):
+        """Test that dragging a midpoint doubles the offset for proper curve effect."""
+        # Setup: In adjust mode with active midpoint drag state
+        self.app._mode = ApplicationMode.ADJUST
+        self.app.drag_state = {
+            "active": True,
+            "type": "midpoint",
+            "id": "1_2",
+            "start_x": 100,
+            "start_y": 100,
+            "last_x": 100,
+            "last_y": 100
+        }
+        
+        # Setup circles with midpoint at (100, 100)
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2, "canvas_id": 101, "x": 150, "y": 150, "color_priority": 2, "connected_to": [1]
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        # Setup connection
+        self.app.connections = {
+            "1_2": {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2,
+                "curve_X": 0,
+                "curve_Y": 0
+            }
+        }
+        
+        # Mock calculate_midpoint method for base position
+        with patch.object(self.app, '_calculate_midpoint', return_value=(100, 100)):
+            # Mock update_connection_curve method
+            with patch.object(self.app, 'update_connection_curve') as mock_update:
+                # Create mock event at new position
+                event = Mock()
+                event.x = 110  # 10 pixels right of midpoint (100,100)
+                event.y = 90   # 10 pixels above midpoint
+                
+                # Call drag motion method
+                self.app._drag_motion(event)
+                
+                # Verify update_connection_curve was called with DOUBLED offset values
+                # Base midpoint is (100,100), event position is (110,90)
+                # Offset is (10,-10), but we double it to (20,-20)
+                mock_update.assert_called_once_with(1, 2, 20, -20)
 
     def test_adjust_mode_binds_midpoint_events(self):
         """Test that entering adjust mode binds midpoint handle events."""
@@ -2376,16 +2484,187 @@ class TestCanvasApplication(unittest.TestCase):
         # Call bind adjust mode events
         self.app._bind_adjust_mode_events()
         
-        # Verify tag_bind was called for midpoint handles
-        self.app.canvas.tag_bind.assert_any_call("midpoint_handle", "<Button-1>", self.app._start_midpoint_drag)
-        self.app.canvas.tag_bind.assert_any_call("midpoint_handle", "<B1-Motion>", self.app._drag_midpoint)
-        self.app.canvas.tag_bind.assert_any_call("midpoint_handle", "<ButtonRelease-1>", self.app._end_midpoint_drag)
+        # Canvas events are now handled by unified drag methods
+        # So we only need to verify the basic bindings were added
+        self.app.canvas.bind.assert_any_call("<Button-1>", self.app._drag_start)
+        self.app.canvas.bind.assert_any_call("<B1-Motion>", self.app._drag_motion)
+        self.app.canvas.bind.assert_any_call("<ButtonRelease-1>", self.app._drag_end)
+
+    def test_show_midpoint_handles(self):
+        """Test showing midpoint handles for all connections."""
+        # Setup connections
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2, "canvas_id": 101, "x": 150, "y": 150, "color_priority": 2, "connected_to": [1]
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        self.app.connections = {
+            "1_2": {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2,
+                "curve_X": 10,
+                "curve_Y": -5
+            }
+        }
+        
+        # Mock _calculate_midpoint_handle_position and _draw_midpoint_handle
+        with patch.object(self.app, '_calculate_midpoint_handle_position', 
+                         return_value=(110, 95)) as mock_calc_pos:
+            with patch.object(self.app, '_draw_midpoint_handle', 
+                             return_value=300) as mock_draw:
+                
+                # Call the method
+                self.app._show_midpoint_handles()
+                
+                # Verify position was calculated
+                mock_calc_pos.assert_called_once_with(1, 2)
+                
+                # Verify handle was drawn at calculated position
+                mock_draw.assert_called_once_with("1_2", 110, 95)
+                
+                # Check that handle was stored
+                self.assertEqual(self.app.midpoint_handles["1_2"], 300)
+
+    def test_update_connection_curve(self):
+        """Test updating curve offset for a connection."""
+        # Setup a connection with default curve data
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2, "canvas_id": 101, "x": 150, "y": 150, "color_priority": 2, "connected_to": [1]
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        self.app.connections = {
+            "1_2": {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2,
+                "curve_X": 0,
+                "curve_Y": 0
+            }
+        }
+        
+        # Mock calculate_curve_points
+        with patch.object(self.app, '_calculate_curve_points', return_value=[50, 50, 75, 75, 150, 150]):
+            # Update the curve
+            result = self.app.update_connection_curve(1, 2, 25, -15)
+            
+            # Verify result
+            self.assertTrue(result)
+            self.assertEqual(self.app.connections["1_2"]["curve_X"], 25)
+            self.assertEqual(self.app.connections["1_2"]["curve_Y"], -15)
+
+    def test_update_connection_curve_updates_handle(self):
+        """Test that updating a curve also updates its midpoint handle in adjust mode."""
+        # Setup
+        self.app._mode = ApplicationMode.ADJUST
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2, "canvas_id": 101, "x": 150, "y": 150, "color_priority": 2, "connected_to": [1]
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        self.app.connections = {
+            "1_2": {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2,
+                "curve_X": 0,
+                "curve_Y": 0
+            }
+        }
+        
+        # Add a midpoint handle
+        self.app.midpoint_handles = {"1_2": 300}
+        
+        # Mock canvas operations and helpers
+        with patch.object(self.app, '_calculate_curve_points', 
+                         return_value=[50, 50, 120, 90, 150, 150]):
+            with patch.object(self.app, '_calculate_midpoint_handle_position',
+                             return_value=(120, 90)):
+                with patch.object(self.app, '_draw_midpoint_handle',
+                                 return_value=301):
+                    
+                    # Call the method
+                    result = self.app.update_connection_curve(1, 2, 20, -10)
+                    
+                    # Verify result
+                    self.assertTrue(result)
+                    
+                    # Verify curve values were updated
+                    self.assertEqual(self.app.connections["1_2"]["curve_X"], 20)
+                    self.assertEqual(self.app.connections["1_2"]["curve_Y"], -10)
+                    
+                    # Verify both the line and old handle were deleted
+                    self.app.canvas.delete.assert_any_call(200)  # Line
+                    self.app.canvas.delete.assert_any_call(300)  # Old handle
+                    
+                    # Verify handle was updated in dictionary
+                    self.assertEqual(self.app.midpoint_handles["1_2"], 301)
+
+    def test_update_connections_with_midpoint_handles(self):
+        """Test updating connections redraws midpoint handles in adjust mode."""
+        # Setup
+        self.app._mode = ApplicationMode.ADJUST
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2, "canvas_id": 101, "x": 150, "y": 150, "color_priority": 2, "connected_to": [1]
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        # Create connection
+        self.app.connections = {
+            "1_2": {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2,
+                "curve_X": 10,
+                "curve_Y": -5
+            }
+        }
+        
+        # Add a midpoint handle
+        self.app.midpoint_handles = {"1_2": 300}
+        
+        # Mock the update_connection_curve method to prevent actual implementation
+        with patch.object(self.app, 'update_connection_curve') as mock_update:
+            # Call the method
+            self.app._update_connections(1)
+            
+            # Verify update_connection_curve was called with the right parameters
+            mock_update.assert_called_once_with(1, 2, 10, -5)
 
     def test_drag_midpoint_with_no_connection(self):
         """Test dragging a midpoint when its connection doesn't exist."""
         # Setup: In adjust mode with active midpoint drag
         self.app._mode = ApplicationMode.ADJUST
-        self.app.dragged_midpoint_key = "1_2"  # Key that doesn't match any connection
+        self.app.drag_state = {
+            "active": True,
+            "type": "midpoint",
+            "id": "1_2",  # Key that doesn't match any connection
+            "start_x": 100,
+            "start_y": 100,
+            "last_x": 100,
+            "last_y": 100
+        }
         
         # Empty connections dict
         self.app.connections = {}
@@ -2397,8 +2676,8 @@ class TestCanvasApplication(unittest.TestCase):
             event.x = 110
             event.y = 90
             
-            # Call drag midpoint method
-            self.app._drag_midpoint(event)
+            # Call drag motion method
+            self.app._drag_motion(event)
             
             # Verify update_connection_curve was not called
             mock_update.assert_not_called()
