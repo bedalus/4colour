@@ -1126,5 +1126,126 @@ class TestCanvasApplication(unittest.TestCase):
         # Check that canvas background was reset to white
         self.app.canvas.config.assert_any_call(bg="white")
 
+    def test_remove_circle_by_id(self):
+        """Test the centralized circle removal method."""
+        # Setup: Add two connected circles
+        first_circle = {
+            "id": 1,
+            "canvas_id": 100,
+            "x": 50,
+            "y": 50,
+            "color": "blue",
+            "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2,
+            "canvas_id": 101,
+            "x": 100,
+            "y": 100,
+            "color": "red",
+            "connected_to": [1]
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        # Create a connection between the circles
+        self.app.connections = {
+            "1_2": {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2
+            }
+        }
+        
+        # Call the removal method
+        result = self.app._remove_circle_by_id(1)
+        
+        # Check the result was successful
+        self.assertTrue(result)
+        
+        # Check that the circle was deleted from the canvas
+        self.app.canvas.delete.assert_any_call(100)  # Circle's canvas_id
+        
+        # Check that the connection line was deleted
+        self.app.canvas.delete.assert_any_call(200)  # Connection line_id
+        
+        # Check that the circle was removed from data structures
+        self.assertEqual(len(self.app.circles), 1)
+        self.assertEqual(self.app.circles[0]["id"], 2)
+        self.assertNotIn(1, self.app.circle_lookup)
+        
+        # Check that the connection was removed from the connections dictionary
+        self.assertEqual(len(self.app.connections), 0)
+        
+        # Check that the connected circle's data was updated
+        self.assertEqual(second_circle["connected_to"], [])
+        
+    def test_remove_circle_connections(self):
+        """Test removing circle connections."""
+        # Setup: Add two connected circles
+        first_circle = {
+            "id": 1,
+            "canvas_id": 100,
+            "x": 50,
+            "y": 50,
+            "color": "blue",
+            "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2,
+            "canvas_id": 101,
+            "x": 100,
+            "y": 100,
+            "color": "red",
+            "connected_to": [1]
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        # Create a connection between the circles
+        self.app.connections = {
+            "1_2": {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2
+            }
+        }
+        
+        # Call the connection removal method
+        self.app._remove_circle_connections(1)
+        
+        # Check that the connection line was deleted
+        self.app.canvas.delete.assert_called_once_with(200)
+        
+        # Check that the connections dictionary is empty
+        self.assertEqual(len(self.app.connections), 0)
+        
+        # Check that the connected circle's data was updated
+        self.assertEqual(second_circle["connected_to"], [])
+        
+    def test_handle_last_circle_removed(self):
+        """Test handling the last circle removal."""
+        # Setup: Set to adjust mode, then remove the last circle
+        self.app._mode = ApplicationMode.ADJUST
+        
+        # Mock set_application_mode
+        with patch.object(self.app, '_set_application_mode') as mock_set_mode:
+            # Call the last circle removal handler
+            self.app._handle_last_circle_removed()
+            
+            # Check that we switched to CREATE mode
+            mock_set_mode.assert_called_with(ApplicationMode.CREATE)
+            
+        # Check that data structures were cleared
+        self.assertEqual(self.app.drawn_items, [])
+        self.assertEqual(self.app.connections, {})
+        self.assertIsNone(self.app.last_circle_id)
+        self.assertEqual(self.app.next_id, 1)
+        
+        # Check that canvas was cleared
+        self.app.canvas.delete.assert_called_with("all")
+
 if __name__ == "__main__":
     unittest.main()

@@ -214,7 +214,7 @@ This phase focuses on improving how mouse and keyboard events are managed across
 
 This phase includes improvements deferred from previous phases.
 
-- [ ] **Refactor Circle Removal Logic:**
+- [x] **Refactor Circle Removal Logic:**
     *   Consolidate the circle and connection removal code into a reusable helper method.
     *   Create a separate method for handling the "last circle removed" scenario.
     *   Ensure consistent cleanup when removing circles, whether through edit mode or through clearing the canvas.

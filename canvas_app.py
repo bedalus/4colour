@@ -367,18 +367,22 @@ class CanvasApplication:
         if self._mode == ApplicationMode.ADJUST:
             return
 
-        self.canvas.delete("all")
-        self.drawn_items.clear()
-        self.circles.clear()
-        self.circle_lookup.clear()  # Clear the lookup dictionary
-        self.connections.clear()    # Clear connections data
-        self.last_circle_id = None
-        self.next_id = 1
-        
-        # Clear debug display
-        if self.debug_text:
-            self.debug_text = None
+        # Use the remove_circle_by_id method for each circle if we need to do specific cleanup
+        # Otherwise, use the simpler approach
+        if self.circles:
+            # More efficient to just clear everything at once
+            self.canvas.delete("all")
+            self.drawn_items.clear()
+            self.circles.clear()
+            self.circle_lookup.clear()
+            self.connections.clear()
+            self.last_circle_id = None
+            self.next_id = 1
             
+            # Clear debug display
+            if self.debug_text:
+                self.debug_text = None
+                
     def _toggle_debug(self):
         """Toggle the debug information display."""
         # Don't allow toggling debug while in adjust mode
@@ -707,12 +711,55 @@ class CanvasApplication:
         if circle_id is None:
             return
             
+        # Use the consolidated removal method
+        self._remove_circle_by_id(circle_id)
+            
+    def _remove_circle_by_id(self, circle_id):
+        """Remove a circle by its ID and cleanup all associated connections.
+        
+        Args:
+            circle_id: ID of the circle to remove
+            
+        Returns:
+            bool: True if the circle was successfully removed, False otherwise
+        """
         # Get the circle to remove
+        circle = self.circle_lookup.get(circle_id)
+        if not circle:
+            return False
+            
+        # First, remove all connections to this circle
+        self._remove_circle_connections(circle_id)
+        
+        # Remove the circle's visual representation
+        self.canvas.delete(circle["canvas_id"])
+        
+        # Remove the circle from data structures
+        self.circles = [c for c in self.circles if c["id"] != circle_id]
+        del self.circle_lookup[circle_id]
+        
+        # Check if this was the last circle and handle special case
+        if not self.circles:
+            self._handle_last_circle_removed()
+            return True
+        
+        # Update debug info if enabled
+        if self.debug_enabled:
+            self._show_debug_info()
+            
+        return True
+            
+    def _remove_circle_connections(self, circle_id):
+        """Remove all connections for a specific circle.
+        
+        Args:
+            circle_id: ID of the circle whose connections should be removed
+        """
+        # Get the circle
         circle = self.circle_lookup.get(circle_id)
         if not circle:
             return
             
-        # First, remove all connections to this circle
         connected_circles = circle["connected_to"].copy()  # Make a copy to avoid modifying while iterating
         for connected_id in connected_circles:
             connected_circle = self.circle_lookup.get(connected_id)
@@ -735,29 +782,17 @@ class CanvasApplication:
                     if connection:
                         self.canvas.delete(connection["line_id"])
                         del self.connections[key2]
-        
-        # Remove the circle's visual representation
-        self.canvas.delete(circle["canvas_id"])
-        
-        # Remove the circle from data structures
-        self.circles = [c for c in self.circles if c["id"] != circle_id]
-        del self.circle_lookup[circle_id]
-        
-        # Check if this was the last circle and reset if so
-        if not self.circles:
-            # Switch back to create mode if this was the last circle
-            self._set_application_mode(ApplicationMode.CREATE)
-            # Clear canvas to fully reset the scenario
-            self.canvas.delete("all")
-            self.drawn_items.clear()
-            self.connections.clear()
-            self.last_circle_id = None
-            self.next_id = 1
-            return
-        
-        # Update debug info if enabled
-        if self.debug_enabled:
-            self._show_debug_info()
+    
+    def _handle_last_circle_removed(self):
+        """Handle the special case when the last circle is removed."""
+        # Switch back to create mode if this was the last circle
+        self._set_application_mode(ApplicationMode.CREATE)
+        # Clear canvas to fully reset the scenario
+        self.canvas.delete("all")
+        self.drawn_items.clear()
+        self.connections.clear()
+        self.last_circle_id = None
+        self.next_id = 1
 
 def main():
     """Application entry point."""
