@@ -54,19 +54,6 @@ class TestCanvasApplication(unittest.TestCase):
         self.root.title.assert_called_with("4colour Canvas")
         self.root.geometry.assert_called_with("800x600")
     
-    def test_get_random_color(self):
-        """Test that the random color function works correctly.""" 
-        # Set a seed to make the test predictable
-        random.seed(42)
-        expected_color = random.choice(self.app.available_colors)
-        
-        # Reset the seed for the app to use
-        random.seed(42)
-        actual_color = self.app._get_random_color()
-        
-        self.assertEqual(actual_color, expected_color)
-        self.assertIn(actual_color, self.app.available_colors)
-    
     def test_draw_on_click_first_circle(self):
         """Test drawing the first circle on the canvas."""
         # Create a mock event
@@ -74,8 +61,8 @@ class TestCanvasApplication(unittest.TestCase):
         event.x = 100
         event.y = 100
         
-        # Mock the color selection
-        with patch.object(self.app, '_get_random_color', return_value='red'):
+        # Mock the color selection - updated to use new function
+        with patch.object(self.app, '_assign_color_based_on_connections', return_value=('red', 4)):
             # Call the method
             self.app._draw_on_click(event)
         
@@ -93,7 +80,7 @@ class TestCanvasApplication(unittest.TestCase):
         self.assertEqual(circle["x"], 100)
         self.assertEqual(circle["y"], 100)
         self.assertEqual(circle["color"], "red")
-        self.assertEqual(circle["color_priority"], get_priority_from_color("red"))
+        self.assertEqual(circle["color_priority"], 4)
         self.assertEqual(circle["connected_to"], [])
         
         # Check that circle_lookup is updated
@@ -131,8 +118,8 @@ class TestCanvasApplication(unittest.TestCase):
         
         # Mock the show_hint_text method
         with patch.object(self.app, '_show_hint_text') as mock_show_hint:
-            # Mock the color selection
-            with patch.object(self.app, '_get_random_color', return_value='green'):
+            # Mock the color selection - updated to use new function
+            with patch.object(self.app, '_assign_color_based_on_connections', return_value=('green', 2)):
                 # Call the method
                 self.app._draw_on_click(event)
             
@@ -240,6 +227,7 @@ class TestCanvasApplication(unittest.TestCase):
             "x": 50,
             "y": 50,
             "color": "blue",
+            "color_priority": 3,  # Added missing color_priority
             "connected_to": [2]
         }]
         self.app.debug_enabled = True
@@ -1248,6 +1236,39 @@ class TestCanvasApplication(unittest.TestCase):
         
         # Check that canvas was cleared
         self.app.canvas.delete.assert_called_with("all")
+
+    def test_assign_color_based_on_connections(self):
+        """Test the basic color assignment logic."""
+        # Test initial assignment for a new circle
+        color, priority = self.app._assign_color_based_on_connections()
+        self.assertEqual(color, "yellow")
+        self.assertEqual(priority, 1)
+        
+        # Test passing an existing circle ID (should still return yellow for now)
+        color, priority = self.app._assign_color_based_on_connections(1)
+        self.assertEqual(color, "yellow")
+        self.assertEqual(priority, 1)
+        
+    def test_draw_on_click_with_deterministic_color(self):
+        """Test drawing a circle with deterministic color assignment."""
+        # Setup: Mock the color assignment function
+        with patch.object(self.app, '_assign_color_based_on_connections', return_value=("yellow", 1)) as mock_assign:
+            # Create a mock event
+            event = Mock()
+            event.x = 100
+            event.y = 100
+            
+            # Call the method
+            self.app._draw_on_click(event)
+            
+            # Check that assign_color was called
+            mock_assign.assert_called_once()
+        
+        # Check that circle data was stored correctly
+        self.assertEqual(len(self.app.circles), 1)
+        circle = self.app.circles[0]
+        self.assertEqual(circle["color"], "yellow")
+        self.assertEqual(circle["color_priority"], 1)
 
 if __name__ == "__main__":
     unittest.main()

@@ -221,7 +221,7 @@ This phase includes improvements deferred from previous phases.
 
 ### Phase 8: Deterministic Coloring
 
-This phase introduces rule-based circle coloring to replace random coloring. Colors are assigned based on connections between circles to ensure connected circles never share the same color.
+This phase introduces rule-based circle coloring to replace random coloring. Colors are assigned based on connections between circles to ensure connected circles never share the same color. This phase introduces the most critical functionality of the app, the coloring logic. In this phase, ensure all new code is thoroughly documented with detailed comments.
 
 - [x] **Implement Color Priority System:**
     *   Define color priorities: 1=yellow (lowest), 2=green, 3=blue, 4=red (highest)
@@ -230,12 +230,14 @@ This phase introduces rule-based circle coloring to replace random coloring. Col
     *   Create a color utility module with functions to convert between priority numbers and color names
     *   Add unit tests for the new color utility functions
 
-- [ ] **Implement Basic Color Assignment Logic:**
+- [x] **Implement Basic Color Assignment Logic:**
     *   Create a new function `_assign_color_based_on_connections()` to replace `_get_random_color()`
-    *   When placing the first circle, always assign priority 1 (yellow)
-    *   When placing subsequent circles, initially assign priority 1 (yellow)
-    *   Update the circles' visual appearance to match their assigned colors
+    *   When placing a new circle, initially assign priority 1 (yellow)
+    *   Ensure this function is designed so that the priority assignment logic can be extended in the future
     *   Add appropriate unit tests for this basic functionality
+
+- [x] **Cleanup:**
+    *   Remove the now-unused `_get_random_color()` function and its associated unit test
 
 - [ ] **Implement Connection-Aware Color Assignment:**
     *   When connections are confirmed in selection mode, check if color conflicts exist
@@ -252,6 +254,3 @@ This phase introduces rule-based circle coloring to replace random coloring. Col
     *   Add tests to verify the placeholder function is called in the appropriate scenarios
     *   Note: Full implementation of color graph reassignment will be addressed in a future phase
 
-- [ ] **Cleanup:**
-    *   Remove the now-unused `_get_random_color()` function and its associated unit test
-    *   Ensure all new code is thoroughly documented with detailed comments

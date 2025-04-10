@@ -288,14 +288,29 @@ class CanvasApplication:
         if hasattr(self, 'debug_button'):
             self.debug_button.focus_set()
 
-    def _get_random_color(self):
-        """Return a random color from the available colors.
+    def _assign_color_based_on_connections(self, circle_id=None):
+        """Assign a color to a circle based on its connections.
+        
+        This function implements the basic color assignment logic.
+        Initially, all new circles are assigned priority 1 (yellow).
+        When connections are added, this function may be called again
+        to adjust colors based on connection constraints.
+        
+        Args:
+            circle_id: Optional ID of an existing circle to reassign color.
+                      If None, this is assumed to be for a new circle.
         
         Returns:
-            str: A randomly selected color name
+            tuple: (color_name, color_priority) - The assigned color and its priority
         """
-        return random.choice(self.available_colors)
-        
+        # For new circles or initial assignment, use priority 1 (yellow)
+        if circle_id is None:
+            return "yellow", 1
+            
+        # This stub will be expanded in the next task to handle
+        # connection-aware color reassignment
+        return "yellow", 1
+
     def _draw_on_click(self, event):
         """Draw a circle at the clicked position or select an existing circle.
         
@@ -312,8 +327,8 @@ class CanvasApplication:
             return
             
         # Normal mode: draw a new circle
-        color = self._get_random_color()
-        color_priority = get_priority_from_color(color)
+        # Use the deterministic color assignment
+        color, color_priority = self._assign_color_based_on_connections()
         
         # Create the circle on canvas
         circle_id = self.canvas.create_oval(
