@@ -1,15 +1,14 @@
 """
-Unit tests for the color_utils module.
-
-This module contains tests for the color utility functions.
+Unit tests for color_utils.py.
 """
 
 import unittest
 import sys
 import os
 
-# Add the parent directory to the path so we can import the color_utils module
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add parent directory to Python path
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+
 from color_utils import get_color_from_priority, find_lowest_available_priority, determine_color_priority_for_connections
 
 class TestColorUtils(unittest.TestCase):

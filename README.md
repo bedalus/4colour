@@ -20,10 +20,6 @@ NOTE: These guidelines apply only to code in the 4colour repo.
 - Use lowercase names for folders.
 - Even though I am English, use the American spelling of colour, i.e. color, except for the title '4colour'.
 
-## Commit Messages
-- Use descriptive commit messages.
-- Follow the format: `<type>: <short description>` (e.g., `feat: add user authentication`).
-
 ## Test-Driven Development
 
 To ensure smooth development and avoid regressions:
@@ -35,11 +31,38 @@ To ensure smooth development and avoid regressions:
 - All new features must have corresponding tests in the `tests` directory.
 - Consider writing tests before implementing a feature to clarify expected behavior.
 
+Tests can be run with: python -m unittest discover -s tests
+
 ## Planning
 
-Completed items are marked with `[x]`. These completed items provide valuable context that document the genesis of the existing code base.
+New work items should be itemized and preceded by an empty checkbox (`- [ ]`). When engaging in a new coding session to implement new features and improvements, follow the requirements in sequential order starting at the first unmarked checkbox. Once the feature and corresponding unit tests are written or updated to the required specification, mark the checkbox as complete ([x]) to track progress. Always remember to complete this step.
 
-New work items should be itemized and preceded by an empty checkbox (`- [ ]`). When engaging in a new coding session to implement new features and improvements, follow the requirements in sequential order starting at the first unmarked checkbox. Once the feature and corresponding unit tests are written or updated to the required specification, mark the checkbox as complete to track progress. Always remember to complete this step.
+If new files are introduced, or if files are removed, update the '## Project Structure' section below accordingly.
+
+**Introducing New Work Phases:**
+
+When the current phase's objectives are complete or a new major area of work is identified, introduce a new phase at the end of this ReadMe file. Follow the following format:
+
+1.  **Add a Phase Heading:** Use a level 3 Markdown heading with the format `### Phase [Number]: [Brief, Descriptive Title]`. Increment the phase number sequentially.
+2.  **Write a Summary:** Immediately below the heading, add a short paragraph summarizing the overall goal or focus of this new phase. Explain *why* this work is being undertaken.
+3.  **Structure Work Items:** List the specific tasks for the phase using the standard format:
+    *   Start each major task with `- [ ] **Task Description:**`. Use bold text for the main task description.
+    *   Use nested bullet points (`    *   Sub-task or detail`) for breaking down the main task or adding specific implementation notes.
+
+## Project Structure
+
+The project is organized into the following key files and directories:
+
+*   `canvas_app.py`: The main application class that initializes the UI and managers.
+*   `ui_manager.py`: Handles UI elements like buttons, hint text, and the debug overlay.
+*   `circle_manager.py`: Manages circle data (creation, storage, retrieval, removal).
+*   `connection_manager.py`: Manages connections between circles, including drawing lines, handling curves, and midpoint interactions.
+*   `interaction_handler.py`: Processes user input events (clicks, drags, key presses) and manages application mode transitions.
+*   `color_manager.py`: Implements the logic for assigning colors based on priority and resolving conflicts between connected circles.
+*   `color_utils.py`: Provides utility functions for mapping color priorities to names and finding available priorities.
+*   `app_enums.py`: Defines enumerations used across the application, such as `ApplicationMode`.
+*   `tests/`: Contains all unit and integration tests.
+*   `README.md`: This file, providing project documentation, guidelines, and planning.
 
 ### Phases 1-7 Summary
 
@@ -49,11 +72,13 @@ The initial development phases (1-7) established the core functionality of the c
 
 Phases 8 and 9 focused on implementing deterministic coloring based on the Four Color Theorem, followed by optimization and refactoring. A color priority system (1=yellow, 2=green, 3=blue, 4=red) was established with utility functions to convert between priorities and color names. The application now assigns colors based on connections—when two connected circles have the same color, a conflict resolution algorithm assigns the lowest available priority color to ensure connected circles never share the same color. A placeholder for advanced network color reassignment was added for cases when all lower priorities are used. The codebase was then optimized by removing redundant color fields, since colors are now derived directly from priorities. Utility functions were extracted to a separate module to improve reusability and testability. Comprehensive unit tests were added for all the new functionality, ensuring the coloring logic works correctly across various scenarios.
 
-### Phase 10: Summary
+### Phase 10-11: Summary
 
-In this phase, connections between circles were enhanced with curved lines using Tkinter's built-in line smoothing capabilities. The implementation added adjustable midpoints that users can drag to define the curve's shape. These midpoints appear as small draggable handles in Adjust mode, allowing users to customize the curve's appearance. The system stores displacement vectors (X/Y offsets) for each connection, maintaining these curves when circles are moved. Comprehensive unit testing was added to verify curve behavior in different scenarios, including extreme displacements, different curve directions, overlapping connections, and interactions across different application modes.
+Phase 10 enhanced connections with curved lines using Tkinter's smoothing, adding draggable midpoints to adjust curve shapes. Displacement vectors store curve offsets, maintained when circles move. Unit tests verified curve behavior in various scenarios.
 
-### Phase 11: Advanced Color Network Reassignment
+Phase 11 expanded integration tests (`test_integration.py`) to cover complex component interactions. Tests were added for dragging circles and midpoints, ensuring coordinate and connection updates. Removal cascade tests were enhanced to verify neighbor updates and color conflict checks. New tests validated color conflict resolution during connections, the complete reset functionality of clearing the canvas, and the side effects of mode transitions (e.g., midpoint handle visibility, hint text display, background color changes).
+
+### Phase 12: Advanced Color Network Reassignment
 
 This phase focuses on developing a sophisticated algorithm for reassigning colors throughout the network of connected circles when simple conflict resolution is insufficient. Currently, the application assigns priority 4 (red) as a fallback, but a more optimal solution would rearrange existing colors to maintain the Four Color Theorem guarantee.
 
