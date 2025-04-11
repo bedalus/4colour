@@ -78,7 +78,19 @@ Phase 10 enhanced connections with curved lines using Tkinter's smoothing, addin
 
 Phase 11 expanded integration tests (`test_integration.py`) to cover complex component interactions. Tests were added for dragging circles and midpoints, ensuring coordinate and connection updates. Removal cascade tests were enhanced to verify neighbor updates and color conflict checks. New tests validated color conflict resolution during connections, the complete reset functionality of clearing the canvas, and the side effects of mode transitions (e.g., midpoint handle visibility, hint text display, background color changes).
 
-### Phase 12: Advanced Color Network Reassignment
+### Phase 13: Track the clockwise sequence of connections to circles
+
+This phase focuses on developing a way of keeping track of the relative position of connections on each circle. Imagine the second hand of a clock sweeping around the clock-face. Which connection does it pass first, second, third, etc...? We need a way of capturing this order. The angle at which the connection arrives at the circle's centre will serve to provide this information, but there is an extra element of complexity, as we must account for the curvature of the connections which is goverened by the mid-point handles and Tkinter's line-smoothing math.
+
+- [ ] **Visualize the impact of Tkinter's line-smoothing at the centre of the circle:**
+    *   Extend the graphical capabilities of the ADJUST mode such that whenever a mid-point handle is being moved, two additional lines are drawn originating from both connected circles. They should be grey and cannot be interacted with directly by the user. These are straight lines with a length equivalent to three times the width of one standard circle. The line drawing function should be generic and reusable since it needs to be called twice for each circle associated with a curve. Each line must protrude at the same angle at which the curved connection arrives at the circle centre. This will require determining the most appropriate Bezier curve math that can transform the co-ordinates of the two circles and the connection mid-point handle into the angle we require. Design this angle determination function as a generic reusable method within the most appropriate code module.
+
+- [ ] **Extend the circle data tracking capabilities:**
+    *   The existing code already has data tracking capabilities for each circle, including some information about the connections (identified by their line_id). Extend that tracking functionality to allow for the storage of an ordered list of line_ids. The list will need to include every line_id that is connected in sequential order from the smallest angle to largest angle (relative to vertical). We can reuse the method from the previous work item to provide each angle, using that information to determine the clockwise sequence. Once the ordered list is stored, the angle information can be discarded.
+    *   The required code needs to be a generic reusable function or method.
+    *   The ordered list needs to be updated when a new circle is created in CREATE mode for the new circle, and any other circles it has been connected to. The list also needs to be updated in ADJUST mode for both circles that are connected by a midpoint handle, if one is moved. Also in ADJUST mode, if a circle is moved, the list needs to be recalculated for the moved circle, and any other circles it is connected to.
+
+### Phase 13: Advanced Color Network Reassignment
 
 This phase focuses on developing a sophisticated algorithm for reassigning colors throughout the network of connected circles when simple conflict resolution is insufficient. Currently, the application assigns priority 4 (red) as a fallback, but a more optimal solution would rearrange existing colors to maintain the Four Color Theorem guarantee.
 
