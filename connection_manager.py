@@ -68,6 +68,10 @@ class ConnectionManager:
             "curve_Y": 0   # Default: no curve offset in Y direction
         }
         
+        # Update ordered connections for both circles
+        self.update_ordered_connections(from_id)
+        self.update_ordered_connections(to_id)
+        
         return True
     
     def remove_circle_connections(self, circle_id):
@@ -111,6 +115,9 @@ class ConnectionManager:
                 if connection_key in self.app.midpoint_handles:
                     self.app.canvas.delete(self.app.midpoint_handles[connection_key])
                     del self.app.midpoint_handles[connection_key]
+                
+                # Update ordered connections for the connected circle
+                self.update_ordered_connections(connected_id)
     
     def calculate_midpoint(self, from_circle, to_circle):
         """Calculate the midpoint between two circles.
@@ -239,6 +246,10 @@ class ConnectionManager:
             
             # Update reference
             self.app.midpoint_handles[connection_key] = handle_id
+        
+        # Update ordered connections for both circles as curve changes affect angles
+        self.update_ordered_connections(from_id)
+        self.update_ordered_connections(to_id)
         
         return True
 
@@ -446,6 +457,44 @@ class ConnectionManager:
             return f"{circle1_id}_{circle2_id}"
         else:
             return f"{circle2_id}_{circle1_id}"
+
+    def update_ordered_connections(self, circle_id):
+        """Update the ordered list of connections for a circle based on entry angles.
+        
+        This orders connections clockwise around the circle starting from North (0 degrees)
+        and ensures the ordering remains consistent even when connections are modified.
+        
+        Args:
+            circle_id: ID of the circle to update ordering for
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        circle = self.app.circle_lookup.get(circle_id)
+        if not circle:
+            return False
+        
+        if not circle["connected_to"]:
+            # No connections, clear the ordered list
+            circle["ordered_connections"] = []
+            return True
+        
+        # Create list of tuples with (connected_id, angle) for sorting
+        connection_angles = []
+        for connected_id in circle["connected_to"]:
+            angle = self.calculate_connection_entry_angle(circle_id, connected_id)
+            connection_angles.append((connected_id, angle))
+        
+        # Sort by angle (ascending, 0-360 degrees clockwise from North)
+        connection_angles.sort(key=lambda x: x[1])
+        
+        # Extract just the connection IDs in the sorted order
+        ordered_connections = [conn_id for conn_id, _ in connection_angles]
+        
+        # Update the circle's ordered_connections list
+        circle["ordered_connections"] = ordered_connections
+        
+        return True
 
 def math_rad_to_deg(rad):
     """Convert radians to degrees."""

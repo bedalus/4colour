@@ -243,3 +243,68 @@ class TestInteractionHandler(MockAppTestCase):
                     mock_bind.assert_called_with(ApplicationMode.CREATE)
                     mock_hide.assert_called_once()
                     self.app.canvas.config.assert_called_with(bg="white")
+    
+    def test_drag_end_updates_ordered_connections_for_circle(self):
+        """Test that drag_end updates ordered_connections when dragging a circle."""
+        # Setup circle and drag state
+        circle = self._create_test_circle(1, 50, 50, connections=[2, 3])
+        circle2 = self._create_test_circle(2, 150, 50, connections=[1])
+        circle3 = self._create_test_circle(3, 50, 150, connections=[1])
+        
+        self.app.circles = [circle, circle2, circle3]
+        self.app.circle_lookup = {1: circle, 2: circle2, 3: circle3}
+        
+        # Set drag state as if circle 1 was being dragged
+        self.app._mode = ApplicationMode.ADJUST
+        self.app.drag_state = {
+            "active": True,
+            "type": "circle",
+            "id": 1,
+            "start_x": 40, "start_y": 40,
+            "last_x": 60, "last_y": 60
+        }
+        
+        # Mock update_ordered_connections
+        with patch.object(self.app.connection_manager, 'update_ordered_connections') as mock_update:
+            # End drag
+            self.app._drag_end(MagicMock())
+            
+            # Verify update_ordered_connections was called for circle 1 and connected circles 2 and 3
+            mock_update.assert_any_call(1)
+            mock_update.assert_any_call(2)
+            mock_update.assert_any_call(3)
+            self.assertEqual(mock_update.call_count, 3)
+    
+    def test_drag_end_updates_ordered_connections_for_midpoint(self):
+        """Test that drag_end updates ordered_connections when dragging a midpoint."""
+        # Setup circles and connections
+        circle1 = self._create_test_circle(1, 50, 50, connections=[2])
+        circle2 = self._create_test_circle(2, 150, 50, connections=[1])
+        
+        self.app.circles = [circle1, circle2]
+        self.app.circle_lookup = {1: circle1, 2: circle2}
+        
+        # Setup connection
+        self.app.connections = {
+            "1_2": {"line_id": 101, "from_circle": 1, "to_circle": 2, "curve_X": 0, "curve_Y": 0}
+        }
+        
+        # Set drag state as if the midpoint between circles 1 and 2 was being dragged
+        self.app._mode = ApplicationMode.ADJUST
+        self.app.drag_state = {
+            "active": True,
+            "type": "midpoint",
+            "id": "1_2",
+            "start_x": 100, "start_y": 50,
+            "last_x": 110, "last_y": 60
+        }
+        
+        # Mock update_ordered_connections
+        with patch.object(self.app.connection_manager, 'update_ordered_connections') as mock_update:
+            # End drag
+            self.app._drag_end(MagicMock())
+            
+            # Verify update_ordered_connections was called for both connected circles
+            mock_update.assert_any_call(1)
+            mock_update.assert_any_call(2)
+            self.assertEqual(mock_update.call_count, 2)

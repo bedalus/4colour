@@ -56,16 +56,39 @@ class UIManager:
         if not self.app.circles:
             info_text = "No circles drawn yet"
         else:
+            # Show the latest circle by default, or the active circle if in ADJUST mode
             latest_circle = self.app.circles[-1]
+            
+            # If in ADJUST mode and a circle or midpoint is being dragged, show that circle instead
+            if self.app.in_edit_mode and self.app.drag_state["active"]:
+                if self.app.drag_state["type"] == "circle":
+                    circle_id = self.app.drag_state["id"]
+                    if circle_id in self.app.circle_lookup:
+                        latest_circle = self.app.circle_lookup[circle_id]
+                elif self.app.drag_state["type"] == "midpoint":
+                    # For midpoint drag, show the first circle in the connection
+                    connection_key = self.app.drag_state["id"]
+                    parts = connection_key.split("_")
+                    if len(parts) == 2:
+                        circle_id = int(parts[0])
+                        if circle_id in self.app.circle_lookup:
+                            latest_circle = self.app.circle_lookup[circle_id]
+            
             # Derive color name from priority for display
             from color_utils import get_color_from_priority
             color_name = get_color_from_priority(latest_circle['color_priority'])
+            
+            # Format the ordered connections list if it exists
+            ordered_connections_str = "None"
+            if "ordered_connections" in latest_circle and latest_circle["ordered_connections"]:
+                ordered_connections_str = ", ".join(map(str, latest_circle["ordered_connections"]))
+            
             info_text = (
                 f"Circle ID: {latest_circle['id']}\n"
                 f"Position: ({latest_circle['x']}, {latest_circle['y']})\n"
-                # Display derived color name and priority
                 f"Color: {color_name} (priority: {latest_circle['color_priority']})\n"
-                f"Connected to: {', '.join(map(str, latest_circle['connected_to']))}"
+                f"Connected to: {', '.join(map(str, latest_circle['connected_to']))}\n"
+                f"Ordered connections: {ordered_connections_str}"
             )
             
         # Display debug text at the top of the canvas

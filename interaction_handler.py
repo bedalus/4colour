@@ -193,14 +193,15 @@ class InteractionHandler:
             tags="circle"  # Add tag for circle
         )
         
-        # Store circle data - now only with priority
+        # Store circle data - now also with ordered_connections list
         circle_data = {
             "id": self.app.next_id,
             "canvas_id": circle_id,
             "x": x,
             "y": y,
             "color_priority": color_priority,
-            "connected_to": []
+            "connected_to": [],
+            "ordered_connections": []  # New field for storing connections in clockwise order
         }
         
         # Add circle to the list and lookup dictionary
@@ -357,26 +358,39 @@ class InteractionHandler:
             self.app.drag_state["id"] = circle_id
     
     def drag_motion(self, event):
-        """Handle drag motion for all draggable objects.
+        """Handle any object's dragging motion.
         
         Args:
-            event: Mouse motion event containing x and y coordinates
+            event: Mouse motion event
         """
         if not self.app.in_edit_mode or not self.app.drag_state["active"]:
             return
+            
+        # Get current mouse position
+        x, y = event.x, event.y
         
-        # Calculate the movement delta from last position
-        dx = event.x - self.app.drag_state["last_x"]
-        dy = event.y - self.app.drag_state["last_y"]
+        # Calculate the delta from the last position
+        delta_x = x - self.app.drag_state["last_x"]
+        delta_y = y - self.app.drag_state["last_y"]
         
-        # Update the last position
-        self.app.drag_state["last_x"] = event.x
-        self.app.drag_state["last_y"] = event.y
+        # Update last position
+        self.app.drag_state["last_x"] = x
+        self.app.drag_state["last_y"] = y
         
+        # Handle object-specific drag logic
         if self.app.drag_state["type"] == "circle":
-            self.drag_circle_motion(event.x, event.y, dx, dy)
+            # Pass the circle_id from drag state as first parameter
+            circle_id = self.app.drag_state["id"]
+            self.drag_circle_motion(circle_id, delta_x, delta_y)
         elif self.app.drag_state["type"] == "midpoint":
-            self.drag_midpoint_motion(event.x, event.y)
+            self.drag_midpoint_motion(x, y)
+            
+        # Update debug info if enabled
+        if self.app.debug_enabled:
+            self.app.ui_manager.show_debug_info()
+        
+        # Stop event propagation
+        return "break"
     
     def drag_end(self, event):
         """End dragging any object.
@@ -390,19 +404,48 @@ class InteractionHandler:
         # Clear any angle visualization lines when dragging ends
         self.app.ui_manager.clear_angle_visualizations()
         
+        # Update ordered connections based on what was dragged
+        if self.app.drag_state["type"] == "circle":
+            # Get the dragged circle's ID
+            circle_id = self.app.drag_state["id"]
+            circle = self.app.circle_lookup.get(circle_id)
+            
+            if circle:
+                # Update the dragged circle's ordered connections
+                self.app.connection_manager.update_ordered_connections(circle_id)
+                
+                # Update ordered connections for all connected circles
+                for connected_id in circle["connected_to"]:
+                    self.app.connection_manager.update_ordered_connections(connected_id)
+        
+        elif self.app.drag_state["type"] == "midpoint":
+            # Extract the connection key and update both connected circles
+            connection_key = self.app.drag_state["id"]
+            
+            # Extract circle IDs from the connection key (format: "smaller_id_larger_id")
+            try:
+                parts = connection_key.split("_")
+                if len(parts) == 2:
+                    from_id = int(parts[0])
+                    to_id = int(parts[1])
+                    
+                    # Update ordered connections for both circles
+                    self.app.connection_manager.update_ordered_connections(from_id)
+                    self.app.connection_manager.update_ordered_connections(to_id)
+            except (ValueError, AttributeError):
+                pass  # Skip if connection key cannot be parsed
+        
         # Reset the drag state
         self.reset_drag_state()
     
-    def drag_circle_motion(self, x, y, dx, dy):
+    def drag_circle_motion(self, circle_id, dx, dy):
         """Handle circle dragging motion.
         
         Args:
-            x: Current X coordinate
-            y: Current Y coordinate
-            dx: X movement delta
-            dy: Y movement delta
+            circle_id: ID of the circle being dragged
+            dx: Change in X position
+            dy: Change in Y position
         """
-        circle_id = self.app.drag_state["id"]
         circle = self.app.circle_lookup.get(circle_id)
         if not circle:
             return
