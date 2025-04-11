@@ -5,6 +5,7 @@ This module handles the UI elements and their behavior.
 """
 
 import tkinter as tk
+import math
 from app_enums import ApplicationMode  # Import from app_enums instead
 
 class UIManager:
@@ -131,3 +132,88 @@ class UIManager:
         # Clear debug display
         if self.app.debug_text:
             self.app.debug_text = None
+
+    def draw_angle_visualization_line(self, circle_id, other_circle_id, angle):
+        """Draw a visualization line showing the angle a connection enters a circle.
+        
+        Args:
+            circle_id: ID of the circle to visualize angle for
+            other_circle_id: ID of the other circle in the connection
+            angle: Entry angle in degrees (0-360, clockwise from North)
+            
+        Returns:
+            int: Canvas ID of the created visualization line
+        """
+        # Get the circle data
+        circle = self.app.circle_lookup.get(circle_id)
+        if not circle:
+            return None
+        
+        # Get the circle center
+        cx, cy = circle["x"], circle["y"]
+        
+        # Calculate the endpoint using trigonometry
+        # Convert angle to radians for math functions
+        angle_rad = math.radians(angle)
+        # Multiply radius by 3 for better visualization
+        length = 3 * self.app.circle_radius
+        
+        # Calculate endpoint using trigonometric functions
+        # sin(angle) gives x component, cos(angle) gives y component
+        # Negate cos since y increases downward in Tkinter
+        x2 = cx + length * math.sin(angle_rad)
+        y2 = cy - length * math.cos(angle_rad)
+        
+        # Create connection key for tagging
+        connection_key = self.app.connection_manager.get_connection_key(circle_id, other_circle_id)
+        
+        # Draw the line
+        line_id = self.app.canvas.create_line(
+            cx, cy, x2, y2,
+            fill="gray50",
+            width=1,
+            dash=(4, 2),  # Dashed line for better visibility
+            tags=("angle_viz", f"angle_{connection_key}")
+        )
+        
+        return line_id
+    
+    def draw_connection_angle_visualizations(self, connection_key):
+        """Draw visualization lines for both circles in a connection.
+        
+        Args:
+            connection_key: Key identifying the connection (e.g. "1_2")
+            
+        Returns:
+            list: List of canvas IDs for the created visualization lines
+        """
+        # Extract circle IDs from the connection key
+        try:
+            parts = connection_key.split("_")
+            if len(parts) != 2:
+                return []
+            
+            circle1_id = int(parts[0])
+            circle2_id = int(parts[1])
+        except (ValueError, AttributeError):
+            return []
+        
+        viz_ids = []
+        
+        # Calculate the angle for the first circle
+        angle1 = self.app.connection_manager.calculate_connection_entry_angle(circle1_id, circle2_id)
+        line_id1 = self.draw_angle_visualization_line(circle1_id, circle2_id, angle1)
+        if line_id1:
+            viz_ids.append(line_id1)
+        
+        # Calculate the angle for the second circle
+        angle2 = self.app.connection_manager.calculate_connection_entry_angle(circle2_id, circle1_id)
+        line_id2 = self.draw_angle_visualization_line(circle2_id, circle1_id, angle2)
+        if line_id2:
+            viz_ids.append(line_id2)
+        
+        return viz_ids
+    
+    def clear_angle_visualizations(self):
+        """Remove all angle visualization lines from the canvas."""
+        self.app.canvas.delete("angle_viz")

@@ -121,7 +121,7 @@ Conclusion: The plan is mathematically sound and achievable with the existing co
         * Adjust the angle to be relative to North (vertical), clockwise from 0 to 360 degrees using `(90 - angle) % 360`.
         * Return this angle value.
 
-- [ ] **Visualize Connection Entry Angles:**
+- [x] **Visualize Connection Entry Angles:**
     * Add a new method `UIManager.draw_angle_visualization_line(circle_id, other_circle_id, angle)`:
         * Takes the circle ID, connection ID, and the angle.
         * Calculates the line endpoint using trigonometry: 

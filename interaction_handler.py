@@ -47,6 +47,9 @@ class InteractionHandler:
             # Hide midpoint handles when exiting ADJUST mode
             self.app.connection_manager.hide_midpoint_handles()
             
+            # Clear angle visualizations when exiting ADJUST mode
+            self.app.ui_manager.clear_angle_visualizations()
+            
             # Clear adjust mode state
             if self.app.edit_hint_text_id:
                 self.app.canvas.delete(self.app.edit_hint_text_id)
@@ -384,7 +387,10 @@ class InteractionHandler:
         if not self.app.in_edit_mode or not self.app.drag_state["active"]:
             return
         
-        # Just reset the drag state
+        # Clear any angle visualization lines when dragging ends
+        self.app.ui_manager.clear_angle_visualizations()
+        
+        # Reset the drag state
         self.reset_drag_state()
     
     def drag_circle_motion(self, x, y, dx, dy):
@@ -447,6 +453,12 @@ class InteractionHandler:
         
         # Update the connection curve with the new offset
         self.app.connection_manager.update_connection_curve(from_id, to_id, new_curve_x, new_curve_y)
+        
+        # Clear any existing angle visualizations
+        self.app.ui_manager.clear_angle_visualizations()
+        
+        # Draw new angle visualizations for the current connection
+        self.app.ui_manager.draw_connection_angle_visualizations(connection_key)
         
         # Stop event propagation
         return "break"
