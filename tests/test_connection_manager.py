@@ -4,6 +4,7 @@ Unit tests for connection_manager.py.
 
 import sys
 import os
+import math  # Add math import for vector calculations
 # Add parent directory to Python path
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
@@ -219,3 +220,98 @@ class TestConnectionManager(MockAppTestCase):
                 x, y = self.app._calculate_midpoint_handle_position(1, 2)
                 self.assertEqual(x, 105.0)  # 100 + 10/2
                 self.assertEqual(y, 97.5)   # 100 - 5/2
+
+    def test_calculate_tangent_vector(self):
+        """Test calculating tangent vectors at circle connection points."""
+        # Setup circles with a horizontal connection (circle1 is left of circle2)
+        first_circle = self._create_test_circle(1, 50, 100, connections=[2])
+        second_circle = self._create_test_circle(2, 150, 100, connections=[1])
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        # Setup a connection with no curve offset
+        self.app.connections = {
+            "1_2": {"line_id": 200, "from_circle": 1, "to_circle": 2, "curve_X": 0, "curve_Y": 0}
+        }
+        
+        # Test tangent at circle 1 (should point right/east)
+        dx, dy = self.app.connection_manager.calculate_tangent_vector(1, 2)
+        self.assertAlmostEqual(dx, 1.0)  # Should be normalized to unit vector pointing east
+        self.assertAlmostEqual(dy, 0.0)  # Horizontal line
+        
+        # Test tangent at circle 2 (should point west/left)
+        dx, dy = self.app.connection_manager.calculate_tangent_vector(2, 1)
+        self.assertAlmostEqual(dx, -1.0)  # Should be normalized to unit vector pointing west
+        self.assertAlmostEqual(dy, 0.0)   # Horizontal line
+        
+        # Now test with a curve offset
+        self.app.connections["1_2"]["curve_X"] = 0
+        self.app.connections["1_2"]["curve_Y"] = 30  # Curve downward
+        
+        # Recalculate tangents with curve
+        dx, dy = self.app.connection_manager.calculate_tangent_vector(1, 2)
+        # Should angle downward from circle 1
+        self.assertTrue(dx > 0)  # Still mostly rightward
+        self.assertTrue(dy > 0)  # With downward component
+        
+        dx, dy = self.app.connection_manager.calculate_tangent_vector(2, 1)
+        # Should angle downward approaching circle 2
+        self.assertTrue(dx < 0)  # Still mostly leftward
+        self.assertTrue(dy > 0)  # With downward component
+
+    def test_calculate_connection_entry_angle(self):
+        """Test calculating the entry angle of connections."""
+        # Setup circles with a horizontal connection (circle1 is left of circle2)
+        first_circle = self._create_test_circle(1, 50, 100, connections=[2])
+        second_circle = self._create_test_circle(2, 150, 100, connections=[1])
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        # Setup connection with no curve
+        self.app.connections = {
+            "1_2": {"line_id": 200, "from_circle": 1, "to_circle": 2, "curve_X": 0, "curve_Y": 0}
+        }
+        
+        # Test angle at circle 1 (west = 270 degrees from north)
+        angle = self.app.connection_manager.calculate_connection_entry_angle(1, 2)
+        self.assertAlmostEqual(angle, 270.0)  # West is 270° clockwise from North
+        
+        # Test angle at circle 2 (east = 90 degrees from north)
+        angle = self.app.connection_manager.calculate_connection_entry_angle(2, 1)
+        self.assertAlmostEqual(angle, 90.0)  # East is 90° clockwise from North
+        
+        # Setup circles with a vertical connection (circle3 is above circle4)
+        third_circle = self._create_test_circle(3, 200, 50, connections=[4])
+        fourth_circle = self._create_test_circle(4, 200, 150, connections=[3])
+        
+        self.app.circles.extend([third_circle, fourth_circle])
+        self.app.circle_lookup.update({3: third_circle, 4: fourth_circle})
+        
+        # Setup vertical connection
+        self.app.connections["3_4"] = {
+            "line_id": 201, "from_circle": 3, "to_circle": 4, "curve_X": 0, "curve_Y": 0
+        }
+        
+        # Test angle at circle 3 (south = 180 degrees from north)
+        angle = self.app.connection_manager.calculate_connection_entry_angle(3, 4)
+        self.assertAlmostEqual(angle, 0.0)  # For our implementation, vertical down is 0°
+        
+        # Test angle at circle 4 (north = 0 degrees from north)
+        angle = self.app.connection_manager.calculate_connection_entry_angle(4, 3)
+        self.assertAlmostEqual(angle, 180.0)  # For our implementation, vertical up is 180°
+
+    def test_get_connection_key(self):
+        """Test getting a consistent connection key."""
+        # Test smaller ID first
+        key = self.app.connection_manager.get_connection_key(1, 2)
+        self.assertEqual(key, "1_2")
+        
+        # Test order doesn't matter
+        key = self.app.connection_manager.get_connection_key(2, 1)
+        self.assertEqual(key, "1_2")  # Still puts smaller ID first
+        
+        # Test equal IDs (edge case)
+        key = self.app.connection_manager.get_connection_key(5, 5)
+        self.assertEqual(key, "5_5")

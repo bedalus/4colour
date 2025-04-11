@@ -4,6 +4,7 @@ Connection Manager for the 4colour project.
 This module handles connection creation, management, and operations.
 """
 
+import math
 from app_enums import ApplicationMode  # Import from app_enums instead
 
 class ConnectionManager:
@@ -351,3 +352,101 @@ class ConnectionManager:
                 
                 # Update connection using these values - this will redraw everything
                 self.update_connection_curve(connection["from_circle"], connection["to_circle"], curve_x, curve_y)
+    
+    def calculate_tangent_vector(self, circle_id, other_circle_id):
+        """Calculate the tangent vector of the curve where it meets the specified circle.
+        
+        Using quadratic Bezier curve math, where:
+        P(t) = (1-t)²P₀ + 2(1-t)tP₁ + t²P₂
+        
+        The derivative (tangent) at endpoints is:
+        At P₀ (t=0): P'(0) = 2(P₁ - P₀)
+        At P₂ (t=1): P'(1) = 2(P₂ - P₁)
+        
+        Args:
+            circle_id: ID of the circle to calculate tangent at
+            other_circle_id: ID of the other circle in the connection
+            
+        Returns:
+            tuple: (dx, dy) normalized tangent vector or (0, 0) if calculation fails
+        """
+        # Get both circles
+        circle = self.app.circle_lookup.get(circle_id)
+        other_circle = self.app.circle_lookup.get(other_circle_id)
+        
+        if not circle or not other_circle:
+            return (0, 0)
+        
+        # Get circle centers
+        cx, cy = circle["x"], circle["y"]
+        ox, oy = other_circle["x"], other_circle["y"]
+        
+        # Calculate the midpoint with curve offset
+        curve_x, curve_y = self.get_connection_curve_offset(circle_id, other_circle_id)
+        base_mid_x, base_mid_y = self.calculate_midpoint(circle, other_circle)
+        mid_x = base_mid_x + curve_x
+        mid_y = base_mid_y + curve_y
+        
+        # Simple model: vector from circle center toward midpoint
+        dx = mid_x - cx
+        dy = mid_y - cy
+        
+        # Normalize the vector
+        magnitude = math.sqrt(dx*dx + dy*dy)
+        if magnitude > 0:
+            dx /= magnitude
+            dy /= magnitude
+        
+        return (dx, dy)
+    
+    def calculate_connection_entry_angle(self, circle_id, other_circle_id):
+        """Calculate the angle at which a connection enters a circle.
+        
+        The angle is measured in degrees clockwise from vertical (North),
+        ranging from 0 to 360 degrees.
+        
+        Args:
+            circle_id: ID of the circle to calculate angle for
+            other_circle_id: ID of the other circle in the connection
+            
+        Returns:
+            float: Angle in degrees (0-360) or 0 if calculation fails
+        """
+        # Get the tangent vector (pointing outward from circle)
+        dx, dy = self.calculate_tangent_vector(circle_id, other_circle_id)
+        
+        if dx == 0 and dy == 0:
+            return 0
+        
+        # For entry angle, we need the opposite direction (inward)
+        dx = -dx
+        dy = -dy
+        
+        # In Tkinter, positive y is downward, so we need to flip the y-component
+        # to convert to standard angle measurement
+        # atan2(dx, -dy) gives angle clockwise from North (0,0) is top-left
+        angle_rad = math.atan2(dx, -dy)
+        angle_deg = angle_rad * (180 / math.pi)
+        
+        # Ensure angle is between 0 and 360
+        return angle_deg % 360
+    
+    def get_connection_key(self, circle1_id, circle2_id):
+        """Get a consistent key for a connection between two circles.
+        
+        Args:
+            circle1_id: ID of the first circle
+            circle2_id: ID of the second circle
+            
+        Returns:
+            str: Connection key in format "smaller_id_larger_id"
+        """
+        # Always put the smaller ID first for consistency
+        if circle1_id < circle2_id:
+            return f"{circle1_id}_{circle2_id}"
+        else:
+            return f"{circle2_id}_{circle1_id}"
+
+def math_rad_to_deg(rad):
+    """Convert radians to degrees."""
+    return rad * (180 / math.pi)
