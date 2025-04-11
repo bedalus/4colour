@@ -88,7 +88,14 @@ Phase 14 aims to implement a more complex algorithm for reassigning colors acros
 2.  Kempe Chain Heuristics: Algorithms attempting to prove or apply the Four Color Theorem often use Kempe chains (paths alternating between two colors). Identifying and manipulating these chains might require knowing the local arrangement of connections around a circle, which the clockwise order provides.
 3.  Systematic Traversal: When the reassignment algorithm needs to explore the network (e.g., using backtracking or recursion as mentioned in the Phase 14 plan), having a consistent, topologically meaningful order for visiting neighbors (the clockwise order) can simplify the logic compared to an arbitrary order.
 
-### Phase 14: Advanced Color Network Reassignment
+### Phase 14: Track which circles are at the border
+
+This phase aims to establish tracking of the border of the map. Circles will be classed as 'at the border' if they are not enclosed. The most basic example is a triangle arrangement with one in the middle. The middle one would be classed as 'enclosed'. This will be useful information for phase 15, where the red color (priority 4) must be swapped from the border to an enclosed circle by exchanging priorities. In order to keep track of the border, assessments will be performed whenever new connections are made in CREATE mode, or when any change in ADJUST mode causes an update to a circle's ordered_connections.
+
+Get gemini to plan this out.
+
+
+### Phase 15: Advanced Color Network Reassignment
 
 This phase focuses on developing a sophisticated algorithm for reassigning colors throughout the network of connected circles when simple conflict resolution is insufficient. Currently, the application assigns priority 4 (red) as a fallback, but a more optimal solution would rearrange existing colors to maintain the Four Color Theorem guarantee.
 
