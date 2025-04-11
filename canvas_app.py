@@ -422,7 +422,8 @@ class CanvasApplication:
             x + self.circle_radius,
             y + self.circle_radius,
             fill=color_name, # Use derived color name
-            outline="black"
+            outline="black",
+            tags="circle"  # Add tag for circle
         )
         
         # Store circle data - now only with priority
@@ -559,8 +560,12 @@ class CanvasApplication:
         line_id = self.canvas.create_line(
             points,  # All points for the curved line
             width=1,
-            smooth=True  # Enable line smoothing for curves
+            smooth=True,  # Enable line smoothing for curves
+            tags="line"  # Add tag for line
         )
+        
+        # Ensure the line is below all circles
+        self.canvas.lower("line")
         
         # Update connection data
         from_circle["connected_to"].append(to_id)
@@ -1168,8 +1173,12 @@ class CanvasApplication:
         new_line_id = self.canvas.create_line(
             points,  # All points for the curved line
             width=1,
-            smooth=True  # Enable line smoothing for curves
+            smooth=True,  # Enable line smoothing for curves
+            tags="line"  # Add tag for line
         )
+        # Ensure new line stays below circles
+        self.canvas.lower("line")
+        
         connection["line_id"] = new_line_id
         
         # If in adjust mode, update the midpoint handle position

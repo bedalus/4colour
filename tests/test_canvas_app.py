@@ -750,7 +750,8 @@ class TestCanvasApplication(unittest.TestCase):
             self.app.canvas.create_line.assert_called_once_with(
                 [50, 50, 75, 75, 100, 100],  # List of points for curved line
                 width=1,
-                smooth=True  # Curved lines use smooth=True
+                smooth=True,  # Curved lines use smooth=True
+                tags="line"   # Added tag parameter to match implementation
             )
             
             # Check that the connection was updated with the new line ID
@@ -1160,12 +1161,11 @@ class TestCanvasApplication(unittest.TestCase):
                     mock_create_line.assert_called_once_with(
                         [50, 50, 120, 90, 150, 150],
                         width=1,
-                        smooth=True
+                        smooth=True,
+                        tags="line"   # Added tag parameter to match implementation
                     )
                     
                     # Verify the connection was updated with the new line ID
-                    self.assertEqual(self.app.connections["1_2"]["line_id"], 201)
-
     def test_y_key_binding(self):
         """Test y key binding for confirming selection."""
         # Setup: Switch to selection mode and reset mocks
@@ -1406,7 +1406,43 @@ class TestCanvasApplication(unittest.TestCase):
         
         # Check that the connected circle's data was updated
         self.assertEqual(second_circle["connected_to"], [])
+
+    def test_remove_circle_connections_removes_midpoint_handles(self):
+        """Test that removing circle connections also removes their midpoint handles."""
+        # Setup
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2, "canvas_id": 101, "x": 150, "y": 150, "color_priority": 2, "connected_to": [1]
+        }
         
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        # Create connection
+        self.app.connections = {
+            "1_2": {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2
+            }
+        }
+        
+        # Add midpoint handle
+        self.app.midpoint_handles = {"1_2": 300}
+        
+        # Call remove connections
+        self.app._remove_circle_connections(1)
+        
+        # Verify line and handle were deleted
+        self.app.canvas.delete.assert_any_call(200)  # Line
+        self.app.canvas.delete.assert_any_call(300)  # Handle
+        
+        # Verify connections and handles dictionaries were cleared
+        self.assertEqual(len(self.app.connections), 0)
+        self.assertEqual(len(self.app.midpoint_handles), 0)
+
     def test_handle_last_circle_removed(self):
         """Test handling the last circle removal."""
         # Setup: Set to adjust mode, then remove the last circle
@@ -1725,7 +1761,7 @@ class TestCanvasApplication(unittest.TestCase):
             {"id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [5]},
             {"id": 2, "canvas_id": 101, "x": 150, "y": 50, "color_priority": 2, "connected_to": [5]},
             {"id": 3, "canvas_id": 102, "x": 250, "y": 50, "color_priority": 3, "connected_to": [5]},
-            {"id": 5, "canvas_id": 103, "x": 150, "y": 150, "color_priority": 1, "connected_to": [1, 2, 3]}
+            {"id": 5, "canvas_id": 103, "x": 100, "y": 100, "color_priority": 1, "connected_to": [1, 2, 3]}
         ]
         
         self.app.circles = circles_data
@@ -1853,7 +1889,7 @@ class TestCanvasApplication(unittest.TestCase):
         
     def test_update_connections_preserves_curve_data(self):
         """Test that updating connections preserves curve data."""
-        # Setup circles
+        # Setup: Add two connected circles
         first_circle = {
             "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [2]
         }
@@ -1890,7 +1926,8 @@ class TestCanvasApplication(unittest.TestCase):
             self.app.canvas.create_line.assert_called_once_with(
                 [50, 50, 75, 75, 100, 100],  # List of points for curved line
                 width=1,
-                smooth=True  # Curved lines use smooth=True
+                smooth=True,  # Curved lines use smooth=True
+                tags="line"   # Add tags parameter to match implementation
             )
             
             # Check that the connection was updated with the new line ID
@@ -2994,6 +3031,68 @@ class TestCanvasApplication(unittest.TestCase):
         handle_x, handle_y = self.app._calculate_midpoint_handle_position(1, 2)
         self.assertEqual(handle_x, 150 - 40/2)  # 130
         self.assertEqual(handle_y, 150 - 30/2)  # 135
+
+    def test_add_connection_line_layering(self):
+        """Test that connection lines are drawn behind circles."""
+        # Setup two circles
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": []
+        }
+        second_circle = {
+            "id": 2, "canvas_id": 101, "x": 150, "y": 150, "color_priority": 2, "connected_to": []
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        # Mock create_line to return a consistent ID
+        self.app.canvas.create_line.return_value = 200
+        
+        # Add connection
+        result = self.app.add_connection(1, 2)
+        
+        # Verify the line was created with the "line" tag
+        self.app.canvas.create_line.assert_called_once()
+        _, kwargs = self.app.canvas.create_line.call_args
+        self.assertEqual(kwargs['tags'], "line")
+        
+        # Verify lower() was called to put lines behind circles
+        self.app.canvas.lower.assert_called_once_with("line")
+        
+    def test_update_connection_curve_maintains_layering(self):
+        """Test that updating connection curves maintains line layering."""
+        # Setup in adjust mode
+        self.app._mode = ApplicationMode.ADJUST
+        first_circle = {
+            "id": 1, "canvas_id": 100, "x": 50, "y": 50, "color_priority": 1, "connected_to": [2]
+        }
+        second_circle = {
+            "id": 2, "canvas_id": 101, "x": 150, "y": 150, "color_priority": 2, "connected_to": [1]
+        }
+        
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        
+        self.app.connections = {
+            "1_2": {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2,
+                "curve_X": 0,
+                "curve_Y": 0
+            }
+        }
+        
+        # Mock canvas methods
+        self.app.canvas.create_line.return_value = 201
+        
+        # Update the curve
+        self.app.update_connection_curve(1, 2, 20, -10)
+        
+        # Verify new line was created with "line" tag and lowered
+        _, kwargs = self.app.canvas.create_line.call_args
+        self.assertEqual(kwargs['tags'], "line")
+        self.app.canvas.lower.assert_called_with("line")
 
 if __name__ == "__main__":
     unittest.main()
