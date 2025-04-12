@@ -16,17 +16,23 @@ class TestCircleManager(MockAppTestCase):
     
     def test_get_circle_at_coords_found(self):
         """Test finding a circle at given coordinates."""
-        circle = self._create_test_circle(1, 50, 50)
-        self.app.circles = [circle]
+        # Use the interaction handler to create the circle to ensure 'enclosed' is present
+        event = self._create_click_event(50, 50)
+        with patch.object(self.app, '_assign_color_based_on_connections', return_value=1):
+            self.app.interaction_handler.draw_on_click(event)
+            
         self.app.circle_radius = 10
         
         result = self.app.get_circle_at_coords(55, 55)  # Inside the circle
-        self.assertEqual(result, 1)
+        self.assertEqual(result, 1) # Assumes first circle has ID 1
         
     def test_get_circle_at_coords_not_found(self):
         """Test not finding a circle at given coordinates."""
-        circle = self._create_test_circle(1, 50, 50)
-        self.app.circles = [circle]
+        # Use the interaction handler to create the circle
+        event = self._create_click_event(50, 50)
+        with patch.object(self.app, '_assign_color_based_on_connections', return_value=1):
+            self.app.interaction_handler.draw_on_click(event)
+            
         self.app.circle_radius = 10
         
         result = self.app.get_circle_at_coords(100, 100)  # Outside the circle
@@ -111,3 +117,33 @@ class TestCircleManager(MockAppTestCase):
             self.assertIsNone(self.app.last_circle_id)
             self.assertEqual(self.app.next_id, 1)
             self.app.canvas.delete.assert_called_with("all")
+    
+    def test_create_circle_attributes(self):
+        """Test that a newly created circle has the expected default attributes."""
+        # Simulate clicking to create a circle using the interaction handler's method
+        # We need to mock dependencies of draw_on_click if necessary
+        event = self._create_click_event(75, 75)
+        
+        # Mock color assignment as it's called during creation
+        with patch.object(self.app, '_assign_color_based_on_connections', return_value=1):
+            self.app.interaction_handler.draw_on_click(event)
+            
+        # Verify the circle was created and added
+        self.assertEqual(len(self.app.circles), 1)
+        self.assertEqual(len(self.app.circle_lookup), 1)
+        
+        # Get the created circle data
+        created_circle = self.app.circle_lookup[1] # Assuming next_id starts at 1
+        
+        # Check for the presence and default value of the 'enclosed' attribute
+        self.assertIn("enclosed", created_circle)
+        self.assertFalse(created_circle["enclosed"])
+        
+        # Check other essential attributes for completeness
+        self.assertEqual(created_circle["id"], 1)
+        self.assertEqual(created_circle["x"], 75)
+        self.assertEqual(created_circle["y"], 75)
+        self.assertEqual(created_circle["color_priority"], 1)
+        self.assertEqual(created_circle["connected_to"], [])
+        self.assertEqual(created_circle["ordered_connections"], [])
+        self.assertIsNotNone(created_circle["canvas_id"])

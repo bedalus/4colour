@@ -33,6 +33,7 @@ class TestInteractionHandler(MockAppTestCase):
             self.assertEqual(circle["y"], 100)
             self.assertEqual(circle["color_priority"], 4)
             self.assertEqual(circle["connected_to"], [])
+            self.assertFalse(circle["enclosed"]) # Verify new attribute
             
             self.assertIn(1, self.app.circle_lookup)
             self.assertEqual(self.app.circle_lookup[1], circle)
@@ -67,6 +68,9 @@ class TestInteractionHandler(MockAppTestCase):
                 self.assertTrue(self.app.in_selection_mode)
                 self.assertEqual(self.app.last_circle_id, 1)  # Unchanged
                 self.assertEqual(self.app.next_id, 3)  # Incremented
+                
+                second_circle = self.app.circles[1]
+                self.assertFalse(second_circle["enclosed"]) # Verify new attribute
     
     def test_toggle_circle_selection(self):
         """Test selecting and deselecting circles."""

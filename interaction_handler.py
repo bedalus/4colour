@@ -193,7 +193,7 @@ class InteractionHandler:
             tags="circle"  # Add tag for circle
         )
         
-        # Store circle data - now also with ordered_connections list
+        # Store circle data - now also with ordered_connections list and enclosed status
         circle_data = {
             "id": self.app.next_id,
             "canvas_id": circle_id,
@@ -201,7 +201,8 @@ class InteractionHandler:
             "y": y,
             "color_priority": color_priority,
             "connected_to": [],
-            "ordered_connections": []  # New field for storing connections in clockwise order
+            "ordered_connections": [],  # New field for storing connections in clockwise order
+            "enclosed": False  # New field for Phase 14: Track outer border
         }
         
         # Add circle to the list and lookup dictionary

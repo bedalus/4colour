@@ -47,7 +47,7 @@ When the current phase's objectives are complete or a new major area of work is 
 2.  **Write a Summary:** Immediately below the heading, add a short paragraph summarizing the overall goal or focus of this new phase. Explain *why* this work is being undertaken.
 3.  **Structure Work Items:** List the specific tasks for the phase using the standard format:
     *   Start each major task with `- [ ] **Task Description:**`. Use bold text for the main task description.
-    *   Use nested bullet points (`    *   Sub-task or detail`) for breaking down the main task or adding specific implementation notes.
+    *   Use nested bullet points (`    * Sub-task or detail`) for breaking down the main task or adding specific implementation notes.
 
 ## Project Structure
 
@@ -80,7 +80,7 @@ Phase 11 expanded integration tests (`test_integration.py`) to cover complex com
 
 ### Phase 13: Track the Clockwise Sequence of Connections to Circles
 
-Phase 13 established a method to determine the clockwise order of connections around each circle, storing this in ordered_connections (connection_manager.py).
+Phase 13 established a method to determine the clockwise order of connections around each circle, storing this in ordered_connections (connection_manager.py). 
 
 Phase 14 aims to implement a more complex algorithm for reassigning colors across the network when simple local adjustments are insufficient. This often involves graph traversal and potentially techniques related to proving or applying the Four Color Theorem. The ordered connection information from Phase 13 could be useful for Phase 14 because:
 
@@ -88,12 +88,67 @@ Phase 14 aims to implement a more complex algorithm for reassigning colors acros
 2.  Kempe Chain Heuristics: Algorithms attempting to prove or apply the Four Color Theorem often use Kempe chains (paths alternating between two colors). Identifying and manipulating these chains might require knowing the local arrangement of connections around a circle, which the clockwise order provides.
 3.  Systematic Traversal: When the reassignment algorithm needs to explore the network (e.g., using backtracking or recursion as mentioned in the Phase 14 plan), having a consistent, topologically meaningful order for visiting neighbors (the clockwise order) can simplify the logic compared to an arbitrary order.
 
-### Phase 14: Track which circles are at the border
+### Phase 14: Track which circles form a border at the outer edge of the map
 
-This phase aims to establish tracking of the border of the map. Circles will be classed as 'at the border' if they are not enclosed. The most basic example is a triangle arrangement with one in the middle. The middle one would be classed as 'enclosed'. This will be useful information for phase 15, where the red color (priority 4) must be swapped from the border to an enclosed circle by exchanging priorities. In order to keep track of the border, assessments will be performed whenever new connections are made in CREATE mode, or when any change in ADJUST mode causes an update to a circle's ordered_connections.
+This phase aims to establish tracking of the outer border of the map. Circles will be classed as 'outer' if they are not enclosed by other circles and connections. The most basic example of an enclosure is a triangle arrangement with one circle in the middle; the middle one would be classed as 'enclosed'. This 'enclosed' status (True/False) will be stored as a boolean attribute for each circle. This information is crucial for Phase 15, where the red color (priority 4) might need to be preferentially assigned to or swapped from an 'outer' circle.
 
-Get gemini to plan this out.
+The determination of which circles are 'outer' (not enclosed) will be done using an outer face traversal algorithm on the graph formed by circles and connections. This assessment must be triggered whenever the graph's topology or geometry changes significantly, such as adding/removing circles or connections, or moving circles or connection midpoints (as this affects connection angles and thus `ordered_connections`).
 
+- [x] **Preliminary Research Stage**
+    *   ~~Figure out what sort of algorithm we need to be able to 'walk' the circles forming the outer border.~~ **Chosen Algorithm:** Outer Face Traversal using `ordered_connections`.
+    *   ~~The algorithm should be triggered every time a reassessment is required, i.e. a circle added or removed, or its position adjusted, or a connection midpoint is moved.~~ **Trigger Points:** Identified (see Implementation Stage 2).
+    *   ~~It should make use of the ordered_connections information to know that it is 'walking' to the next 'border' and not and interior circle that is 'enclosed'~~ **Mechanism:** Use the clockwise order in `ordered_connections` relative to the incoming edge to determine the next edge on the outer face boundary.
+    *   ~~When the understanding is deep enough, flesh out the impementation plan below with additional stages. The planning should be suitable for a mid-level developer to be able to follow step-by-step, with plenty of technical detail, code suggestions, warnings about potential pitfalls, but must not state the obvious. Assume the developer has a good awareness of the existing project codebase. Adhere to the 'contribution guidelines' in this document.~~ **Done.**
+
+- [x] **Implementation Stage 1: Add 'enclosed' Attribute**
+    *   Modify the `InteractionHandler.draw_on_click` method (in `interaction_handler.py`) to add a new key-value pair `enclosed: False` to the dictionary representing each new circle. This ensures all circles start with a default status.
+    *   Update any relevant unit tests for circle creation (`test_circle_manager.py` or relevant interaction tests) to check for the presence and default value of this new attribute.
+
+- [ ] **Implementation Stage 2: Implement Outer Face Traversal Algorithm**
+    *   Create a new method, potentially `_update_enclosure_status(self)`, within the main `CanvasApplication` class (`canvas_app.py`). This method will encapsulate the logic for finding the outer border and updating the `enclosed` status of all circles.
+    *   **Inside `_update_enclosure_status`:**
+        *   Handle edge cases: If there are 0, 1, or 2 circles, none are enclosed. Set `enclosed = False` for all and return early.
+        *   **Find Starting Node:** Identify a circle guaranteed to be on the outer boundary. A reliable choice is the circle with the minimum y-coordinate. If there's a tie, use the minimum x-coordinate among those tied. Store its ID in `start_node_id`. Handle the case where no circles exist.
+        *   **Initialize Traversal:**
+            *   Create an empty set `outer_border_ids = set()`.
+            *   Set `current_node_id = start_node_id`.
+            *   Determine the "entry edge" for the `start_node_id`. Since it's the lowest point, we can conceptually imagine entering it from infinitely far below, corresponding to an *entry* angle of 0 degrees (North). Store this as `entry_angle`. Alternatively, find its connection with the largest clockwise angle and start from there. A simpler approach might be to pick its first connection in `ordered_connections` as the initial exit edge. Let's refine this:
+                *   Find the connection to `start_node_id` that has the *largest* entry angle (closest to 360 degrees, just before North). The *next* connection clockwise from this one will be the first edge of the outer boundary walk. Let the node connected via this first edge be `next_node_id`.
+                *   If `start_node_id` has only one connection, the graph is linear; handle appropriately (both nodes are outer).
+            *   Set `previous_node_id = start_node_id`.
+            *   Set `current_node_id = next_node_id`. Add `start_node_id` to `outer_border_ids`.
+        *   **Traversal Loop:** Start a loop that continues until `current_node_id == start_node_id`.
+            *   Add `current_node_id` to `outer_border_ids`.
+            *   Get the `current_circle = self.circle_lookup[current_node_id]`.
+            *   Get its `ordered_connections`. If empty or only contains `previous_node_id`, handle potential errors or edge cases (e.g., dangling node).
+            *   Find the index of `previous_node_id` within `ordered_connections`.
+            *   Determine the index of the *next* node in the clockwise order: `next_index = (previous_node_index + 1) % len(ordered_connections)`.
+            *   Get the `next_node_id = ordered_connections[next_index]`.
+            *   Update for the next iteration: `previous_node_id = current_node_id`, `current_node_id = next_node_id`.
+            *   Include a safety break (e.g., max iterations based on number of circles) to prevent infinite loops in case of unexpected graph states.
+        *   **Update Status:** After the loop completes, iterate through `self.circle_lookup.values()`. For each `circle`, set `circle['enclosed'] = (circle['id'] not in outer_border_ids)`.
+
+- [ ] **Implementation Stage 3: Integrate Algorithm Trigger Points**
+    *   Identify all places where the graph structure or geometry changes significantly enough to potentially alter which circles are enclosed.
+    *   Call `self._update_enclosure_status()` at the end of these operations:
+        *   `InteractionHandler._on_canvas_click` (after a circle is successfully created in CREATE mode).
+        *   `InteractionHandler.confirm_selection` (after connections are successfully added).
+        *   `InteractionHandler._remove_circle` (after a circle and its connections are removed). Ensure `ordered_connections` for neighbors are updated *before* calling the enclosure update.
+        *   `InteractionHandler._on_circle_release` (after a circle drag is completed). Ensure `ordered_connections` for the moved circle and its neighbors are updated first.
+        *   `InteractionHandler._on_midpoint_release` (after a midpoint drag is completed). Ensure `ordered_connections` for the two connected circles are updated first.
+    *   **Refactor Prerequisite:** Ensure that `ConnectionManager.update_ordered_connections` is reliably called *before* `_update_enclosure_status` in the ADJUST mode drag release handlers (`_on_circle_release`, `_on_midpoint_release`).
+
+- [ ] **Implementation Stage 4: Unit Testing**
+    *   Create new tests in `test_integration.py` or potentially a new `test_geometry.py`.
+    *   Test `_update_enclosure_status` directly with various pre-defined graph structures:
+        *   Empty graph, single circle, two connected circles.
+        *   Triangle (all outer).
+        *   Square (all outer).
+        *   Triangle with one circle inside (inner circle should be `enclosed=True`).
+        *   Square with one circle inside.
+        *   More complex structures with multiple enclosed circles.
+        *   Test cases where moving a circle or midpoint changes the enclosure status.
+    *   Verify that the `enclosed` status is correctly updated after operations like adding/removing circles/connections in integration tests.
 
 ### Phase 15: Advanced Color Network Reassignment
 
