@@ -104,8 +104,8 @@ The determination of which circles are 'outer' (not enclosed) will be done using
     *   Modify the `InteractionHandler.draw_on_click` method (in `interaction_handler.py`) to add a new key-value pair `enclosed: False` to the dictionary representing each new circle. This ensures all circles start with a default status.
     *   Update any relevant unit tests for circle creation (`test_circle_manager.py` or relevant interaction tests) to check for the presence and default value of this new attribute.
 
-- [ ] **Implementation Stage 2: Implement Outer Face Traversal Algorithm**
-    *   Create a new method, potentially `_update_enclosure_status(self)`, within the main `CanvasApplication` class (`canvas_app.py`). This method will encapsulate the logic for finding the outer border and updating the `enclosed` status of all circles.
+- [x] **Implementation Stage 2: Implement Outer Face Traversal Algorithm**
+    *   [x] Create a new method, potentially `_update_enclosure_status(self)`, within the main `CanvasApplication` class (`canvas_app.py`). This method will encapsulate the logic for finding the outer border and updating the `enclosed` status of all circles.
     *   **Inside `_update_enclosure_status`:**
         *   Handle edge cases: If there are 0, 1, or 2 circles, none are enclosed. Set `enclosed = False` for all and return early.
         *   **Find Starting Node:** Identify a circle guaranteed to be on the outer boundary. A reliable choice is the circle with the minimum y-coordinate. If there's a tie, use the minimum x-coordinate among those tied. Store its ID in `start_node_id`. Handle the case where no circles exist.
@@ -128,17 +128,16 @@ The determination of which circles are 'outer' (not enclosed) will be done using
             *   Include a safety break (e.g., max iterations based on number of circles) to prevent infinite loops in case of unexpected graph states.
         *   **Update Status:** After the loop completes, iterate through `self.circle_lookup.values()`. For each `circle`, set `circle['enclosed'] = (circle['id'] not in outer_border_ids)`.
 
-- [ ] **Implementation Stage 3: Integrate Algorithm Trigger Points**
+- [x] **Implementation Stage 3: Integrate Algorithm Trigger Points**
     *   Identify all places where the graph structure or geometry changes significantly enough to potentially alter which circles are enclosed.
     *   Call `self._update_enclosure_status()` at the end of these operations:
-        *   `InteractionHandler._on_canvas_click` (after a circle is successfully created in CREATE mode).
+        *   `InteractionHandler.draw_on_click` (after a circle is successfully created in CREATE mode).
         *   `InteractionHandler.confirm_selection` (after connections are successfully added).
-        *   `InteractionHandler._remove_circle` (after a circle and its connections are removed). Ensure `ordered_connections` for neighbors are updated *before* calling the enclosure update.
-        *   `InteractionHandler._on_circle_release` (after a circle drag is completed). Ensure `ordered_connections` for the moved circle and its neighbors are updated first.
-        *   `InteractionHandler._on_midpoint_release` (after a midpoint drag is completed). Ensure `ordered_connections` for the two connected circles are updated first.
-    *   **Refactor Prerequisite:** Ensure that `ConnectionManager.update_ordered_connections` is reliably called *before* `_update_enclosure_status` in the ADJUST mode drag release handlers (`_on_circle_release`, `_on_midpoint_release`).
+        *   `InteractionHandler.remove_circle` (after a circle and its connections are removed). Ensure `ordered_connections` for neighbors are updated *before* calling the enclosure update.
+        *   `InteractionHandler.drag_end` (after a circle or midpoint drag is completed). Ensure `ordered_connections` are updated first.
+    *   **Refactor Prerequisite:** Ensure that `ConnectionManager.update_ordered_connections` is reliably called *before* `_update_enclosure_status` in the ADJUST mode drag release handlers (`drag_end`). (Verified during implementation).
 
-- [ ] **Implementation Stage 4: Unit Testing**
+- [x] **Implementation Stage 4: Unit Testing**
     *   Create new tests in `test_integration.py` or potentially a new `test_geometry.py`.
     *   Test `_update_enclosure_status` directly with various pre-defined graph structures:
         *   Empty graph, single circle, two connected circles.

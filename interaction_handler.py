@@ -215,6 +215,9 @@ class InteractionHandler:
             self.app.next_id += 1
             self.app.drawn_items.append((x, y))
             
+            # Update enclosure status after adding the first circle
+            self.app._update_enclosure_status() # Phase 14 Trigger Point
+            
             # Update debug display if enabled
             if self.app.debug_enabled:
                 self.app.ui_manager.show_debug_info()
@@ -228,6 +231,10 @@ class InteractionHandler:
         # Enter selection mode
         self.app.in_selection_mode = True
         self.app.ui_manager.show_hint_text()
+        
+        # Update enclosure status after adding a subsequent circle (before connections)
+        # Although connections aren't made yet, the geometry changes.
+        self.app._update_enclosure_status() # Phase 14 Trigger Point
         
         # Update debug display if enabled
         if self.app.debug_enabled:
@@ -303,6 +310,9 @@ class InteractionHandler:
         if self.app.hint_text_id:
             self.app.canvas.delete(self.app.hint_text_id)
             self.app.hint_text_id = None
+            
+        # Update enclosure status after connections are confirmed
+        self.app._update_enclosure_status() # Phase 14 Trigger Point
             
         # Update debug info if enabled
         if self.app.debug_enabled:
@@ -405,6 +415,9 @@ class InteractionHandler:
         # Clear any angle visualization lines when dragging ends
         self.app.ui_manager.clear_angle_visualizations()
         
+        # Flag to check if ordered connections were updated
+        ordered_connections_updated = False
+        
         # Update ordered connections based on what was dragged
         if self.app.drag_state["type"] == "circle":
             # Get the dragged circle's ID
@@ -414,6 +427,7 @@ class InteractionHandler:
             if circle:
                 # Update the dragged circle's ordered connections
                 self.app.connection_manager.update_ordered_connections(circle_id)
+                ordered_connections_updated = True
                 
                 # Update ordered connections for all connected circles
                 for connected_id in circle["connected_to"]:
@@ -433,11 +447,16 @@ class InteractionHandler:
                     # Update ordered connections for both circles
                     self.app.connection_manager.update_ordered_connections(from_id)
                     self.app.connection_manager.update_ordered_connections(to_id)
+                    ordered_connections_updated = True
             except (ValueError, AttributeError):
                 pass  # Skip if connection key cannot be parsed
         
-        # Reset the drag state
+        # Reset the drag state BEFORE updating enclosure status
         self.reset_drag_state()
+
+        # Update enclosure status AFTER drag ends and ordered connections are updated
+        if ordered_connections_updated:
+             self.app._update_enclosure_status() # Phase 14 Trigger Point
     
     def drag_circle_motion(self, circle_id, dx, dy):
         """Handle circle dragging motion.
@@ -506,3 +525,20 @@ class InteractionHandler:
         
         # Stop event propagation
         return "break"
+    
+    def remove_circle(self, event):
+        """Handle right-click to remove a circle in adjust mode."""
+        if self.app._mode != ApplicationMode.ADJUST:
+            return
+
+        # Find if a circle was right-clicked
+        circle_id = self.app.circle_manager.get_circle_at_coords(event.x, event.y)
+        if circle_id is None:
+            return
+
+        # Use the consolidated removal method from CircleManager
+        removed = self.app.circle_manager.remove_circle_by_id(circle_id)
+
+        # Update enclosure status after removing a circle
+        if removed:
+            self.app._update_enclosure_status() # Phase 14 Trigger Point

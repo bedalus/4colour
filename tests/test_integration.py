@@ -375,3 +375,145 @@ class TestIntegrationWorkflows(MockAppTestCase):
         self.assertEqual(len(self.app.midpoint_handles), 0)
         self.assertIsNone(self.app.last_circle_id)
         self.assertEqual(self.app.next_id, 1)
+
+class TestEnclosureStatus(MockAppTestCase):
+    """Test cases for the enclosure status update logic."""
+
+    def _setup_triangle(self):
+        """Sets up a simple triangle graph."""
+        c1 = self._create_test_circle(1, 100, 50) # Top
+        c2 = self._create_test_circle(2, 50, 150)  # Bottom-left
+        c3 = self._create_test_circle(3, 150, 150) # Bottom-right
+        self.app.circles = [c1, c2, c3]
+        self.app.circle_lookup = {c["id"]: c for c in self.app.circles}
+        
+        # Add connections (ensures ordered_connections are updated)
+        self.app.connection_manager.add_connection(1, 2)
+        self.app.connection_manager.add_connection(1, 3)
+        self.app.connection_manager.add_connection(2, 3)
+
+    def _setup_square(self):
+        """Sets up a simple square graph."""
+        c1 = self._create_test_circle(1, 50, 50)   # Top-left
+        c2 = self._create_test_circle(2, 150, 50)  # Top-right
+        c3 = self._create_test_circle(3, 150, 150) # Bottom-right
+        c4 = self._create_test_circle(4, 50, 150)  # Bottom-left
+        self.app.circles = [c1, c2, c3, c4]
+        self.app.circle_lookup = {c["id"]: c for c in self.app.circles}
+
+        self.app.connection_manager.add_connection(1, 2)
+        self.app.connection_manager.add_connection(2, 3)
+        self.app.connection_manager.add_connection(3, 4)
+        self.app.connection_manager.add_connection(4, 1)
+
+    def _setup_triangle_with_center(self):
+        """Sets up a triangle with one circle inside."""
+        self._setup_triangle() # Start with the outer triangle
+        c4 = self._create_test_circle(4, 100, 100) # Center
+        self.app.circles.append(c4)
+        self.app.circle_lookup[4] = c4
+
+        # Connect center to all outer points
+        self.app.connection_manager.add_connection(4, 1)
+        self.app.connection_manager.add_connection(4, 2)
+        self.app.connection_manager.add_connection(4, 3)
+
+    def test_enclosure_empty_graph(self):
+        """Test enclosure status with no circles."""
+        self.app._update_enclosure_status()
+        # No assertions needed, just ensure it runs without error
+
+    def test_enclosure_single_circle(self):
+        """Test enclosure status with one circle."""
+        c1 = self._create_test_circle(1, 50, 50)
+        self.app.circles = [c1]
+        self.app.circle_lookup = {1: c1}
+        self.app._update_enclosure_status()
+        self.assertFalse(self.app.circle_lookup[1]['enclosed'])
+
+    def test_enclosure_two_connected_circles(self):
+        """Test enclosure status with two connected circles."""
+        c1 = self._create_test_circle(1, 50, 50)
+        c2 = self._create_test_circle(2, 150, 50)
+        self.app.circles = [c1, c2]
+        self.app.circle_lookup = {1: c1, 2: c2}
+        self.app.connection_manager.add_connection(1, 2)
+
+        self.app._update_enclosure_status()
+        self.assertFalse(self.app.circle_lookup[1]['enclosed'])
+        self.assertFalse(self.app.circle_lookup[2]['enclosed'])
+
+    def test_enclosure_triangle(self):
+        """Test enclosure status for a triangle (all outer)."""
+        self._setup_triangle()
+        self.app._update_enclosure_status()
+
+        self.assertFalse(self.app.circle_lookup[1]['enclosed'], "Circle 1 should not be enclosed")
+        self.assertFalse(self.app.circle_lookup[2]['enclosed'], "Circle 2 should not be enclosed")
+        self.assertFalse(self.app.circle_lookup[3]['enclosed'], "Circle 3 should not be enclosed")
+
+    def test_enclosure_square(self):
+        """Test enclosure status for a square (all outer)."""
+        self._setup_square()
+        self.app._update_enclosure_status()
+
+        self.assertFalse(self.app.circle_lookup[1]['enclosed'])
+        self.assertFalse(self.app.circle_lookup[2]['enclosed'])
+        self.assertFalse(self.app.circle_lookup[3]['enclosed'])
+        self.assertFalse(self.app.circle_lookup[4]['enclosed'])
+
+    def test_enclosure_triangle_with_center(self):
+        """Test enclosure status for a triangle with an enclosed center."""
+        self._setup_triangle_with_center()
+        self.app._update_enclosure_status()
+
+        # Outer triangle nodes should not be enclosed
+        self.assertFalse(self.app.circle_lookup[1]['enclosed'], "Outer Circle 1 should not be enclosed")
+        self.assertFalse(self.app.circle_lookup[2]['enclosed'], "Outer Circle 2 should not be enclosed")
+        self.assertFalse(self.app.circle_lookup[3]['enclosed'], "Outer Circle 3 should not be enclosed")
+        # Center node should be enclosed
+        self.assertTrue(self.app.circle_lookup[4]['enclosed'], "Center Circle 4 should be enclosed")
+
+    def test_enclosure_update_after_connection(self):
+        """Test that enclosure status updates after a connection encloses a circle."""
+        # Start with a triangle
+        self._setup_triangle()
+        # Add a center circle, but don't connect it yet
+        c4 = self._create_test_circle(4, 100, 100) # Center
+        self.app.circles.append(c4)
+        self.app.circle_lookup[4] = c4
+
+        # Initially, run update - center should not be enclosed yet
+        self.app._update_enclosure_status()
+        self.assertFalse(self.app.circle_lookup[4]['enclosed'], "Center should not be enclosed before connections")
+
+        # Now, connect the center circle to the triangle
+        self.app.connection_manager.add_connection(4, 1)
+        self.app.connection_manager.add_connection(4, 2)
+        self.app.connection_manager.add_connection(4, 3)
+
+        # Rerun the update
+        self.app._update_enclosure_status()
+        self.assertTrue(self.app.circle_lookup[4]['enclosed'], "Center should be enclosed after connections")
+        self.assertFalse(self.app.circle_lookup[1]['enclosed']) # Outer ones remain outer
+        self.assertFalse(self.app.circle_lookup[2]['enclosed'])
+        self.assertFalse(self.app.circle_lookup[3]['enclosed'])
+
+    def test_enclosure_update_after_removal(self):
+        """Test that enclosure status updates after removing an enclosing circle."""
+        self._setup_triangle_with_center()
+
+        # Initially, center is enclosed
+        self.app._update_enclosure_status()
+        self.assertTrue(self.app.circle_lookup[4]['enclosed'], "Center should be enclosed initially")
+
+        # Remove one of the outer triangle circles (e.g., circle 1)
+        # We need to use the proper removal sequence which updates connections
+        self.app.circle_manager.remove_circle_by_id(1) # This should trigger connection removal and ordered list updates internally
+
+        # Rerun the update - the former center should no longer be enclosed
+        self.app._update_enclosure_status()
+        self.assertFalse(self.app.circle_lookup[4]['enclosed'], "Former center should not be enclosed after outer circle removed")
+        # Check remaining circles
+        self.assertFalse(self.app.circle_lookup[2]['enclosed'])
+        self.assertFalse(self.app.circle_lookup[3]['enclosed'])
