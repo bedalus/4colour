@@ -43,7 +43,9 @@ class BaseTestCase(unittest.TestCase):
             "x": x,
             "y": y,
             "color_priority": priority,
-            "connected_to": connections
+            "connected_to": connections,
+            "ordered_connections": connections.copy(),  # Initialize with same values as connections
+            "enclosed": False  # Default to not enclosed
         }
         
         return circle

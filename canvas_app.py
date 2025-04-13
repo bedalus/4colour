@@ -21,6 +21,13 @@ from color_manager import ColorManager
 class CanvasApplication:
     """Main application class for the drawing canvas."""
     
+    # Constants for fixed nodes
+    FIXED_NODE_A_ID = -1
+    FIXED_NODE_B_ID = -2
+    FIXED_NODE_A_POS = (15, 60)  # Increased by 50% from (10, 40)
+    FIXED_NODE_B_POS = (60, 15)  # Increased by 50% from (40, 10)
+    PROXIMITY_LIMIT = 75  # Increased proximity limit (was 50)
+    
     def __init__(self, root):
         """Initialize the application with the main window.
         
@@ -81,10 +88,6 @@ class CanvasApplication:
         
         # Store drawn items for potential resize handling
         self.drawn_items = []
-        
-        # Add these new instance variables
-        self.extreme_node_indicator = None
-        self.extreme_midpoint_indicator = None
 
         # Initialize UI components
         self._setup_ui()
@@ -101,6 +104,9 @@ class CanvasApplication:
         
         # Bind initial events for CREATE mode
         self.interaction_handler.bind_mode_events(self._mode)
+        
+        # Create fixed outer nodes
+        self._initialize_fixed_nodes()
 
     def _setup_ui(self):
         """Create and configure all UI elements."""
@@ -306,70 +312,21 @@ class CanvasApplication:
 
     def _update_enclosure_status(self):
         """Updates the 'enclosed' status for all circles by traversing the outer boundary."""
-        # First, ensure any existing indicators are cleared
-        if self.extreme_node_indicator:
-            self.canvas.delete(self.extreme_node_indicator)
-            self.extreme_node_indicator = None
-        if self.extreme_midpoint_indicator:
-            self.canvas.delete(self.extreme_midpoint_indicator)
-            self.extreme_midpoint_indicator = None
-
         # Handle empty or small graphs (no enclosure possible)
         if len(self.circles) <= 2:
             for circle in self.circle_lookup.values():
                 circle['enclosed'] = False
             return # No boundary to traverse
 
-        # --- Determine Start Node based on Most Extreme Connection Edge ---
-        start_node = None
-        extreme_handle_pos = None
-        extreme_connection_key = None
-        min_handle_y = float('inf')
-        min_handle_x = float('inf')
-
-        # 1. Find the most extreme connection edge (based on midpoint handle position)
-        for conn_key, connection in self.connections.items():
-            handle_x, handle_y = self.connection_manager.calculate_midpoint_handle_position(
-                connection["from_circle"],
-                connection["to_circle"]
-            )
-            if handle_y < min_handle_y or (handle_y == min_handle_y and handle_x < min_handle_x):
-                min_handle_y = handle_y
-                min_handle_x = handle_x
-                extreme_handle_pos = (handle_x, handle_y)
-                extreme_connection_key = conn_key
-
-        # 2. The start node is the extreme connection's most extreme endpoint
-        extreme_connection = self.connections[extreme_connection_key]
-        node1_id = extreme_connection["from_circle"]
-        node2_id = extreme_connection["to_circle"]
-        node1 = self.circle_lookup.get(node1_id)
-        node2 = self.circle_lookup.get(node2_id)
-
-        # Select the more extreme node (min y, then min x) between the two
-        if node1['y'] < node2['y'] or (node1['y'] == node2['y'] and node1['x'] < node2['x']):
-            start_node = node1
-        else:
-            start_node = node2
-
-        # --- End of Start Node Determination ---
-
-        # Draw indicators if in adjust mode
-        if self._mode == ApplicationMode.ADJUST:
-            # Draw indicator around the determined start_node
-            self.extreme_node_indicator = self.canvas.create_oval(
-                start_node['x'] - self.circle_radius - 5, start_node['y'] - self.circle_radius - 5,
-                start_node['x'] + self.circle_radius + 5, start_node['y'] + self.circle_radius + 5,
-                outline="purple", width=2
-            )
-            # Draw indicator around the extreme midpoint handle, if found
-            x, y = extreme_handle_pos
-            size = 8
-            self.extreme_midpoint_indicator = self.canvas.create_rectangle(
-                x - size, y - size, x + size, y + size,
-                outline="purple", width=2
-            )
-
+        # --- Get the fixed start node (Node A) ---
+        start_node = self.circle_lookup.get(self.FIXED_NODE_A_ID)
+        if not start_node:
+            # If we can't find the fixed node, something is wrong
+            # Mark all circles as not enclosed
+            for circle in self.circle_lookup.values():
+                circle['enclosed'] = False
+            return
+            
         # Initialize boundary tracking
         boundary_nodes = set()
         boundary_nodes.add(start_node['id'])
@@ -393,6 +350,8 @@ class CanvasApplication:
         # Traverse the outer boundary clockwise.
         # Start from the 'next_id' found above, keeping track of the node we came from ('previous_id').
         previous_id = start_node['id'] # We start by conceptually moving from start_node to next_id
+        visited_edges = set()  # Track visited edges to handle edges that appear twice in boundary
+        
         while next_id and next_id != start_node['id']:
             # Safety break to prevent infinite loops in case of graph inconsistency
             if len(boundary_nodes) > len(self.circles) + 1: # Allow one extra for safety margin
@@ -404,15 +363,21 @@ class CanvasApplication:
                      self.ui_manager.show_debug_info()
                  return # Exit traversal
 
-            # Break if we revisit a node unexpectedly (other than the start node at the end)
-            if next_id in boundary_nodes:
-                print(f"Warning: Boundary traversal revisited node {next_id} unexpectedly. Breaking loop.")
+            # Create an edge identifier (ordered pair of node IDs)
+            edge = tuple(sorted([previous_id, next_id]))
+            
+            # Check if we've already visited this node AND this specific edge
+            if next_id in boundary_nodes and edge in visited_edges:
+                print(f"Warning: Boundary traversal revisited node {next_id} and edge {edge} unexpectedly. Breaking loop.")
                 # Mark all as not enclosed as boundary is likely incorrect
                 for circle in self.circle_lookup.values():
                     circle['enclosed'] = False
                 if self.debug_enabled:
                     self.ui_manager.show_debug_info()
                 return # Exit traversal
+                
+            # Track this edge as visited
+            visited_edges.add(edge)
 
             current_id = next_id
             boundary_nodes.add(current_id) # Mark the current node as part of the boundary
@@ -438,7 +403,6 @@ class CanvasApplication:
 
                 # The next edge to follow is the one immediately clockwise from the arrival edge.
                 # Use modulo arithmetic to wrap around the list correctly.
-                # Corrected: Use +1 for clockwise traversal.
                 next_idx = (prev_idx + 1) % len(current_node['ordered_connections'])
                 next_id = current_node['ordered_connections'][next_idx]
 
@@ -505,6 +469,96 @@ class CanvasApplication:
         
         # Normalize to 0-360 range, maintaining clockwise orientation
         return (angle_deg) % 360
+
+    def _initialize_fixed_nodes(self):
+        """Create and connect the two fixed outer nodes that guarantee a starting point for outer face traversal."""
+        # Create fixed node A - Yellow (color_priority 1)
+        x_a, y_a = self.FIXED_NODE_A_POS
+        node_a_canvas_id = self.canvas.create_oval(
+            x_a - self.circle_radius,
+            y_a - self.circle_radius,
+            x_a + self.circle_radius,
+            y_a + self.circle_radius,
+            fill="yellow",  # Color priority 1 = yellow
+            outline="black",
+            tags="fixed_circle"  # Special tag to identify fixed nodes
+        )
+        
+        # Create fixed node B - Green (color_priority 2)
+        x_b, y_b = self.FIXED_NODE_B_POS
+        node_b_canvas_id = self.canvas.create_oval(
+            x_b - self.circle_radius,
+            y_b - self.circle_radius,
+            x_b + self.circle_radius,
+            y_b + self.circle_radius,
+            fill="green",  # Color priority 2 = green
+            outline="black",
+            tags="fixed_circle"
+        )
+        
+        # Add fixed node A to circles data structures
+        node_a_data = {
+            "id": self.FIXED_NODE_A_ID,
+            "canvas_id": node_a_canvas_id,
+            "x": x_a,
+            "y": y_a,
+            "color_priority": 1,  # Yellow by default
+            "connected_to": [self.FIXED_NODE_B_ID],  # Will connect to node B
+            "ordered_connections": [self.FIXED_NODE_B_ID],
+            "enclosed": False,
+            "fixed": True  # Mark as a fixed node
+        }
+        
+        # Add fixed node B to circles data structures
+        node_b_data = {
+            "id": self.FIXED_NODE_B_ID,
+            "canvas_id": node_b_canvas_id,
+            "x": x_b,
+            "y": y_b,
+            "color_priority": 2,  # Green by default
+            "connected_to": [self.FIXED_NODE_A_ID],  # Will connect to node A
+            "ordered_connections": [self.FIXED_NODE_A_ID],
+            "enclosed": False,
+            "fixed": True  # Mark as a fixed node
+        }
+        
+        # Add to circles list and lookup dictionary
+        self.circles.append(node_a_data)
+        self.circles.append(node_b_data)
+        self.circle_lookup[self.FIXED_NODE_A_ID] = node_a_data
+        self.circle_lookup[self.FIXED_NODE_B_ID] = node_b_data
+        
+        # Create connection between the fixed nodes
+        connection_key = f"{self.FIXED_NODE_A_ID}_{self.FIXED_NODE_B_ID}"
+        points = self._calculate_curve_points(self.FIXED_NODE_A_ID, self.FIXED_NODE_B_ID)
+        
+        # Draw the connection line
+        line_id = self.canvas.create_line(
+            points,
+            width=1,
+            smooth=True,
+            tags=("line", "fixed_connection")  # Special tag for fixed connection
+        )
+        
+        # Ensure the line is below all circles
+        self.canvas.lower("line")
+        
+        # Store connection details
+        self.connections[connection_key] = {
+            "line_id": line_id,
+            "from_circle": self.FIXED_NODE_A_ID,
+            "to_circle": self.FIXED_NODE_B_ID,
+            "curve_X": 0,
+            "curve_Y": 0,
+            "fixed": True  # Mark as a fixed connection
+        }
+        
+        # Update ordered connections for both nodes
+        self.connection_manager.update_ordered_connections(self.FIXED_NODE_A_ID)
+        self.connection_manager.update_ordered_connections(self.FIXED_NODE_B_ID)
+        
+        # Update enclosure status after creating fixed nodes
+        self._update_enclosure_status()
 
 def main():
     """Application entry point."""

@@ -20,12 +20,27 @@ class TestCanvasApplication(MockAppTestCase):
         self.assertEqual(self.app.canvas_height, 500)
         self.assertEqual(self.app.circle_radius, 10)
         self.assertEqual(self.app.midpoint_radius, 5)
-        self.assertEqual(self.app.circles, [])
+        
+        # Fixed nodes should be present at startup - two nodes plus connection
+        self.assertEqual(len(self.app.circles), 2)
+        
+        # Check for fixed nodes with correct IDs
+        node_ids = [circle['id'] for circle in self.app.circles]
+        self.assertIn(self.app.FIXED_NODE_A_ID, node_ids)
+        self.assertIn(self.app.FIXED_NODE_B_ID, node_ids)
+        
+        # Fixed nodes should be in circle_lookup
+        self.assertIn(self.app.FIXED_NODE_A_ID, self.app.circle_lookup)
+        self.assertIn(self.app.FIXED_NODE_B_ID, self.app.circle_lookup)
+        
+        # One connection should exist between the fixed nodes
+        self.assertEqual(len(self.app.connections), 1)
+        
+        # Other initializations remain the same
         self.assertEqual(self.app.next_id, 1)
         self.assertIsNone(self.app.last_circle_id)
         self.assertFalse(self.app.debug_enabled)
-        self.assertEqual(self.app.circle_lookup, {})
-        self.assertEqual(self.app.connections, {})
+        
         self.root.title.assert_called_with("4colour Canvas")
         self.root.geometry.assert_called_with("800x600")
     

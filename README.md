@@ -88,53 +88,52 @@ Phase 11 expanded integration tests (`test_integration.py`) to cover complex com
 
 Phase 13 established a method to determine the clockwise order of connections around each circle, storing this in ordered_connections (connection_manager.py). 
 
-Phase 14 aims to implement a more complex algorithm for reassigning colors across the network when simple local adjustments are insufficient. This often involves graph traversal and potentially techniques related to proving or applying the Four Color Theorem. The ordered connection information from Phase 13 could be useful for Phase 14 because:
-
-1.  Planar Graph Algorithms: Many algorithms designed for planar graphs rely on knowing the cyclic order of edges around each vertex. This information defines the planar embedding and is crucial for operations like identifying faces or traversing the dual graph.
-2.  Kempe Chain Heuristics: Algorithms attempting to prove or apply the Four Color Theorem often use Kempe chains (paths alternating between two colors). Identifying and manipulating these chains might require knowing the local arrangement of connections around a circle, which the clockwise order provides.
-3.  Systematic Traversal: When the reassignment algorithm needs to explore the network (e.g., using backtracking or recursion as mentioned in the Phase 14 plan), having a consistent, topologically meaningful order for visiting neighbors (the clockwise order) can simplify the logic compared to an arbitrary order.
-
-### Phase 14: Track which circles form a border at the outer edge of the map - Summary
+### Phase 14: Identify Outer Boundary Nodes - Summary
 
 Phase 14 introduced the capability to distinguish between circles on the outer boundary of the graph and those enclosed within faces. An `enclosed` boolean attribute was added to each circle's data structure, defaulting to `False`. The core logic resides in the `_update_enclosure_status` method within `CanvasApplication` (`canvas_app.py`). This method implements an outer face traversal algorithm to identify all circles belonging to the outer boundary.
 
-The algorithm critically depends on the `ordered_connections` list maintained for each circle by the `ConnectionManager`, which stores neighbors in clockwise order based on the calculated angle of departure of the connection line (including any curve adjustments).
+The algorithm critically depends on the `ordered_connections` list maintained for each circle by the `ConnectionManager`, which stores neighbors in clockwise order based on the calculated angle of the connection line (including any curve adjustments).
 
-Identifying the starting node for the traversal involves a two-stage process to handle potential complexities introduced by curved connections. First, the algorithm identifies the geometrically "most extreme" node (minimum y-coordinate, then minimum x-coordinate) as an initial candidate. Second, it calculates the position of the midpoint handle for every connection (accounting for curves) and identifies the connection whose handle position is "most extreme" (minimum y, then minimum x). The algorithm then compares the extremeness of the candidate node and the extreme midpoint handle position. If the midpoint handle position is found to be more extreme (lower y, or same y and lower x) than the candidate node, the starting node for the traversal is selected from the two nodes connected by that extreme edge (specifically, the one with the minimum y, then minimum x coordinate between the two). Otherwise, if the candidate node is more extreme or equally extreme, or if no connections exist, the candidate node itself is chosen as the starting point. Once the starting node is determined, the traversal identifies the first edge to follow by finding the connection *entering* the start node with the largest angle (closest to 360 degrees in the clockwise sweep from North) and then selecting the *next* connection in the start node's `ordered_connections` list as the first outgoing edge.
+To start the traversal, the algorithm first identifies the connection edge whose midpoint handle position is "most extreme" (minimum y, then minimum x, accounting for curves). The starting node for the traversal is then chosen as the endpoint of this extreme edge that is itself most extreme (minimum y, then minimum x).
 
-From this starting edge, the algorithm "walks" the outer boundary. At each circle (`current_node`), it identifies the connection it arrived from (`previous_node`). Using the `ordered_connections` of the `current_node`, it finds the index of the `previous_node` and selects the *next* connection in the clockwise sequence as the path to the next circle on the outer boundary. This process repeats until the walk returns to the starting circle. All circles visited during this walk are marked as `enclosed=False`, and all others are marked `enclosed=True`.
+Once the starting node is determined, the traversal identifies the first outgoing edge to follow by finding the connection leaving the start node with the smallest angle (measured clockwise from North, 0 degrees). From this initial edge, the algorithm "walks" the outer boundary using the Right-Hand Rule (see below). At each circle (`current_node`), it identifies the connection it arrived from (`previous_node`). Using the `ordered_connections` of the `current_node`, it finds the index of the `previous_node` and selects the *next* connection in the clockwise sequence as the path to the next circle on the outer boundary. This process repeats until the walk returns to the starting circle. All circles visited during this walk are marked as `enclosed=False`, and all others are marked `enclosed=True`.
 
-A key complexity arises from curved connections. A significant curve can alter the effective angle of a connection line where it meets the circle, potentially changing its position within the `ordered_connections` list compared to a straight line. The `update_ordered_connections` method accounts for these curves when calculating angles, ensuring the traversal algorithm correctly follows the topological outer face even when geometric shapes are distorted by curves.
+A key complexity arises from curved connections. A significant curve can alter the effective angle of a connection line where it meets the circle, potentially changing its position within the `ordered_connections` list compared to a straight line. The angle calculation methods (`_calculate_corrected_angle` in `canvas_app.py` and related methods in `connection_manager.py`) account for these curves when determining the order, ensuring the traversal algorithm correctly follows the topological outer face even when geometric shapes are distorted by curves.
 
-The `_update_enclosure_status` calculation is triggered after operations that modify the graph's topology or geometry: circle creation (`draw_on_click`), connection creation (`confirm_selection`), circle removal (`remove_circle`), and drag completion (`drag_end`). Comprehensive integration tests were added in `test_integration.py` to validate the enclosure status under various graph structures and modifications, including scenarios specifically testing the impact of curved connections.
+The `_update_enclosure_status` calculation is triggered after operations that modify the graph's topology or geometry: circle creation (`draw_on_click`), connection creation (`confirm_selection`), circle removal (`remove_circle_by_id`), and drag completion (`drag_end`). Comprehensive integration tests were added in `test_integration.py` to validate the enclosure status under various graph structures and modifications.
 
-### Phase 14-post-implementation: Debugging the Perimeter Traversal Algorithm
+**The Right-Hand Rule:** In the context of traversing faces in a planar graph embedding (where edges around each node have a defined cyclic order, like our clockwise `ordered_connections`), the Right-Hand Rule provides a consistent way to trace a face boundary. Imagine walking along an edge towards a node. When you arrive, you look at the available edges leaving that node, ordered clockwise. To follow the Right-Hand Rule, you always choose the *next* edge in the clockwise order immediately after the edge you just arrived on. If you consistently apply this rule, you will trace the boundary of a single face in a clockwise direction. The Left-Hand Rule is analogous, choosing the next edge *counter-clockwise*, tracing the face in the opposite direction. For finding the outer face (often considered the "infinite" face), starting on a known outer edge and consistently applying one of these rules allows traversal of its boundary.
 
-There is a miscalculation happening in the algorithm designed in phase 14 so we are going to try to find the cause. The first circle (or "node") identified as the starting point for determining the graph's perimeter has an arrow pointing out of it to indicate the perimeter node traversal path. Unfortunately it *sometimes* fails at this task (points along the wrong connection). I believe the issue might be related to Tkinter's inverted y-axis. This has been compensated for already in most of the application, but not for these arrows.
+### Phase 15: Guaranteeing an Outer Face Starting Point
 
-Upon examining the logic around these arrows (focusing on the y-axis inversion, "north" as zero-degrees, clockwise ordering, and possible systemic problems) we established that: 
+This phase aims to simplify the identification of the outer face boundary by establishing a guaranteed starting point that is always part of the outer face and remains the "most extreme" element geometrically. This avoids complexities with curved connections potentially altering which node or edge appears most extreme.
 
-- The starting node is determined correctly.
-- Tkinter's y-axis increases downward, the opposite to usual mathematical convention.
-- The "most extreme" node (minimum-y and minimum-x for ties) appears closer to the top of the canvas.
-- Minimum-x is conventional, i.e. leftmost, so calculations for clockwise may be inverted.
-- North = 0° , East = 90° , South = 180° , West = 270°.
-- North is still intended to point upward, accounting for the inversion.
-- The first outgoing edge (called a connection in the code) from the starting node is determined by a clockwise sweep from North.
+- [ ] **Initialize with Fixed Outer Nodes:**
+    *   Modify `CanvasApplication.__init__` to automatically create two specific nodes upon startup (e.g., Node A at (10, 40), Node B at (40, 10)).
+    *   Automatically create a connection between these two initial nodes.
+    *   Assign unique, reserved IDs (e.g., -1, -2) or use a flag to mark these nodes as special/fixed.
+    *   Be sure to reinitialize if the clear canvas button is pressed.
 
-We must fix the problem. We must consider possible causes:
+- [ ] **Make Initial Nodes Non-Adjustable:**
+    *   Modify `InteractionHandler.drag_start` to prevent dragging of these fixed nodes.
+    *   Modify `CircleManager.remove_circle_by_id` (or related interaction logic) to prevent deletion of these fixed nodes.
+    *   Ensure the connection between them cannot be removed or its midpoint handle dragged.
 
-- An isolated routine in the algorithm selects the wrong "next" connection to begin traversal when it fails to properly account for the y-axis inversion when calculating the "largest angle" for the entering connection.
-- In a standard angle system (with y-up), a vector pointing up has angle 90°, a vector pointing down has angle 270°, but in an inverted y-axis system (with y-down), those same vectors would have up as 270° and down as 90°.
-- If the algorithm uses atan2(y, x) directly without accounting for the inversion, angles would be incorrectly calculated, causing the wrong "next" connection to be selected.
+- [ ] **Implement Proximity Restrictions:**
+    *   Modify `InteractionHandler.draw_on_click` to prevent placing new nodes within a defined radius of the origin or the fixed nodes (e.g., disallow placement if x < 50 and y < 50).
+    *   Modify `InteractionHandler.drag_midpoint_motion` (or `drag_end`) to prevent midpoint handles from being dragged into this restricted zone. This ensures no new element can become "more extreme" than the initial fixed nodes/edge.
 
-To either confirm or refute the above hypothesis we should examine:
+- [ ] **Adapt Outer Face Traversal Start:**
+    *   Modify `CanvasApplication._update_enclosure_status` to *always* use one of the fixed nodes (e.g., Node A) as the `start_node` for the outer face traversal.
+    *   The logic to find the first outgoing edge (minimum angle clockwise from North) can remain, starting from this fixed node.
+    *   We no longer need to find the starting point, as we can use the Node A -> Node B connection as a guaranteed outer edge, so the existing code that does this is redundant and can be removed.
 
-- How angles are calculated in the update_ordered_connections method.
-- The logic for finding the connection with the "largest angle" entering the start node.
-- Whether transformations like (90 + atan2(y, x)) % 360 are being applied to account for the inverted y-axis.
+- [ ] **Update Tests:**
+    *   Adjust existing tests (`test_integration.py`, `test_canvas_app.py`) to account for the presence and behavior of the fixed initial nodes.
+    *   Add new tests specifically verifying the non-adjustability and proximity restrictions.
+    *   When working on the tests, anticipate that there may be undocumented reasons why they are out of alignment with the revised application code, so may need multiple passes to fully repair.
 
-### Phase 15: Advanced Color Network Reassignment
+### Phase 16: Advanced Color Network Reassignment
 
 This phase focuses on developing a sophisticated algorithm for reassigning colors throughout the network of connected circles when simple conflict resolution is insufficient. Currently, the application assigns priority 4 (red) as a fallback, but a more optimal solution would rearrange existing colors to maintain the Four Color Theorem guarantee.
 

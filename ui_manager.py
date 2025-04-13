@@ -86,11 +86,11 @@ class UIManager:
             
             self.active_circle_ids = []  # Reset after showing
             
-        # Display debug text at the top of the canvas
+        # Display debug text on the right side of the canvas
         self.app.debug_text = self.app.canvas.create_text(
-            10, 10, 
+            self.app.canvas_width - 10, 10, 
             text=info_text, 
-            anchor=tk.NW, 
+            anchor=tk.NE,  # Right-align text at the top
             fill="black",
             font=("Arial", 10)
         )
@@ -177,6 +177,9 @@ class UIManager:
             
         # Return to create mode
         self.app._set_application_mode(ApplicationMode.CREATE)
+        
+        # Reinitialize fixed nodes
+        self.app._initialize_fixed_nodes()
 
     def draw_angle_visualization_line(self, circle_id, other_circle_id, angle, connection_key=None):
         """Draw a visualization line showing the angle a connection enters a circle.

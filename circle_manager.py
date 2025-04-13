@@ -57,6 +57,10 @@ class CircleManager:
         if not circle:
             return False
             
+        # Check if this is a fixed node - prevent removal
+        if circle.get("fixed", False) or circle_id in (self.app.FIXED_NODE_A_ID, self.app.FIXED_NODE_B_ID):
+            return False
+            
         # First, remove all connections to this circle
         self.app._remove_circle_connections(circle_id)
         

@@ -50,14 +50,6 @@ class InteractionHandler:
             # Clear angle visualizations when exiting ADJUST mode
             self.app.ui_manager.clear_angle_visualizations()
             
-            # Clear extreme node/midpoint indicators when exiting ADJUST mode
-            if self.app.extreme_node_indicator:
-                self.app.canvas.delete(self.app.extreme_node_indicator)
-                self.app.extreme_node_indicator = None
-            if self.app.extreme_midpoint_indicator:
-                self.app.canvas.delete(self.app.extreme_midpoint_indicator)
-                self.app.extreme_midpoint_indicator = None
-            
             # Clear adjust mode state
             if self.app.edit_hint_text_id:
                 self.app.canvas.delete(self.app.edit_hint_text_id)
@@ -187,6 +179,11 @@ class InteractionHandler:
                 self.toggle_circle_selection(circle_id)
             return
             
+        # Check for proximity restrictions - prevent placement too close to origin or fixed nodes
+        if x < self.app.PROXIMITY_LIMIT and y < self.app.PROXIMITY_LIMIT:
+            # Position is in the restricted zone near origin and fixed nodes
+            return
+            
         # Normal mode: draw a new circle
         # Use the deterministic color assignment
         color_priority = self.app._assign_color_based_on_connections()  # Only get priority
@@ -219,31 +216,16 @@ class InteractionHandler:
         self.app.circles.append(circle_data)
         self.app.circle_lookup[self.app.next_id] = circle_data
         
-        # Special case: If this is the first circle, just add it
-        if self.app.last_circle_id is None:
-            self.app.last_circle_id = self.app.next_id
-            self.app.next_id += 1
-            self.app.drawn_items.append((x, y))
-            
-            # Update enclosure status after adding the first circle
-            self.app._update_enclosure_status() # Phase 14 Trigger Point
-            
-            # Update debug display if enabled
-            if self.app.debug_enabled:
-                self.app.ui_manager.show_debug_info()
-            return
-            
-        # For subsequent circles:
-        self.app.newly_placed_circle_id = self.app.next_id  # Store the new circle's ID
+        # Store this circle's ID as the one to be connected
+        self.app.newly_placed_circle_id = self.app.next_id
         self.app.next_id += 1
         self.app.drawn_items.append((x, y))
         
-        # Enter selection mode
+        # Enter selection mode - this applies for all nodes now that we have fixed starting nodes
         self.app.in_selection_mode = True
         self.app.ui_manager.show_hint_text()
         
-        # Update enclosure status after adding a subsequent circle (before connections)
-        # Although connections aren't made yet, the geometry changes.
+        # Update enclosure status after adding a new circle
         self.app._update_enclosure_status() # Phase 14 Trigger Point
         
         # Update debug display if enabled
@@ -402,6 +384,12 @@ class InteractionHandler:
                 # Find which connection this midpoint belongs to
                 for tag in tags:
                     if "_" in tag and tag in self.app.midpoint_handles:
+                        # Check if this is a fixed connection
+                        connection = self.app.connections.get(tag)
+                        if connection and connection.get("fixed", False):
+                            # Cannot drag fixed connection midpoints
+                            return
+                        
                         self.app.drag_state["active"] = True
                         self.app.drag_state["type"] = "midpoint"
                         self.app.drag_state["id"] = tag
@@ -410,6 +398,12 @@ class InteractionHandler:
         # If not a midpoint, check if it's a circle
         circle_id = self.app.get_circle_at_coords(event.x, event.y)
         if circle_id is not None:
+            # Check if this is a fixed node
+            circle = self.app.circle_lookup.get(circle_id)
+            if circle and circle.get("fixed", False):
+                # Cannot drag fixed nodes
+                return
+                
             self.app.drag_state["active"] = True
             self.app.drag_state["type"] = "circle"
             self.app.drag_state["id"] = circle_id
@@ -584,6 +578,11 @@ class InteractionHandler:
         from_circle = self.app.circle_lookup.get(from_id)
         to_circle = self.app.circle_lookup.get(to_id)
         if not from_circle or not to_circle:
+            return
+        
+        # Check for proximity restrictions - prevent dragging into the restricted zone
+        if x < self.app.PROXIMITY_LIMIT and y < self.app.PROXIMITY_LIMIT:
+            # Position is in the restricted zone near origin and fixed nodes
             return
         
         # Calculate the base midpoint (without any curve offset)

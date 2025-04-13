@@ -517,3 +517,242 @@ class TestEnclosureStatus(MockAppTestCase):
         # Check remaining circles
         self.assertFalse(self.app.circle_lookup[2]['enclosed'])
         self.assertFalse(self.app.circle_lookup[3]['enclosed'])
+
+    def test_fixed_nodes_behavior(self):
+        """Test that fixed nodes cannot be dragged or removed."""
+        # Test removal prevention
+        # Try to remove the fixed node A - this should fail
+        result = self.app.circle_manager.remove_circle_by_id(self.app.FIXED_NODE_A_ID)
+        self.assertFalse(result)
+        self.assertIn(self.app.FIXED_NODE_A_ID, self.app.circle_lookup)
+        
+        # Try to remove the fixed node B - this should fail
+        result = self.app.circle_manager.remove_circle_by_id(self.app.FIXED_NODE_B_ID)
+        self.assertFalse(result)
+        self.assertIn(self.app.FIXED_NODE_B_ID, self.app.circle_lookup)
+        
+        # Test drag prevention
+        # Set up drag state as if user clicked on a fixed node
+        self.app._set_application_mode(ApplicationMode.ADJUST)
+        
+        fixed_node_a = self.app.circle_lookup[self.app.FIXED_NODE_A_ID]
+        event = self._create_click_event(fixed_node_a['x'], fixed_node_a['y'])
+        
+        # Simulate drag start
+        self.app.interaction_handler.drag_start(event)
+        
+        # Drag state should not be active since fixed nodes cannot be dragged
+        self.assertFalse(self.app.drag_state['active'])
+        
+        # Try to modify the connection between fixed nodes
+        connection_key = f"{self.app.FIXED_NODE_A_ID}_{self.app.FIXED_NODE_B_ID}"
+        
+        # Get midpoint handle position
+        midpoint_x, midpoint_y = self.app.connection_manager.calculate_midpoint_handle_position(
+            self.app.FIXED_NODE_A_ID, 
+            self.app.FIXED_NODE_B_ID
+        )
+        
+        # Set up drag state as if user clicked on the midpoint handle
+        self.app.midpoint_handles[connection_key] = self.app.canvas.create_rectangle(
+            midpoint_x - 5, midpoint_y - 5, midpoint_x + 5, midpoint_y + 5,
+            tags=('midpoint_handle', connection_key)
+        )
+        
+        # Simulate drag start on the midpoint handle
+        event = self._create_click_event(midpoint_x, midpoint_y)
+        self.app._drag_start(event)
+        
+        # Drag state should not be active since fixed connections cannot be modified
+        self.assertFalse(self.app.drag_state['active'])
+
+    def test_proximity_restrictions(self):
+        """Test that proximity restrictions prevent placing nodes too close to origin or fixed nodes."""
+        # Try to place a circle in the restricted zone
+        restricted_event = self._create_click_event(30, 30)  # Inside the restricted zone
+        
+        with patch.object(self.app.canvas, 'create_oval') as mock_create_oval:
+            self.app._draw_on_click(restricted_event)
+            # Verify the circle was not created
+            mock_create_oval.assert_not_called()
+            self.assertEqual(len(self.app.circles), 0)
+        
+        # Try to place a circle outside the restricted zone
+        allowed_event = self._create_click_event(100, 100)  # Outside the restricted zone
+        self.app.canvas.create_oval.return_value = 101  # Reset mock ID
+        
+        with patch.object(self.app.color_manager, 'assign_color_based_on_connections', return_value=1):
+            self.app._draw_on_click(allowed_event)
+            # Verify the circle was created
+            self.assertEqual(len(self.app.circles), 1)
+            self.assertEqual(self.app.circles[0]['x'], 100)
+            self.assertEqual(self.app.circles[0]['y'], 100)
+            
+        # Test proximity restrictions for midpoint handles
+        # Switch to adjust mode
+        self.app._set_application_mode(ApplicationMode.ADJUST)
+        
+        # Create another circle and connect it to the first one
+        c2 = self._create_test_circle(2, 200, 200, connections=[1])
+        c1 = self.app.circle_lookup[1]
+        c1['connected_to'].append(2)
+        
+        self.app.circles.append(c2)
+        self.app.circle_lookup[2] = c2
+        
+        connection_key = "1_2"
+        self.app.connections[connection_key] = {
+            "line_id": 200,
+            "from_circle": 1,
+            "to_circle": 2,
+            "curve_X": 0,
+            "curve_Y": 0
+        }
+        
+        # Set up midpoint handle
+        self.app.midpoint_handles[connection_key] = self.app.canvas.create_rectangle(
+            150, 150, 160, 160,  # Midpoint would be around (150,150)
+            tags=('midpoint_handle', connection_key)
+        )
+        
+        # Set up drag state as if dragging midpoint handle
+        self.app.drag_state = {
+            "active": True,
+            "type": "midpoint",
+            "id": connection_key,
+            "start_x": 150,
+            "start_y": 150,
+            "last_x": 150,
+            "last_y": 150
+        }
+        
+        # Try to drag the midpoint into the restricted zone
+        with patch.object(self.app.canvas, 'coords') as mock_coords:
+            restricted_move_event = self._create_click_event(20, 20)  # Inside restricted zone
+            self.app._drag_motion(restricted_move_event)
+            
+            # Verify the handle wasn't moved
+            mock_coords.assert_not_called()
+            
+        # Now try dragging to an allowed position
+        with patch.object(self.app.canvas, 'coords') as mock_coords:
+            with patch.object(self.app.ui_manager, 'clear_angle_visualizations'):
+                with patch.object(self.app.ui_manager, 'draw_connection_angle_visualizations'):
+                    allowed_move_event = self._create_click_event(180, 180)  # Outside restricted zone
+                    self.app._drag_motion(allowed_move_event)
+                    
+                    # Verify handle was moved
+                    mock_coords.assert_called_once()
+
+    def test_boundary_traversal_with_reused_edges(self):
+        """Test that boundary traversal correctly handles edges that appear twice in the boundary."""
+        # Create a simple graph with an edge that must be traversed twice in the boundary
+        # Fixed node A and B already exist
+        # Add a node that connects to both fixed nodes, forming a triangle
+        
+        # First, set up our nodes (fixed nodes A and B already exist)
+        fixed_node_a = self.app.circle_lookup[self.app.FIXED_NODE_A_ID]
+        fixed_node_b = self.app.circle_lookup[self.app.FIXED_NODE_B_ID]
+        
+        # Create node C which will be connected to both fixed nodes
+        event = self._create_click_event(100, 100)
+        self.app._mode = ApplicationMode.CREATE
+        
+        # Mock color assignment and create node C
+        with patch.object(self.app.color_manager, 'assign_color_based_on_connections', return_value=3):
+            self.app.interaction_handler.draw_on_click(event)
+            
+            # Now node C (ID 1) should be placed and selection mode entered
+            self.assertTrue(self.app.in_selection_mode)
+            self.assertEqual(self.app.newly_placed_circle_id, 1)
+            
+            # Select both fixed nodes to connect to
+            self.app.selected_circles = [self.app.FIXED_NODE_A_ID, self.app.FIXED_NODE_B_ID]
+            
+            # Confirm selection
+            confirm_event = self._create_key_event('y')
+            with patch.object(self.app.color_manager, 'check_and_resolve_color_conflicts', return_value=3):
+                self.app.interaction_handler.confirm_selection(confirm_event)
+        
+        # Now we have a triangle: Fixed A -- Fixed B -- Node C -- Fixed A
+        # Node C should be connected to both fixed nodes
+        node_c = self.app.circle_lookup[1]
+        self.assertEqual(len(node_c['connected_to']), 2)
+        self.assertIn(self.app.FIXED_NODE_A_ID, node_c['connected_to'])
+        self.assertIn(self.app.FIXED_NODE_B_ID, node_c['connected_to'])
+        
+        # Both fixed nodes should be connected to node C
+        self.assertIn(1, fixed_node_a['connected_to'])
+        self.assertIn(1, fixed_node_b['connected_to'])
+        
+        # Now add a second node D that's only connected to node C
+        # This creates a case where Node C appears twice in the boundary traversal
+        event = self._create_click_event(150, 150)
+        with patch.object(self.app.color_manager, 'assign_color_based_on_connections', return_value=2):
+            self.app.interaction_handler.draw_on_click(event)
+            
+            # Select only node C to connect to
+            self.app.selected_circles = [1] # Node C
+            
+            # Confirm selection
+            confirm_event = self._create_key_event('y')
+            with patch.object(self.app.color_manager, 'check_and_resolve_color_conflicts', return_value=2):
+                self.app.interaction_handler.confirm_selection(confirm_event)
+        
+        # Now we have a graph where:
+        # Fixed A -- Fixed B -- Node C -- Node D
+        #    \       /
+        #     ------
+        
+        # Force a re-calculation of the enclosure status
+        with patch('builtins.print') as mock_print:
+            self.app._update_enclosure_status()
+            
+            # The traversal should not report revisiting a node unexpectedly
+            unexpected_visit_calls = [
+                call for call in mock_print.call_args_list 
+                if "revisited node" in str(call) and "unexpectedly" in str(call)
+            ]
+            self.assertEqual(len(unexpected_visit_calls), 0, 
+                            "Boundary traversal reported unexpected node revisit")
+            
+            # All nodes should be correctly identified as boundary nodes
+            for node_id in [self.app.FIXED_NODE_A_ID, self.app.FIXED_NODE_B_ID, 1, 2]:
+                node = self.app.circle_lookup[node_id]
+                self.assertFalse(node['enclosed'], f"Node {node_id} should be on boundary")
+                
+        # Create another test configuration - a "lollipop" structure
+        # Clear existing structure and re-initialize
+        self.app.ui_manager.clear_canvas()
+        
+        # Create a linear chain: Fixed A -- Fixed B -- Node E -- Node F
+        event_e = self._create_click_event(100, 100)
+        with patch.object(self.app.color_manager, 'assign_color_based_on_connections', return_value=3):
+            self.app.interaction_handler.draw_on_click(event_e)
+            self.app.selected_circles = [self.app.FIXED_NODE_B_ID]
+            confirm_event = self._create_key_event('y')
+            self.app.interaction_handler.confirm_selection(confirm_event)
+        
+        event_f = self._create_click_event(150, 150)
+        with patch.object(self.app.color_manager, 'assign_color_based_on_connections', return_value=2):
+            self.app.interaction_handler.draw_on_click(event_f)
+            self.app.selected_circles = [1]  # Node E
+            confirm_event = self._create_key_event('y')
+            self.app.interaction_handler.confirm_selection(confirm_event)
+        
+        # Force a re-calculation of the enclosure status with the linear graph
+        with patch('builtins.print') as mock_print:
+            self.app._update_enclosure_status()
+            
+            # The traversal should not report revisiting a node unexpectedly
+            unexpected_visit_calls = [
+                call for call in mock_print.call_args_list 
+                if "revisited node" in str(call) and "unexpectedly" in str(call)
+            ]
+            self.assertEqual(len(unexpected_visit_calls), 0, 
+                            "Boundary traversal reported unexpected node revisit")
+            
+            # All nodes should be correctly identified as boundary nodes
+            for node_id in [self.app.FIXED_NODE_A_ID, self.app.FIXED_NODE_B_ID, 1, 2]:
+                node = self.app.circle_lookup[node_id]
+                self.assertFalse(node['enclosed'], f"Node {node_id} should be on boundary")
