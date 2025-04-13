@@ -298,136 +298,122 @@ class CanvasApplication:
         return self.connection_manager.update_connections(circle_id)
 
     def _update_enclosure_status(self):
+        """Updates the 'enclosed' status for all circles by traversing the outer boundary.
+        
+        Algorithm: 
+        1. Find topmost-leftmost circle as starting point
+        2. Account for curved connections when finding boundary
+        3. Traverse clockwise around outer boundary
+        4. Mark all circles not on boundary as enclosed
         """
-        Updates the 'enclosed' status for all circles by traversing the outer face
-        of the graph embedding.
-        """
-        num_circles = len(self.circles)
-
-        # --- Edge Cases ---
-        if num_circles <= 2:
-            # With 0, 1, or 2 circles, none can be enclosed.
+        if len(self.circles) <= 2:
+            # 0-2 circles cannot enclose anything
             for circle in self.circle_lookup.values():
                 circle['enclosed'] = False
-            # Update debug display if needed after status change
-            if self.debug_enabled:
-                self.ui_manager.show_debug_info()
             return
 
-        # --- Find Starting Node ---
-        start_node_id = -1
+        # Find topmost-leftmost node (minimum y, then minimum x due to inverted y-axis)
+        start_node = None
         min_y = float('inf')
-        min_x_at_min_y = float('inf')
-
-        for circle in self.circle_lookup.values():
-            if circle['y'] < min_y:
+        min_x = float('inf')
+        for circle in self.circles:
+            if circle['y'] < min_y or (circle['y'] == min_y and circle['x'] < min_x):
                 min_y = circle['y']
-                min_x_at_min_y = circle['x']
-                start_node_id = circle['id']
-            elif circle['y'] == min_y:
-                if circle['x'] < min_x_at_min_y:
-                    min_x_at_min_y = circle['x']
-                    start_node_id = circle['id']
+                min_x = circle['x']
+                start_node = circle
 
-        if start_node_id == -1:
-             # Should not happen if num_circles > 0, but handle defensively
-            return
-
-        start_node = self.circle_lookup[start_node_id]
-
-        # --- Initialize Traversal ---
-        outer_border_ids = set()
-        
-        # Handle case where the start node has no connections
-        if not start_node['ordered_connections']:
-             # If the lowest node has no connections, it's trivially on the border.
-             # If it's the *only* node, the edge case handled it.
-             # If other nodes exist but aren't connected, they also aren't enclosed.
-             # This logic assumes a single connected component for enclosure.
-             # A more robust solution might handle disconnected components separately.
+        if not start_node or not start_node['ordered_connections']:
+            # No valid starting point or no connections
             for circle in self.circle_lookup.values():
                 circle['enclosed'] = False
-            if self.debug_enabled:
-                self.ui_manager.show_debug_info()
             return
 
-        # Find the first edge to traverse on the outer boundary.
-        # For the lowest node, the edge leaving it with the smallest angle
-        # (most counter-clockwise relative to vertical-down) should be part of the outer face.
-        # However, our ordered_connections are clockwise from North (0 degrees).
-        # The connection *entering* the start_node with the largest angle (closest to 360)
-        # corresponds to the edge we "came from" if traversing clockwise.
-        # The *next* connection in ordered_connections is the one we take *out*.
-
-        # Calculate entry angles for the start node
-        entry_angles = []
-        for neighbor_id in start_node['connected_to']:
-             angle = self.connection_manager.calculate_connection_entry_angle(start_node_id, neighbor_id)
-             entry_angles.append({'neighbor_id': neighbor_id, 'angle': angle})
-
-        # Find the connection with the largest entry angle (last edge if coming from outside)
-        entry_angles.sort(key=lambda x: x['angle'], reverse=True)
-        last_incoming_neighbor_id = entry_angles[0]['neighbor_id']
-
-        # Find this neighbor in the ordered list
-        try:
-            last_incoming_index = start_node['ordered_connections'].index(last_incoming_neighbor_id)
-        except ValueError:
-             # Should not happen if connected_to and ordered_connections are consistent
-             print(f"Error: Neighbor {last_incoming_neighbor_id} not found in ordered_connections of {start_node_id}")
-             return # Or handle error more gracefully
-
-        # The next connection clockwise is the first edge of our outer face traversal
-        first_outgoing_index = (last_incoming_index + 1) % len(start_node['ordered_connections'])
-        next_node_id = start_node['ordered_connections'][first_outgoing_index]
-
-        # Initialize traversal state
-        outer_border_ids.add(start_node_id)
-        previous_node_id = start_node_id
-        current_node_id = next_node_id
+        # Initialize boundary tracking
+        boundary_nodes = set()
+        boundary_nodes.add(start_node['id'])
         
-        # Safety break counter
-        max_iterations = num_circles + 1 # Should complete in num_circles steps
+        # Find first boundary edge by calculating corrected angles
+        current_id = start_node['id']
+        current_node = start_node
 
-        # --- Traversal Loop ---
-        while current_node_id != start_node_id and max_iterations > 0:
-            outer_border_ids.add(current_node_id)
+        # Find initial outgoing edge - crucial fix for y-axis inversion
+        min_angle = float('inf')
+        next_id = None
+        
+        for neighbor_id in current_node['ordered_connections']:
+            # Calculate angle with correction for inverted y-axis
+            angle = self._calculate_corrected_angle(current_node, neighbor_id)
+            if angle < min_angle:  # Use minimum angle for inverted y-axis
+                min_angle = angle
+                next_id = neighbor_id
+
+        if not next_id:
+            return
+
+        # Traverse boundary clockwise
+        while next_id and next_id != start_node['id']:
+            current_id = next_id
+            boundary_nodes.add(current_id)
             
-            current_circle = self.circle_lookup.get(current_node_id)
-            if not current_circle or not current_circle['ordered_connections']:
-                # Error: Node disappeared or lost connections during traversal?
-                print(f"Error during traversal: Node {current_node_id} invalid or has no connections.")
-                break # Exit loop
-
-            ordered_connections = current_circle['ordered_connections']
-
-            # Find the index corresponding to the edge we *entered* from
-            try:
-                previous_node_index = ordered_connections.index(previous_node_id)
-            except ValueError:
-                print(f"Error: Previous node {previous_node_id} not found in ordered_connections of {current_node_id}")
+            current_node = self.circle_lookup[current_id]
+            if not current_node['ordered_connections']:
                 break
 
-            # The next node in clockwise order defines the next edge of the outer face
-            next_index = (previous_node_index + 1) % len(ordered_connections)
-            next_node_id_candidate = ordered_connections[next_index]
+            # Get previous node's position in ordered connections
+            try:
+                prev_idx = current_node['ordered_connections'].index(
+                    previous_id if 'previous_id' in locals() else start_node['id']
+                )
+                # Take next connection clockwise (account for end of list)
+                next_idx = (prev_idx + 1) % len(current_node['ordered_connections'])
+                next_id = current_node['ordered_connections'][next_idx]
+            except ValueError:
+                break  # Exit if we can't find previous node in connections
+                
+            previous_id = current_id
 
-            # Update for next iteration
-            previous_node_id = current_node_id
-            current_node_id = next_node_id_candidate
-            
-            max_iterations -= 1
+        # Update enclosed status for all circles
+        for circle in self.circles:
+            circle['enclosed'] = circle['id'] not in boundary_nodes
 
-        if max_iterations <= 0:
-             print("Warning: Outer face traversal exceeded max iterations. Possible graph inconsistency.")
-
-        # --- Update Status ---
-        for circle_id, circle in self.circle_lookup.items():
-            circle['enclosed'] = (circle_id not in outer_border_ids)
-
-        # Update debug display if needed after status change
         if self.debug_enabled:
             self.ui_manager.show_debug_info()
+
+    def _calculate_corrected_angle(self, circle, neighbor_id):
+        """Calculate angle between circles with correction for inverted y-axis.
+        
+        Args:
+            circle: Dictionary containing the source circle's data
+            neighbor_id: ID of the neighboring circle
+            
+        Returns:
+            float: Corrected angle in degrees (0-360)
+        """
+        neighbor = self.circle_lookup.get(neighbor_id)
+        if not neighbor:
+            return 0
+            
+        # Get vector components
+        dx = neighbor['x'] - circle['x']
+        dy = neighbor['y'] - circle['y']
+        
+        # Account for any curve offset
+        curve_x, curve_y = self.connection_manager.get_connection_curve_offset(
+            circle['id'], 
+            neighbor_id
+        )
+        
+        # Adjust vector by half the curve offset
+        dx += curve_x / 2
+        dy += curve_y / 2
+        
+        # Calculate angle with correction for inverted y-axis
+        # atan2 with -dy to flip the y-axis back to mathematical convention
+        angle_rad = math.atan2(dx, -dy)  # Note: swapped order and negated dy
+        angle_deg = math.degrees(angle_rad)
+        
+        # Normalize to 0-360 range, maintaining clockwise orientation
+        return (angle_deg) % 360
 
 def main():
     """Application entry point."""
