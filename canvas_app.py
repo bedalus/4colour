@@ -328,67 +328,31 @@ class CanvasApplication:
         min_handle_x = float('inf')
 
         # 1. Find the most extreme connection edge (based on midpoint handle position)
-        if self.connections:
-            for conn_key, connection in self.connections.items():
-                handle_x, handle_y = self.connection_manager.calculate_midpoint_handle_position(
-                    connection["from_circle"],
-                    connection["to_circle"]
-                )
-                if handle_y < min_handle_y or (handle_y == min_handle_y and handle_x < min_handle_x):
-                    min_handle_y = handle_y
-                    min_handle_x = handle_x
-                    extreme_handle_pos = (handle_x, handle_y)
-                    extreme_connection_key = conn_key
+        for conn_key, connection in self.connections.items():
+            handle_x, handle_y = self.connection_manager.calculate_midpoint_handle_position(
+                connection["from_circle"],
+                connection["to_circle"]
+            )
+            if handle_y < min_handle_y or (handle_y == min_handle_y and handle_x < min_handle_x):
+                min_handle_y = handle_y
+                min_handle_x = handle_x
+                extreme_handle_pos = (handle_x, handle_y)
+                extreme_connection_key = conn_key
 
-        # 2. If an extreme connection edge was found, determine the start node from its endpoints
-        if extreme_connection_key:
-            extreme_connection = self.connections[extreme_connection_key]
-            node1_id = extreme_connection["from_circle"]
-            node2_id = extreme_connection["to_circle"]
-            node1 = self.circle_lookup.get(node1_id)
-            node2 = self.circle_lookup.get(node2_id)
+        # 2. The start node is the extreme connection's most extreme endpoint
+        extreme_connection = self.connections[extreme_connection_key]
+        node1_id = extreme_connection["from_circle"]
+        node2_id = extreme_connection["to_circle"]
+        node1 = self.circle_lookup.get(node1_id)
+        node2 = self.circle_lookup.get(node2_id)
 
-            if node1 and node2:
-                # Select the more extreme node (min y, then min x) between the two
-                if node1['y'] < node2['y'] or (node1['y'] == node2['y'] and node1['x'] < node2['x']):
-                    start_node = node1
-                else:
-                    start_node = node2
-            elif node1: # Fallback if node2 is missing
-                start_node = node1
-            elif node2: # Fallback if node1 is missing
-                start_node = node2
-
-        # 3. Fallback: If no connections exist, find the geometrically most extreme node
-        if not start_node:
-            min_node_y = float('inf')
-            min_node_x = float('inf')
-            for circle in self.circles:
-                if circle['y'] < min_node_y or (circle['y'] == min_node_y and circle['x'] < min_node_x):
-                    min_node_y = circle['y']
-                    min_node_x = circle['x']
-                    start_node = circle
+        # Select the more extreme node (min y, then min x) between the two
+        if node1['y'] < node2['y'] or (node1['y'] == node2['y'] and node1['x'] < node2['x']):
+            start_node = node1
+        else:
+            start_node = node2
 
         # --- End of Start Node Determination ---
-
-        # Exit if no valid start node could be determined (e.g., empty graph after filtering)
-        if not start_node:
-            for circle in self.circle_lookup.values():
-                circle['enclosed'] = False
-            return
-
-        # Exit if the determined start node has no connections (cannot traverse)
-        if not start_node.get('ordered_connections'):
-             for circle in self.circle_lookup.values():
-                 circle['enclosed'] = False
-             # Draw indicator for the isolated start node if in adjust mode
-             if self._mode == ApplicationMode.ADJUST:
-                 self.extreme_node_indicator = self.canvas.create_oval(
-                     start_node['x'] - self.circle_radius - 5, start_node['y'] - self.circle_radius - 5,
-                     start_node['x'] + self.circle_radius + 5, start_node['y'] + self.circle_radius + 5,
-                     outline="orange", width=2 # Orange for isolated start
-                 )
-             return
 
         # Draw indicators if in adjust mode
         if self._mode == ApplicationMode.ADJUST:
@@ -399,13 +363,12 @@ class CanvasApplication:
                 outline="purple", width=2
             )
             # Draw indicator around the extreme midpoint handle, if found
-            if extreme_handle_pos:
-                x, y = extreme_handle_pos
-                size = 8
-                self.extreme_midpoint_indicator = self.canvas.create_rectangle(
-                    x - size, y - size, x + size, y + size,
-                    outline="purple", width=2
-                )
+            x, y = extreme_handle_pos
+            size = 8
+            self.extreme_midpoint_indicator = self.canvas.create_rectangle(
+                x - size, y - size, x + size, y + size,
+                outline="purple", width=2
+            )
 
         # Initialize boundary tracking
         boundary_nodes = set()
@@ -426,15 +389,6 @@ class CanvasApplication:
             if angle < min_angle:
                 min_angle = angle
                 next_id = neighbor_id # The neighbor connected by the edge with the minimum angle
-
-        # If start_node has no connections or something went wrong, exit.
-        if not next_id:
-            # Mark all nodes as not enclosed if traversal can't start
-            for circle in self.circle_lookup.values():
-                circle['enclosed'] = False
-            if self.debug_enabled:
-                self.ui_manager.show_debug_info()
-            return
 
         # Traverse the outer boundary clockwise.
         # Start from the 'next_id' found above, keeping track of the node we came from ('previous_id').
