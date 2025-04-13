@@ -82,6 +82,10 @@ class CanvasApplication:
         # Store drawn items for potential resize handling
         self.drawn_items = []
         
+        # Add these new instance variables
+        self.extreme_node_indicator = None
+        self.extreme_midpoint_indicator = None
+
         # Initialize UI components
         self._setup_ui()
         
@@ -301,21 +305,22 @@ class CanvasApplication:
         return self.connection_manager.update_connections(circle_id)
 
     def _update_enclosure_status(self):
-        """Updates the 'enclosed' status for all circles by traversing the outer boundary.
-        
-        Algorithm: 
-        1. Find topmost-leftmost circle as starting point
-        2. Account for curved connections when finding boundary
-        3. Traverse clockwise around outer boundary
-        4. Mark all circles not on boundary as enclosed
-        """
+        """Updates the 'enclosed' status for all circles by traversing the outer boundary."""
+        # First, ensure any existing indicators are cleared
+        if self.extreme_node_indicator:
+            self.canvas.delete(self.extreme_node_indicator)
+            self.extreme_node_indicator = None
+        if self.extreme_midpoint_indicator:
+            self.canvas.delete(self.extreme_midpoint_indicator)
+            self.extreme_midpoint_indicator = None
+
+        # Handle empty or small graphs
         if len(self.circles) <= 2:
-            # 0-2 circles cannot enclose anything
             for circle in self.circle_lookup.values():
                 circle['enclosed'] = False
             return
 
-        # Find topmost-leftmost node (minimum y, then minimum x due to inverted y-axis)
+        # Find topmost-leftmost node
         start_node = None
         min_y = float('inf')
         min_x = float('inf')
@@ -325,11 +330,51 @@ class CanvasApplication:
                 min_x = circle['x']
                 start_node = circle
 
+        # Exit early if no valid start node
         if not start_node or not start_node['ordered_connections']:
-            # No valid starting point or no connections
             for circle in self.circle_lookup.values():
                 circle['enclosed'] = False
             return
+
+        # Only draw indicators if in adjust mode
+        if self._mode == ApplicationMode.ADJUST:
+            self.extreme_node_indicator = self.canvas.create_oval(
+                start_node['x'] - self.circle_radius - 5,
+                start_node['y'] - self.circle_radius - 5,
+                start_node['x'] + self.circle_radius + 5,
+                start_node['y'] + self.circle_radius + 5,
+                outline="purple",
+                width=2
+            )
+
+            # Now check midpoints (only if there's a starting node with connections)
+            if start_node['ordered_connections']:
+                extreme_handle_y = float('inf')
+                extreme_handle_x = float('inf')
+                extreme_handle_pos = None
+                
+                # Check each connection for potentially more extreme midpoint handle
+                for connected_id in start_node['ordered_connections']:
+                    if connected_id in self.circle_lookup:
+                        handle_x, handle_y = self.connection_manager.calculate_midpoint_handle_position(
+                            start_node['id'],
+                            connected_id
+                        )
+                        if handle_y < extreme_handle_y or (handle_y == extreme_handle_y and handle_x < extreme_handle_x):
+                            extreme_handle_y = handle_y
+                            extreme_handle_x = handle_x
+                            extreme_handle_pos = (handle_x, handle_y)
+
+                # Draw box around extreme midpoint if found
+                if extreme_handle_pos:
+                    x, y = extreme_handle_pos
+                    size = 8  # Size of the box
+                    self.extreme_midpoint_indicator = self.canvas.create_rectangle(
+                        x - size, y - size,
+                        x + size, y + size,
+                        outline="purple",
+                        width=2
+                    )
 
         # Initialize boundary tracking
         boundary_nodes = set()

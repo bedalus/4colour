@@ -50,6 +50,14 @@ class InteractionHandler:
             # Clear angle visualizations when exiting ADJUST mode
             self.app.ui_manager.clear_angle_visualizations()
             
+            # Clear extreme node/midpoint indicators when exiting ADJUST mode
+            if self.app.extreme_node_indicator:
+                self.app.canvas.delete(self.app.extreme_node_indicator)
+                self.app.extreme_node_indicator = None
+            if self.app.extreme_midpoint_indicator:
+                self.app.canvas.delete(self.app.extreme_midpoint_indicator)
+                self.app.extreme_midpoint_indicator = None
+            
             # Clear adjust mode state
             if self.app.edit_hint_text_id:
                 self.app.canvas.delete(self.app.edit_hint_text_id)
@@ -80,6 +88,8 @@ class InteractionHandler:
             self.app.canvas.config(bg="#FFEEEE")  # Pale pink
             # Show midpoint handles in ADJUST mode
             self.app.connection_manager.show_midpoint_handles()
+            # Update enclosure status to show indicators
+            self.app._update_enclosure_status()
     
     def bind_mode_events(self, mode):
         """Bind the appropriate events for the given mode.
@@ -284,6 +294,10 @@ class InteractionHandler:
         if not self.app.in_selection_mode:
             return
             
+        # Prevent confirming with no selections
+        if not self.app.selected_circles:
+            return
+            
         # Connect the newly placed circle to all selected circles
         for circle_id in self.app.selected_circles:
             self.app.connection_manager.add_connection(self.app.newly_placed_circle_id, circle_id)
@@ -410,7 +424,7 @@ class InteractionHandler:
             return
             
         # Get current mouse position
-        x, y = event.x, event.y
+        x, y = event.x, event.y  # Fixed: Properly get both coordinates
         
         # Calculate the delta from the last position
         delta_x = x - self.app.drag_state["last_x"]
@@ -522,6 +536,7 @@ class InteractionHandler:
         # Update enclosure status AFTER drag ends and ordered connections are updated
         if ordered_connections_updated:
              self.app._update_enclosure_status() # Phase 14 Trigger Point
+             # The extreme node/midpoint indicators will be updated as part of _update_enclosure_status
              
         # Set the active circles for debug display before updating
         if debug_circle_ids and self.app.debug_enabled:
