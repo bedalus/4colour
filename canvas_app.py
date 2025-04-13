@@ -314,127 +314,205 @@ class CanvasApplication:
             self.canvas.delete(self.extreme_midpoint_indicator)
             self.extreme_midpoint_indicator = None
 
-        # Handle empty or small graphs
+        # Handle empty or small graphs (no enclosure possible)
         if len(self.circles) <= 2:
             for circle in self.circle_lookup.values():
                 circle['enclosed'] = False
-            return
+            return # No boundary to traverse
 
-        # Find topmost-leftmost node
+        # --- Determine Start Node based on Most Extreme Connection Edge ---
         start_node = None
-        min_y = float('inf')
-        min_x = float('inf')
-        for circle in self.circles:
-            if circle['y'] < min_y or (circle['y'] == min_y and circle['x'] < min_x):
-                min_y = circle['y']
-                min_x = circle['x']
-                start_node = circle
+        extreme_handle_pos = None
+        extreme_connection_key = None
+        min_handle_y = float('inf')
+        min_handle_x = float('inf')
 
-        # Exit early if no valid start node
-        if not start_node or not start_node['ordered_connections']:
+        # 1. Find the most extreme connection edge (based on midpoint handle position)
+        if self.connections:
+            for conn_key, connection in self.connections.items():
+                handle_x, handle_y = self.connection_manager.calculate_midpoint_handle_position(
+                    connection["from_circle"],
+                    connection["to_circle"]
+                )
+                if handle_y < min_handle_y or (handle_y == min_handle_y and handle_x < min_handle_x):
+                    min_handle_y = handle_y
+                    min_handle_x = handle_x
+                    extreme_handle_pos = (handle_x, handle_y)
+                    extreme_connection_key = conn_key
+
+        # 2. If an extreme connection edge was found, determine the start node from its endpoints
+        if extreme_connection_key:
+            extreme_connection = self.connections[extreme_connection_key]
+            node1_id = extreme_connection["from_circle"]
+            node2_id = extreme_connection["to_circle"]
+            node1 = self.circle_lookup.get(node1_id)
+            node2 = self.circle_lookup.get(node2_id)
+
+            if node1 and node2:
+                # Select the more extreme node (min y, then min x) between the two
+                if node1['y'] < node2['y'] or (node1['y'] == node2['y'] and node1['x'] < node2['x']):
+                    start_node = node1
+                else:
+                    start_node = node2
+            elif node1: # Fallback if node2 is missing
+                start_node = node1
+            elif node2: # Fallback if node1 is missing
+                start_node = node2
+
+        # 3. Fallback: If no connections exist, find the geometrically most extreme node
+        if not start_node:
+            min_node_y = float('inf')
+            min_node_x = float('inf')
+            for circle in self.circles:
+                if circle['y'] < min_node_y or (circle['y'] == min_node_y and circle['x'] < min_node_x):
+                    min_node_y = circle['y']
+                    min_node_x = circle['x']
+                    start_node = circle
+
+        # --- End of Start Node Determination ---
+
+        # Exit if no valid start node could be determined (e.g., empty graph after filtering)
+        if not start_node:
             for circle in self.circle_lookup.values():
                 circle['enclosed'] = False
             return
 
-        # Only draw indicators if in adjust mode
+        # Exit if the determined start node has no connections (cannot traverse)
+        if not start_node.get('ordered_connections'):
+             for circle in self.circle_lookup.values():
+                 circle['enclosed'] = False
+             # Draw indicator for the isolated start node if in adjust mode
+             if self._mode == ApplicationMode.ADJUST:
+                 self.extreme_node_indicator = self.canvas.create_oval(
+                     start_node['x'] - self.circle_radius - 5, start_node['y'] - self.circle_radius - 5,
+                     start_node['x'] + self.circle_radius + 5, start_node['y'] + self.circle_radius + 5,
+                     outline="orange", width=2 # Orange for isolated start
+                 )
+             return
+
+        # Draw indicators if in adjust mode
         if self._mode == ApplicationMode.ADJUST:
+            # Draw indicator around the determined start_node
             self.extreme_node_indicator = self.canvas.create_oval(
-                start_node['x'] - self.circle_radius - 5,
-                start_node['y'] - self.circle_radius - 5,
-                start_node['x'] + self.circle_radius + 5,
-                start_node['y'] + self.circle_radius + 5,
-                outline="purple",
-                width=2
+                start_node['x'] - self.circle_radius - 5, start_node['y'] - self.circle_radius - 5,
+                start_node['x'] + self.circle_radius + 5, start_node['y'] + self.circle_radius + 5,
+                outline="purple", width=2
             )
-
-            # Now check midpoints (only if there's a starting node with connections)
-            if start_node['ordered_connections']:
-                extreme_handle_y = float('inf')
-                extreme_handle_x = float('inf')
-                extreme_handle_pos = None
-                
-                # Check each connection for potentially more extreme midpoint handle
-                for connected_id in start_node['ordered_connections']:
-                    if connected_id in self.circle_lookup:
-                        handle_x, handle_y = self.connection_manager.calculate_midpoint_handle_position(
-                            start_node['id'],
-                            connected_id
-                        )
-                        if handle_y < extreme_handle_y or (handle_y == extreme_handle_y and handle_x < extreme_handle_x):
-                            extreme_handle_y = handle_y
-                            extreme_handle_x = handle_x
-                            extreme_handle_pos = (handle_x, handle_y)
-
-                # Draw box around extreme midpoint if found
-                if extreme_handle_pos:
-                    x, y = extreme_handle_pos
-                    size = 8  # Size of the box
-                    self.extreme_midpoint_indicator = self.canvas.create_rectangle(
-                        x - size, y - size,
-                        x + size, y + size,
-                        outline="purple",
-                        width=2
-                    )
+            # Draw indicator around the extreme midpoint handle, if found
+            if extreme_handle_pos:
+                x, y = extreme_handle_pos
+                size = 8
+                self.extreme_midpoint_indicator = self.canvas.create_rectangle(
+                    x - size, y - size, x + size, y + size,
+                    outline="purple", width=2
+                )
 
         # Initialize boundary tracking
         boundary_nodes = set()
         boundary_nodes.add(start_node['id'])
-        
-        # Find first boundary edge by calculating corrected angles
+
+        # --- Start of Traversal Logic ---
         current_id = start_node['id']
         current_node = start_node
 
-        # Find initial outgoing edge - crucial fix for y-axis inversion
+        # Find the initial outgoing edge from the start_node.
+        # This is the edge with the smallest angle when measured clockwise from North (0 degrees).
         min_angle = float('inf')
-        next_id = None
-        
-        for neighbor_id in current_node['ordered_connections']:
-            # Calculate angle with correction for inverted y-axis
-            angle = self._calculate_corrected_angle(current_node, neighbor_id)
-            if angle < min_angle:  # Use minimum angle for inverted y-axis
-                min_angle = angle
-                next_id = neighbor_id
+        next_id = None # This will be the ID of the first node to visit *after* start_node
 
+        for neighbor_id in current_node['ordered_connections']:
+            # Calculate angle of the connection vector leaving current_node towards neighbor_id
+            angle = self._calculate_corrected_angle(current_node, neighbor_id)
+            if angle < min_angle:
+                min_angle = angle
+                next_id = neighbor_id # The neighbor connected by the edge with the minimum angle
+
+        # If start_node has no connections or something went wrong, exit.
         if not next_id:
+            # Mark all nodes as not enclosed if traversal can't start
+            for circle in self.circle_lookup.values():
+                circle['enclosed'] = False
+            if self.debug_enabled:
+                self.ui_manager.show_debug_info()
             return
 
-        # Traverse boundary clockwise
+        # Traverse the outer boundary clockwise.
+        # Start from the 'next_id' found above, keeping track of the node we came from ('previous_id').
         previous_id = start_node['id'] # We start by conceptually moving from start_node to next_id
         while next_id and next_id != start_node['id']:
             # Safety break to prevent infinite loops in case of graph inconsistency
-            if len(boundary_nodes) > len(self.circles):
+            if len(boundary_nodes) > len(self.circles) + 1: # Allow one extra for safety margin
                  print(f"Warning: Boundary traversal exceeded expected length ({len(boundary_nodes)} > {len(self.circles)}). Breaking loop.")
-                 break
+                 # Mark all as not enclosed as boundary is likely incorrect
+                 for circle in self.circle_lookup.values():
+                     circle['enclosed'] = False
+                 if self.debug_enabled:
+                     self.ui_manager.show_debug_info()
+                 return # Exit traversal
+
+            # Break if we revisit a node unexpectedly (other than the start node at the end)
+            if next_id in boundary_nodes:
+                print(f"Warning: Boundary traversal revisited node {next_id} unexpectedly. Breaking loop.")
+                # Mark all as not enclosed as boundary is likely incorrect
+                for circle in self.circle_lookup.values():
+                    circle['enclosed'] = False
+                if self.debug_enabled:
+                    self.ui_manager.show_debug_info()
+                return # Exit traversal
 
             current_id = next_id
             boundary_nodes.add(current_id) # Mark the current node as part of the boundary
 
-            current_node = self.circle_lookup[current_id]
-            # If the current node has no connections, the boundary is broken.
-            if not current_node['ordered_connections']:
-                print(f"Warning: Boundary traversal stopped at node {current_id} with no connections.")
-                break
+            current_node = self.circle_lookup.get(current_id)
+            # If the current node is missing or has no connections, the boundary is broken.
+            if not current_node or not current_node.get('ordered_connections'):
+                print(f"Warning: Boundary traversal stopped at node {current_id} (missing or no connections).")
+                # Mark all as not enclosed as boundary is incomplete
+                for circle in self.circle_lookup.values():
+                    circle['enclosed'] = False
+                if self.debug_enabled:
+                    self.ui_manager.show_debug_info()
+                return # Exit traversal
 
             # Find the edge we arrived from (previous_id) in the current node's ordered list.
             try:
+                # Ensure ordered_connections is not empty before trying to find index
+                if not current_node['ordered_connections']:
+                    raise ValueError("Node has no ordered connections")
+
                 prev_idx = current_node['ordered_connections'].index(previous_id)
 
                 # The next edge to follow is the one immediately clockwise from the arrival edge.
+                # Use modulo arithmetic to wrap around the list correctly.
+                # Corrected: Use +1 for clockwise traversal.
                 next_idx = (prev_idx + 1) % len(current_node['ordered_connections'])
                 next_id = current_node['ordered_connections'][next_idx]
 
             except ValueError:
                  # This indicates an inconsistency in the graph data (e.g., previous_id not found).
                  print(f"Warning: Could not find previous node {previous_id} in connections of {current_id}. Boundary traversal incomplete.")
-                 break # Exit if the graph structure is broken
+                 # Mark all as not enclosed as boundary is broken
+                 for circle in self.circle_lookup.values():
+                     circle['enclosed'] = False
+                 if self.debug_enabled:
+                     self.ui_manager.show_debug_info()
+                 return # Exit traversal
 
             # Update previous_id for the next iteration.
             previous_id = current_id
+        # --- End of Traversal Logic ---
 
-        # Update enclosed status for all circles
+        # Update enclosed status for all circles based on whether they were visited during traversal.
         for circle in self.circles:
-            circle['enclosed'] = circle['id'] not in boundary_nodes
+            # Check if circle ID exists in lookup before accessing
+            if circle['id'] in self.circle_lookup:
+                 self.circle_lookup[circle['id']]['enclosed'] = circle['id'] not in boundary_nodes
+            else:
+                 # Handle case where circle might be in self.circles but not lookup (should not happen ideally)
+                 print(f"Warning: Circle ID {circle['id']} found in self.circles but not in self.circle_lookup during enclosure update.")
 
+
+        # Update debug info if enabled.
         if self.debug_enabled:
             self.ui_manager.show_debug_info()
 
