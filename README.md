@@ -33,6 +33,12 @@ To ensure smooth development and avoid regressions:
 
 Tests can be run with: python -m unittest discover -s tests
 
+If running with runtime logging: python log_function_calls.py
+
+To analyse the results*: python analyze_call_logs.py
+
+(* if missing pandas/matplotlib, open a terminal as admin, then: pip install pandas matplotlib)
+
 ## Planning
 
 New work items should be itemized and preceded by an empty checkbox (`- [ ]`). When engaging in a new coding session to implement new features and improvements, follow the requirements in sequential order starting at the first unmarked checkbox. Once the feature and corresponding unit tests are written or updated to the required specification, mark the checkbox as complete ([x]) to track progress. Always remember to complete this step.
