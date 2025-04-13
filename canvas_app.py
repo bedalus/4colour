@@ -399,25 +399,36 @@ class CanvasApplication:
             return
 
         # Traverse boundary clockwise
+        previous_id = start_node['id'] # We start by conceptually moving from start_node to next_id
         while next_id and next_id != start_node['id']:
+            # Safety break to prevent infinite loops in case of graph inconsistency
+            if len(boundary_nodes) > len(self.circles):
+                 print(f"Warning: Boundary traversal exceeded expected length ({len(boundary_nodes)} > {len(self.circles)}). Breaking loop.")
+                 break
+
             current_id = next_id
-            boundary_nodes.add(current_id)
-            
+            boundary_nodes.add(current_id) # Mark the current node as part of the boundary
+
             current_node = self.circle_lookup[current_id]
+            # If the current node has no connections, the boundary is broken.
             if not current_node['ordered_connections']:
+                print(f"Warning: Boundary traversal stopped at node {current_id} with no connections.")
                 break
 
-            # Get previous node's position in ordered connections
+            # Find the edge we arrived from (previous_id) in the current node's ordered list.
             try:
-                prev_idx = current_node['ordered_connections'].index(
-                    previous_id if 'previous_id' in locals() else start_node['id']
-                )
-                # Take next connection clockwise (account for end of list)
+                prev_idx = current_node['ordered_connections'].index(previous_id)
+
+                # The next edge to follow is the one immediately clockwise from the arrival edge.
                 next_idx = (prev_idx + 1) % len(current_node['ordered_connections'])
                 next_id = current_node['ordered_connections'][next_idx]
+
             except ValueError:
-                break  # Exit if we can't find previous node in connections
-                
+                 # This indicates an inconsistency in the graph data (e.g., previous_id not found).
+                 print(f"Warning: Could not find previous node {previous_id} in connections of {current_id}. Boundary traversal incomplete.")
+                 break # Exit if the graph structure is broken
+
+            # Update previous_id for the next iteration.
             previous_id = current_id
 
         # Update enclosed status for all circles
