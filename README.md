@@ -108,32 +108,38 @@ The `_update_enclosure_status` calculation is triggered after operations that mo
 
 This phase aims to simplify the identification of the outer face boundary by establishing a guaranteed starting point that is always part of the outer face and remains the "most extreme" element geometrically. This avoids complexities with curved connections potentially altering which node or edge appears most extreme.
 
-- [ ] **Initialize with Fixed Outer Nodes:**
+- [x] **Initialize with Fixed Outer Nodes:**
     *   Modify `CanvasApplication.__init__` to automatically create two specific nodes upon startup (e.g., Node A at (10, 40), Node B at (40, 10)).
     *   Automatically create a connection between these two initial nodes.
     *   Assign unique, reserved IDs (e.g., -1, -2) or use a flag to mark these nodes as special/fixed.
     *   Be sure to reinitialize if the clear canvas button is pressed.
 
-- [ ] **Make Initial Nodes Non-Adjustable:**
+- [x] **Make Initial Nodes Non-Adjustable:**
     *   Modify `InteractionHandler.drag_start` to prevent dragging of these fixed nodes.
     *   Modify `CircleManager.remove_circle_by_id` (or related interaction logic) to prevent deletion of these fixed nodes.
     *   Ensure the connection between them cannot be removed or its midpoint handle dragged.
 
-- [ ] **Implement Proximity Restrictions:**
+- [x] **Implement Proximity Restrictions:**
     *   Modify `InteractionHandler.draw_on_click` to prevent placing new nodes within a defined radius of the origin or the fixed nodes (e.g., disallow placement if x < 50 and y < 50).
     *   Modify `InteractionHandler.drag_midpoint_motion` (or `drag_end`) to prevent midpoint handles from being dragged into this restricted zone. This ensures no new element can become "more extreme" than the initial fixed nodes/edge.
 
-- [ ] **Adapt Outer Face Traversal Start:**
+- [x] **Adapt Outer Face Traversal Start:**
     *   Modify `CanvasApplication._update_enclosure_status` to *always* use one of the fixed nodes (e.g., Node A) as the `start_node` for the outer face traversal.
     *   The logic to find the first outgoing edge (minimum angle clockwise from North) can remain, starting from this fixed node.
     *   We no longer need to find the starting point, as we can use the Node A -> Node B connection as a guaranteed outer edge, so the existing code that does this is redundant and can be removed.
 
-- [ ] **Update Tests:**
+- [x] **Update Tests:**
     *   Adjust existing tests (`test_integration.py`, `test_canvas_app.py`) to account for the presence and behavior of the fixed initial nodes.
     *   Add new tests specifically verifying the non-adjustability and proximity restrictions.
     *   When working on the tests, anticipate that there may be undocumented reasons why they are out of alignment with the revised application code, so may need multiple passes to fully repair.
 
-### Phase 16: Advanced Color Network Reassignment
+### Phase 16: Deal with current bugs
+
+E.g. error: Warning: Boundary traversal revisited node 4 and edge (4, 5) unexpectedly. Breaking loop.
+
+This happens when there's one sticking out on its own. But this should be allowed. Or if a single edge joins two more complex graphs. Its a boundary you pass with the right-hand rule in one direction, then the other. You still traverse the entire outer perimeter. Fix the code to allow this.
+
+### Phase 17: Advanced Color Network Reassignment
 
 This phase focuses on developing a sophisticated algorithm for reassigning colors throughout the network of connected circles when simple conflict resolution is insufficient. Currently, the application assigns priority 4 (red) as a fallback, but a more optimal solution would rearrange existing colors to maintain the Four Color Theorem guarantee.
 
