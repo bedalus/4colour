@@ -115,14 +115,16 @@ class UIManager:
         # Format ordered connections list if it exists
         ordered_connections_str = "None"
         if "ordered_connections" in circle and circle["ordered_connections"]:
-            ordered_connections_str = ", ".join(map(str, circle["ordered_connections"]))
+            # Format as clockwise order: 1→2→3
+            ordered_connections_str = "→".join(map(str, circle["ordered_connections"]))
         
         return (
             f"Circle ID: {circle['id']}\n"
             f"Position: ({circle['x']}, {circle['y']})\n"
             f"Color: {color_name} (priority: {circle['color_priority']})\n"
             f"Connected to: {', '.join(map(str, circle['connected_to']))}\n"
-            f"Ordered connections: {ordered_connections_str}"
+            f"Clockwise order: {ordered_connections_str}\n"
+            f"Enclosed: {circle['enclosed']}"
         )
     
     def show_hint_text(self):
