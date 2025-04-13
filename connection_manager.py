@@ -466,18 +466,15 @@ class ConnectionManager:
         
         Args:
             circle_id: ID of the circle to update ordering for
-            
-        Returns:
-            bool: True if successful, False otherwise
         """
         circle = self.app.circle_lookup.get(circle_id)
         if not circle:
-            return False
+            return
         
         if not circle["connected_to"]:
             # No connections, clear the ordered list
             circle["ordered_connections"] = []
-            return True
+            return
         
         # Create list of tuples with (connected_id, angle) for sorting
         connection_angles = []
@@ -493,9 +490,3 @@ class ConnectionManager:
         
         # Update the circle's ordered_connections list
         circle["ordered_connections"] = ordered_connections
-        
-        return True
-
-def math_rad_to_deg(rad):
-    """Convert radians to degrees."""
-    return rad * (180 / math.pi)
