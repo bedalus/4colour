@@ -18,6 +18,8 @@ class UIManager:
             app: The main CanvasApplication instance
         """
         self.app = app
+        self.active_circle_id = None  # Add this line
+        self.active_circle_ids = []  # Change from single ID to list
         
     def focus_after(self, command_func):
         """Execute a command and then set focus to the debug button.
@@ -47,6 +49,22 @@ class UIManager:
                 self.app.canvas.delete(self.app.debug_text)
                 self.app.debug_text = None
                 
+    def set_active_circle(self, circle_id):
+        """Set the ID of the circle to display debug info for.
+        
+        Args:
+            circle_id: ID of the circle to focus on
+        """
+        self.active_circle_id = circle_id
+
+    def set_active_circles(self, *circle_ids):
+        """Set the IDs of circles to display debug info for.
+        
+        Args:
+            *circle_ids: Variable number of circle IDs to focus on
+        """
+        self.active_circle_ids = list(circle_ids)
+    
     def show_debug_info(self):
         """Display debug information about the most recent circle."""
         # Clear previous debug text
@@ -56,40 +74,21 @@ class UIManager:
         if not self.app.circles:
             info_text = "No circles drawn yet"
         else:
-            # Show the latest circle by default, or the active circle if in ADJUST mode
-            latest_circle = self.app.circles[-1]
+            circles_info = []
             
-            # If in ADJUST mode and a circle or midpoint is being dragged, show that circle instead
-            if self.app.in_edit_mode and self.app.drag_state["active"]:
-                if self.app.drag_state["type"] == "circle":
-                    circle_id = self.app.drag_state["id"]
+            # Show active circles if set, otherwise latest circle
+            if self.active_circle_ids:
+                for circle_id in self.active_circle_ids:
                     if circle_id in self.app.circle_lookup:
-                        latest_circle = self.app.circle_lookup[circle_id]
-                elif self.app.drag_state["type"] == "midpoint":
-                    # For midpoint drag, show the first circle in the connection
-                    connection_key = self.app.drag_state["id"]
-                    parts = connection_key.split("_")
-                    if len(parts) == 2:
-                        circle_id = int(parts[0])
-                        if circle_id in self.app.circle_lookup:
-                            latest_circle = self.app.circle_lookup[circle_id]
+                        circle = self.app.circle_lookup[circle_id]
+                        circles_info.append(self._format_circle_info(circle))
+            elif self.app.circles:
+                latest_circle = self.app.circles[-1]
+                circles_info.append(self._format_circle_info(latest_circle))
+
+            info_text = "\n\n".join(circles_info)  # Separate multiple circle infos with blank line
             
-            # Derive color name from priority for display
-            from color_utils import get_color_from_priority
-            color_name = get_color_from_priority(latest_circle['color_priority'])
-            
-            # Format the ordered connections list if it exists
-            ordered_connections_str = "None"
-            if "ordered_connections" in latest_circle and latest_circle["ordered_connections"]:
-                ordered_connections_str = ", ".join(map(str, latest_circle["ordered_connections"]))
-            
-            info_text = (
-                f"Circle ID: {latest_circle['id']}\n"
-                f"Position: ({latest_circle['x']}, {latest_circle['y']})\n"
-                f"Color: {color_name} (priority: {latest_circle['color_priority']})\n"
-                f"Connected to: {', '.join(map(str, latest_circle['connected_to']))}\n"
-                f"Ordered connections: {ordered_connections_str}"
-            )
+            self.active_circle_ids = []  # Reset after showing
             
         # Display debug text at the top of the canvas
         self.app.debug_text = self.app.canvas.create_text(
@@ -98,6 +97,32 @@ class UIManager:
             anchor=tk.NW, 
             fill="black",
             font=("Arial", 10)
+        )
+
+    def _format_circle_info(self, circle):
+        """Format debug info for a single circle.
+        
+        Args:
+            circle: Circle data dictionary
+            
+        Returns:
+            str: Formatted debug info text
+        """
+        # Derive color name from priority for display
+        from color_utils import get_color_from_priority
+        color_name = get_color_from_priority(circle['color_priority'])
+        
+        # Format ordered connections list if it exists
+        ordered_connections_str = "None"
+        if "ordered_connections" in circle and circle["ordered_connections"]:
+            ordered_connections_str = ", ".join(map(str, circle["ordered_connections"]))
+        
+        return (
+            f"Circle ID: {circle['id']}\n"
+            f"Position: ({circle['x']}, {circle['y']})\n"
+            f"Color: {color_name} (priority: {circle['color_priority']})\n"
+            f"Connected to: {', '.join(map(str, circle['connected_to']))}\n"
+            f"Ordered connections: {ordered_connections_str}"
         )
     
     def show_hint_text(self):

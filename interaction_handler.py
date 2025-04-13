@@ -418,6 +418,9 @@ class InteractionHandler:
         # Flag to check if ordered connections were updated
         ordered_connections_updated = False
         
+        # Track which circle IDs to display in debug
+        debug_circle_ids = []
+        
         # Update ordered connections based on what was dragged
         if self.app.drag_state["type"] == "circle":
             # Get the dragged circle's ID
@@ -425,6 +428,7 @@ class InteractionHandler:
             circle = self.app.circle_lookup.get(circle_id)
             
             if circle:
+                debug_circle_ids.append(circle_id)  # Changed from single ID to list
                 # First update all connections for the circle visually
                 self.app.connection_manager.update_connections(circle_id)
                 
@@ -439,6 +443,16 @@ class InteractionHandler:
         elif self.app.drag_state["type"] == "midpoint":
             # Extract the connection key and update both connected circles
             connection_key = self.app.drag_state["id"]
+            
+            # For midpoint drag, show both connected circles
+            try:
+                parts = connection_key.split("_")
+                if len(parts) == 2:
+                    from_id = int(parts[0])
+                    to_id = int(parts[1])
+                    debug_circle_ids.extend([from_id, to_id])  # Add both circles
+            except (ValueError, AttributeError):
+                pass
             
             # Now apply the curve update that was calculated during drag_motion
             if "curve_x" in self.app.drag_state and "curve_y" in self.app.drag_state:
@@ -479,8 +493,9 @@ class InteractionHandler:
         if ordered_connections_updated:
              self.app._update_enclosure_status() # Phase 14 Trigger Point
              
-        # Update debug info AFTER drag is complete and all updates are done
-        if self.app.debug_enabled:
+        # Set the active circles for debug display before updating
+        if debug_circle_ids and self.app.debug_enabled:
+            self.app.ui_manager.set_active_circles(*debug_circle_ids)
             self.app.ui_manager.show_debug_info()
     
     def drag_circle_motion(self, circle_id, dx, dy):
