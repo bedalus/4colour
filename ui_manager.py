@@ -36,10 +36,6 @@ class UIManager:
     
     def toggle_debug(self):
         """Toggle the debug information display."""
-        # Don't allow toggling debug while in adjust mode
-        if self.app._mode == ApplicationMode.ADJUST:  # Fixed: Using imported ApplicationMode
-            return
-
         self.app.debug_enabled = not self.app.debug_enabled
         if self.app.debug_enabled:
             self.show_debug_info()
@@ -137,7 +133,7 @@ class UIManager:
         self.app.hint_text_id = self.app.canvas.create_text(
             self.app.canvas_width // 2,
             20,
-            text="Please select which circles to connect to then press 'y'",
+            text="Please select which circles to connect to then press 'y', or press Escape to cancel",
             anchor=tk.N,
             fill="black",
             font=("Arial", 12)
@@ -157,7 +153,7 @@ class UIManager:
         self.app.edit_hint_text_id = self.app.canvas.create_text(
             (self.app.canvas_width // 2) + 20,  # Moved 20 pixels to the right
             20,
-            text="Click-and-drag to move, right click to remove",
+            text="Click-and-drag to move circles and handles",
             anchor=tk.N,
             fill="black",
             font=("Arial", 12)
@@ -165,10 +161,6 @@ class UIManager:
     
     def clear_canvas(self):
         """Clear all items from the canvas."""
-        # Don't allow clearing the canvas while in adjust mode
-        if self.app._mode == ApplicationMode.ADJUST:  # Fixed: Using imported ApplicationMode
-            return
-
         # More efficient to just clear everything at once
         self.app.canvas.delete("all")
         self.app.drawn_items.clear()
@@ -182,6 +174,9 @@ class UIManager:
         # Clear debug display
         if self.app.debug_text:
             self.app.debug_text = None
+            
+        # Return to create mode
+        self.app._set_application_mode(ApplicationMode.CREATE)
 
     def draw_angle_visualization_line(self, circle_id, other_circle_id, angle, connection_key=None):
         """Draw a visualization line showing the angle a connection enters a circle.

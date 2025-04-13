@@ -40,21 +40,8 @@ class CircleManager:
         return None
     
     def remove_circle(self, event):
-        """Remove a circle when right-clicked in adjust mode.
-        
-        Args:
-            event: Mouse right-click event containing x and y coordinates
-        """
-        if self.app._mode != ApplicationMode.ADJUST:  # Fixed: Using imported ApplicationMode
-            return
-            
-        # Find if a circle was right-clicked
-        circle_id = self.get_circle_at_coords(event.x, event.y)
-        if circle_id is None:
-            return
-            
-        # Use the consolidated removal method
-        self.remove_circle_by_id(circle_id)
+        """Stub for backward compatibility."""
+        pass
             
     def remove_circle_by_id(self, circle_id):
         """Remove a circle by its ID and cleanup all associated connections.

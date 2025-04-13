@@ -124,6 +124,7 @@ class InteractionHandler:
         if not self.app._bound_events[ApplicationMode.SELECTION]:
             self.app.canvas.bind("<Button-1>", self.app._draw_on_click)  # Uses same draw function but in selection mode
             self.app.root.bind("<y>", self.app._confirm_selection)
+            self.app.root.bind("<Escape>", self.app._cancel_selection)  # Add escape binding
             self.app._bound_events[ApplicationMode.SELECTION] = True
 
     def unbind_selection_mode_events(self):
@@ -131,6 +132,7 @@ class InteractionHandler:
         if self.app._bound_events[ApplicationMode.SELECTION]:
             self.app.canvas.unbind("<Button-1>")
             self.app.root.unbind("<y>")
+            self.app.root.unbind("<Escape>")  # Remove escape binding
             self.app._bound_events[ApplicationMode.SELECTION] = False
 
     def bind_adjust_mode_events(self):
@@ -140,7 +142,6 @@ class InteractionHandler:
             self.app.canvas.bind("<Button-1>", self.app._drag_start)
             self.app.canvas.bind("<B1-Motion>", self.app._drag_motion)
             self.app.canvas.bind("<ButtonRelease-1>", self.app._drag_end)
-            self.app.canvas.bind("<Button-3>", self.app._remove_circle)
             self.app._bound_events[ApplicationMode.ADJUST] = True
 
     def unbind_adjust_mode_events(self):
@@ -149,7 +150,6 @@ class InteractionHandler:
             self.app.canvas.unbind("<Button-1>")
             self.app.canvas.unbind("<B1-Motion>")
             self.app.canvas.unbind("<ButtonRelease-1>")
-            self.app.canvas.unbind("<Button-3>")
             self.app._bound_events[ApplicationMode.ADJUST] = False
     
     def toggle_mode(self):
@@ -317,6 +317,36 @@ class InteractionHandler:
         # Update debug info if enabled
         if self.app.debug_enabled:
             self.app.ui_manager.show_debug_info()
+
+    def cancel_selection(self, event):
+        """Handle escape key press to cancel circle placement.
+        
+        Args:
+            event: Key press event
+        """
+        if not self.app.in_selection_mode:
+            return
+
+        if self.app.newly_placed_circle_id:
+            # Use the circle manager's remove method since it handles all cleanup
+            self.app.circle_manager.remove_circle_by_id(self.app.newly_placed_circle_id)
+            
+            # Reset selection state
+            self.app.newly_placed_circle_id = None
+            self.app.selected_circles = []
+            
+            # Clear selection indicators
+            for indicator_id in self.app.selection_indicators.values():
+                self.app.canvas.delete(indicator_id)
+            self.app.selection_indicators = {}
+            
+            # Clear hint text
+            if self.app.hint_text_id:
+                self.app.canvas.delete(self.app.hint_text_id)
+                self.app.hint_text_id = None
+            
+            # Exit selection mode
+            self.app.in_selection_mode = False
 
     def reset_drag_state(self):
         """Reset the drag state to its default values."""
@@ -586,18 +616,5 @@ class InteractionHandler:
         return "break"
     
     def remove_circle(self, event):
-        """Handle right-click to remove a circle in adjust mode."""
-        if self.app._mode != ApplicationMode.ADJUST:
-            return
-
-        # Find if a circle was right-clicked
-        circle_id = self.app.circle_manager.get_circle_at_coords(event.x, event.y)
-        if circle_id is None:
-            return
-
-        # Use the consolidated removal method from CircleManager
-        removed = self.app.circle_manager.remove_circle_by_id(circle_id)
-
-        # Update enclosure status after removing a circle
-        if removed:
-            self.app._update_enclosure_status() # Phase 14 Trigger Point
+        """Handler stub for backward compatibility."""
+        pass

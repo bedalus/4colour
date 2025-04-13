@@ -249,6 +249,9 @@ class CanvasApplication:
     def _unbind_adjust_mode_events(self):
         return self.interaction_handler.unbind_adjust_mode_events()
         
+    def _cancel_selection(self, event):
+        return self.interaction_handler.cancel_selection(event)
+
     # Public methods from the original implementation
     def add_connection(self, from_id, to_id):
         return self.connection_manager.add_connection(from_id, to_id)
