@@ -327,7 +327,9 @@ class InteractionHandler:
             "start_x": 0,
             "start_y": 0,
             "last_x": 0,
-            "last_y": 0
+            "last_y": 0,
+            "curve_x": 0,  # Added for midpoint dragging
+            "curve_y": 0   # Added for midpoint dragging
         }
     
     def drag_start(self, event):
@@ -396,9 +398,7 @@ class InteractionHandler:
         elif self.app.drag_state["type"] == "midpoint":
             self.drag_midpoint_motion(x, y)
             
-        # Update debug info if enabled
-        if self.app.debug_enabled:
-            self.app.ui_manager.show_debug_info()
+        # Remove debug info update during motion - will be updated on drag_end only
         
         # Stop event propagation
         return "break"
@@ -425,7 +425,10 @@ class InteractionHandler:
             circle = self.app.circle_lookup.get(circle_id)
             
             if circle:
-                # Update the dragged circle's ordered connections
+                # First update all connections for the circle visually
+                self.app.connection_manager.update_connections(circle_id)
+                
+                # Then update the ordered connections
                 self.app.connection_manager.update_ordered_connections(circle_id)
                 ordered_connections_updated = True
                 
@@ -436,6 +439,24 @@ class InteractionHandler:
         elif self.app.drag_state["type"] == "midpoint":
             # Extract the connection key and update both connected circles
             connection_key = self.app.drag_state["id"]
+            
+            # Now apply the curve update that was calculated during drag_motion
+            if "curve_x" in self.app.drag_state and "curve_y" in self.app.drag_state:
+                connection = self.app.connections.get(connection_key)
+                if connection:
+                    from_id = connection["from_circle"]
+                    to_id = connection["to_circle"]
+                    
+                    # Update the connection with the stored curve offsets
+                    self.app.connection_manager.update_connection_curve(
+                        from_id, 
+                        to_id, 
+                        self.app.drag_state["curve_x"], 
+                        self.app.drag_state["curve_y"]
+                    )
+                    
+                    # Draw angle visualizations for the updated curve
+                    self.app.ui_manager.draw_connection_angle_visualizations(connection_key)
             
             # Extract circle IDs from the connection key (format: "smaller_id_larger_id")
             try:
@@ -457,6 +478,10 @@ class InteractionHandler:
         # Update enclosure status AFTER drag ends and ordered connections are updated
         if ordered_connections_updated:
              self.app._update_enclosure_status() # Phase 14 Trigger Point
+             
+        # Update debug info AFTER drag is complete and all updates are done
+        if self.app.debug_enabled:
+            self.app.ui_manager.show_debug_info()
     
     def drag_circle_motion(self, circle_id, dx, dy):
         """Handle circle dragging motion.
@@ -477,12 +502,7 @@ class InteractionHandler:
         circle["x"] += dx
         circle["y"] += dy
         
-        # Update connecting lines in real-time
-        self.app.connection_manager.update_connections(circle_id)
-        
-        # Update debug info if enabled
-        if self.app.debug_enabled:
-            self.app.ui_manager.show_debug_info()
+        # Remove connection update during dragging - will be done at drag_end instead
     
     def drag_midpoint_motion(self, x, y):
         """Handle midpoint dragging motion.
@@ -514,14 +534,38 @@ class InteractionHandler:
         new_curve_x = (x - base_mid_x) * 2
         new_curve_y = (y - base_mid_y) * 2
         
-        # Update the connection curve with the new offset
-        self.app.connection_manager.update_connection_curve(from_id, to_id, new_curve_x, new_curve_y)
+        # Store the calculated curve offset in drag_state for use on drag_end
+        self.app.drag_state["curve_x"] = new_curve_x
+        self.app.drag_state["curve_y"] = new_curve_y
         
-        # Clear any existing angle visualizations
+        # Just move the handle visually without updating the curve
+        handle_id = self.app.midpoint_handles.get(connection_key)
+        if handle_id:
+            # Move the handle rectangle to the new position
+            self.app.canvas.coords(
+                handle_id,
+                x - self.app.midpoint_radius, 
+                y - self.app.midpoint_radius,
+                x + self.app.midpoint_radius, 
+                y + self.app.midpoint_radius
+            )
+        
+        # Update angle visualizations without updating the actual curve
+        # First clear existing visualizations
         self.app.ui_manager.clear_angle_visualizations()
         
-        # Draw new angle visualizations for the current connection
+        # Temporarily update connection curve offsets for angle calculation
+        original_curve_x = connection.get("curve_X", 0)
+        original_curve_y = connection.get("curve_Y", 0)
+        connection["curve_X"] = new_curve_x
+        connection["curve_Y"] = new_curve_y
+        
+        # Draw angle visualizations based on temporary curve values
         self.app.ui_manager.draw_connection_angle_visualizations(connection_key)
+        
+        # Restore original curve offsets (since we're not updating the actual curve until drag_end)
+        connection["curve_X"] = original_curve_x
+        connection["curve_Y"] = original_curve_y
         
         # Stop event propagation
         return "break"

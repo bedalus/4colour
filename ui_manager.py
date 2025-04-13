@@ -156,13 +156,14 @@ class UIManager:
         if self.app.debug_text:
             self.app.debug_text = None
 
-    def draw_angle_visualization_line(self, circle_id, other_circle_id, angle):
+    def draw_angle_visualization_line(self, circle_id, other_circle_id, angle, connection_key=None):
         """Draw a visualization line showing the angle a connection enters a circle.
         
         Args:
             circle_id: ID of the circle to visualize angle for
             other_circle_id: ID of the other circle in the connection
             angle: Entry angle in degrees (0-360, clockwise from North)
+            connection_key: Optional pre-computed connection key to avoid recalculation
             
         Returns:
             int: Canvas ID of the created visualization line
@@ -187,8 +188,9 @@ class UIManager:
         x2 = cx + length * math.sin(angle_rad)
         y2 = cy - length * math.cos(angle_rad)
         
-        # Create connection key for tagging
-        connection_key = self.app.connection_manager.get_connection_key(circle_id, other_circle_id)
+        # Use provided connection_key or calculate it if not provided
+        if connection_key is None:
+            connection_key = self.app.connection_manager.get_connection_key(circle_id, other_circle_id)
         
         # Draw the line
         line_id = self.app.canvas.create_line(
@@ -225,13 +227,13 @@ class UIManager:
         
         # Calculate the angle for the first circle
         angle1 = self.app.connection_manager.calculate_connection_entry_angle(circle1_id, circle2_id)
-        line_id1 = self.draw_angle_visualization_line(circle1_id, circle2_id, angle1)
+        line_id1 = self.draw_angle_visualization_line(circle1_id, circle2_id, angle1, connection_key)
         if line_id1:
             viz_ids.append(line_id1)
         
         # Calculate the angle for the second circle
         angle2 = self.app.connection_manager.calculate_connection_entry_angle(circle2_id, circle1_id)
-        line_id2 = self.draw_angle_visualization_line(circle2_id, circle1_id, angle2)
+        line_id2 = self.draw_angle_visualization_line(circle2_id, circle1_id, angle2, connection_key)
         if line_id2:
             viz_ids.append(line_id2)
         
