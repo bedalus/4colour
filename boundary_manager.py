@@ -57,8 +57,7 @@ class BoundaryManager:
         # Traverse the outer boundary clockwise.
         # Start from the 'next_id' found above, keeping track of the node we came from ('previous_id').
         previous_id = start_node['id'] # We start by conceptually moving from start_node to next_id
-        visited_edges = set()  # Track visited edges to handle edges that appear twice in boundary
-        
+
         while next_id and next_id != start_node['id']:
             # Safety break to prevent infinite loops in case of graph inconsistency
             if len(boundary_nodes) > len(self.app.circles) + 1: # Allow one extra for safety margin
@@ -72,19 +71,6 @@ class BoundaryManager:
 
             # Create an edge identifier (ordered pair of node IDs)
             edge = tuple(sorted([previous_id, next_id]))
-            
-            # Check if we've already visited this node AND this specific edge
-            if next_id in boundary_nodes and edge in visited_edges:
-                print(f"Warning: Boundary traversal revisited node {next_id} and edge {edge} unexpectedly. Breaking loop.")
-                # Mark all as not enclosed as boundary is likely incorrect
-                for circle in self.app.circle_lookup.values():
-                    circle['enclosed'] = False
-                if self.app.debug_enabled:
-                    self.app.ui_manager.show_debug_info()
-                return # Exit traversal
-                
-            # Track this edge as visited
-            visited_edges.add(edge)
 
             current_id = next_id
             boundary_nodes.add(current_id) # Mark the current node as part of the boundary
