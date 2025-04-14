@@ -115,45 +115,106 @@ Phase 15 ensured a consistent starting point for the outer face traversal by int
 
 ### Phase 16: Advanced Color Network Reassignment
 
-This phase focuses on developing a sophisticated algorithm for reassigning colors throughout the network of connected circles when simple conflict resolution is insufficient. Currently, the application assigns priority 4 (red) as a fallback, but a more optimal solution would rearrange existing colors to maintain the Four Color Theorem guarantee.
+This phase focuses on enhancing the color management system to handle complex graph coloring scenarios where simple conflict resolution isn't sufficient. The current implementation falls back to priority 4 (red) in difficult cases, but we need a more sophisticated algorithm that can reassign colors throughout the network to maintain the Four Color Theorem more optimally.
 
-- [ ] **Design Network Reassignment Algorithm:**
-    * Define a graph traversal approach for analyzing the network of connected circles
-    * Develop strategy for identifying color reassignment opportunities (e.g., swapping colors between distant circles)
-    * Determine stopping conditions to prevent infinite loops during recursive traversal
-    * Document the algorithm design with clear pseudocode or diagrams for implementation reference
+- [ ] **Review and Understand Existing Color Management:**
+    * Study the current implementation in `color_manager.py`, particularly `assign_color_based_on_connections()`, `check_and_resolve_color_conflicts()`, and `_reassign_color_network()`
+    * Examine test failures in `test_color_manager.py` to understand expected behavior
+    * Ensure color priority system (1=yellow, 2=green, 3=blue, 4=red, with 5 being an "overflow" priority) is consistently implemented
 
-- [ ] **Implement Network Analysis Functions:**
-    * Create helper functions in `color_utils.py` to analyze graph properties relevant for coloring
-    * Implement functions to identify color domains, conflict regions, and potential reassignment candidates
-    * Add utility functions to test whether a proposed coloring solution is valid
-    * Write unit tests for these utility functions with various graph configurations
+- [ ] **Extend Color Priority System:**
+    * Update `color_utils.py` to handle priority 5 (recommend using purple or another distinct color)
+    * Modify `get_color_from_priority()` to support the extended range
+    * Add entry to `_PRIORITY_TO_COLOR` dictionary
+    * Update any related UI components to handle the new color
 
-- [ ] **Implement Core Reassignment Logic:**
-    * Replace the placeholder implementation in `_reassign_color_network()` with the new algorithm
-    * Develop a recursive function that can traverse the circle network and test different color assignments
-    * Implement backtracking capability to revert unsuccessful color assignments during traversal
-    * Ensure the implementation prioritizes using colors 1-3 (yellow, green, blue) and minimizes use of color 4 (red)
-    * Add appropriate error handling for edge cases (circular references, disconnected components)
+- [ ] **Design Graph Coloring Algorithm:**
+    * Research well-established graph coloring algorithms (e.g., greedy coloring, backtracking, kempe chain)
+    * Implement a "kempe chain" approach - this allows color swapping between different regions of the graph
+    * For complex cases, consider implementing a backtracking algorithm with these components:
+        - Function to check if a color assignment is valid for a node
+        - Recursive function to try different color assignments
+        - Mechanism to track already-tried configurations
 
-- [ ] **Add Performance Optimizations:**
-    * Implement memoization or caching to avoid redundant calculations during traversal
-    * Add early termination conditions for branches that cannot lead to valid solutions
-    * Optimize the algorithm to prefer minimal color changes when resolving conflicts
-    * Consider adding a complexity threshold beyond which a simpler fallback solution is used
+- [ ] **Enhance Core Color Management Functions:**
+    * Update `check_and_resolve_color_conflicts()` to attempt more sophisticated resolution before falling back to priority 5
+    * Implement `_find_valid_coloring()` function that can recursively explore different color assignments
+    * Replace placeholder implementation in `_reassign_color_network()` with full algorithm that:
+        - Identifies the affected subgraph when a conflict occurs
+        - Attempts to reassign colors within the subgraph without introducing new conflicts
+        - Uses a depth-first search to explore potential color swaps
+        - Falls back to priority 5 only when genuinely necessary
+
+- [ ] **Improve Color Assignment Logic:**
+    * Modify `assign_color_based_on_connections()` to handle invalid circle IDs properly (return None)
+    * Update conflict detection to consider the full network effect of color changes
+    * Add a `get_connected_component()` function that returns all circles in a connected subgraph
+    * Implement proper handling for "saturated" scenarios where all 4 colors are already in use
+
+- [ ] **Add Data Structures for Efficient Color Management:**
+    * Create a `ColorGraph` class in a new file `color_graph.py` to represent the coloring problem:
+        ```python
+        class ColorGraph:
+            def __init__(self, app):
+                self.app = app
+                self.nodes = {}  # Mapping of circle IDs to node objects
+                self.max_color = 4  # Default to 4 colors
+            
+            def build_from_circles(self, circles, circle_lookup):
+                """Build graph representation from application's circle data"""
+                # Implementation here
+            
+            def is_valid_coloring(self):
+                """Check if current coloring is valid"""
+                # Implementation here
+            
+            def find_optimal_coloring(self):
+                """Find an optimal coloring using backtracking"""
+                # Implementation here
+            
+            def apply_coloring_to_app(self):
+                """Apply the graph's coloring solution back to the app"""
+                # Implementation here
+        ```
+    * Add methods to analyze color constraints and identify minimal changes needed
+
+- [ ] **Implement Kempe Chain Algorithm:**
+    * Create a function that can swap colors along a chain:
+        ```python
+        def kempe_chain_swap(graph, node_id, color1, color2):
+            """
+            Perform a Kempe chain color swap starting from node_id.
+            Swaps color1 and color2 throughout the connected component.
+            """
+            # Implementation here
+        ```
+    * Use this function when resolving conflicts to avoid using a 5th color
+
+- [ ] **Add Performance Considerations:**
+    * Implement memoization to cache results of subproblems
+    * Add early termination for branches that can't lead to valid solutions
+    * Consider adding a complexity threshold (e.g., number of affected nodes) beyond which a simpler approach is used
+    * For very large graphs (20+ nodes), implement a timeout mechanism to fall back to greedy coloring
 
 - [ ] **Update UI Feedback for Reassignment:**
-    * Implement visual feedback when network reassignment occurs (e.g., brief animation, status message)
-    * Add optional debugging overlay to visualize the reassignment process for educational purposes
-    * Ensure all circle colors update smoothly after network reassignment
+    * Add visual indication when network reassignment occurs
+    * Consider showing a brief animation of color changes or status message
+    * Add debug mode to visualize the coloring algorithm in action (optional)
 
-- [ ] **Create Comprehensive Unit Tests:**
-    * Develop test cases for various network configurations (linear chains, loops, complete graphs, etc.)
-    * Add tests for edge cases like maximum connections and highly constrained networks
-    * Implement tests to verify the algorithm's performance characteristics
-    * Create tests that validate the four-color theorem is maintained across the application
+- [ ] **Fix and Enhance Unit Tests:**
+    * Update test expectations in `test_color_manager.py` to match the new algorithm behavior
+    * Fix tests that expect priority 5 for overflow cases
+    * Add tests for kempe chain and backtracking algorithms
+    * Include tests for various graph configurations:
+        - Linear chains
+        - Cycles (odd and even length)
+        - Complete graphs (K3, K4, K5)
+        - Planar and non-planar graphs
+        - Bipartite graphs
 
-- [ ] **Update Documentation:**
-    * Add detailed comments explaining the network reassignment algorithm
-    * Include high-level description of the algorithm in code documentation
-    * Document any limitations or known edge cases for future reference
+- [ ] **Document Algorithm and Implementation:**
+    * Add detailed comments explaining color reassignment strategy
+    * Create a visual diagram of the algorithm flow
+    * Document any limitations (e.g., performance with very large graphs)
+    * Include references to graph coloring literature
+    * Update user documentation if the color scheme changes
