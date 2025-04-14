@@ -612,3 +612,170 @@ class TestConnectionManager(MockAppTestCase):
             # After moving, the order should remain consistent based on angles
             # The implementation sorts by ascending angle: South (0°), East (90°), West (270°)
             self.assertEqual(center_circle["ordered_connections"], [3, 2, 4])
+
+    def test_add_connection_self_loop(self):
+        """Test adding a connection to the same circle (self-loop)."""
+        circle = self._create_test_circle(1, 50, 50)
+        self.app.circles = [circle]
+        self.app.circle_lookup = {1: circle}
+
+        result = self.app.add_connection(1, 1)
+
+        self.assertFalse(result)
+        self.assertNotIn(1, circle["connected_to"])
+        self.assertEqual(self.app.connections, {})
+
+    def test_add_connection_already_exists(self):
+        """Test adding a connection that already exists."""
+        first_circle = self._create_test_circle(1, 50, 50, connections=[2])
+        second_circle = self._create_test_circle(2, 150, 150, connections=[1])
+
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        self.app.connections = {
+            "1_2": {
+                "line_id": 200,
+                "from_circle": 1,
+                "to_circle": 2
+            }
+        }
+
+        result = self.app.add_connection(1, 2)
+
+        self.assertFalse(result)
+        self.assertEqual(len(self.app.connections), 1)
+
+    def test_update_ordered_connections_dynamic_addition(self):
+        """Test updating ordered connections when a new connection is added dynamically."""
+        center_circle = self._create_test_circle(1, 100, 100, connections=[2])
+        east_circle = self._create_test_circle(2, 200, 100, connections=[1])
+        south_circle = self._create_test_circle(3, 100, 200, connections=[])
+
+        self.app.circles = [center_circle, east_circle, south_circle]
+        self.app.circle_lookup = {1: center_circle, 2: east_circle, 3: south_circle}
+
+        # Initial ordered connections
+        center_circle["ordered_connections"] = [2]
+
+        # Add a new connection dynamically
+        center_circle["connected_to"].append(3)
+        south_circle["connected_to"].append(1)
+        self.app.connections["1_3"] = {
+            "line_id": 300,
+            "from_circle": 1,
+            "to_circle": 3,
+            "curve_X": 0,
+            "curve_Y": 0
+        }
+
+        # Update ordered connections
+        self.app.connection_manager.update_ordered_connections(1)
+
+        # Verify the new connection is included in the correct order
+        self.assertIn(3, center_circle["ordered_connections"])
+
+    def test_update_ordered_connections_dynamic_removal(self):
+        """Test updating ordered connections when a connection is removed dynamically."""
+        center_circle = self._create_test_circle(1, 100, 100, connections=[2, 3])
+        east_circle = self._create_test_circle(2, 200, 100, connections=[1])
+        south_circle = self._create_test_circle(3, 100, 200, connections=[1])
+
+        self.app.circles = [center_circle, east_circle, south_circle]
+        self.app.circle_lookup = {1: center_circle, 2: east_circle, 3: south_circle}
+
+        # Initial ordered connections
+        center_circle["ordered_connections"] = [2, 3]
+
+        # Remove a connection dynamically
+        center_circle["connected_to"].remove(3)
+        south_circle["connected_to"].remove(1)
+        del self.app.connections["1_3"]
+
+        # Update ordered connections
+        self.app.connection_manager.update_ordered_connections(1)
+
+        # Verify the removed connection is no longer in the ordered list
+        self.assertNotIn(3, center_circle["ordered_connections"])
+
+    def test_add_connection_canvas_locked(self):
+        """Test adding a connection when the canvas is locked."""
+        first_circle = self._create_test_circle(1, 50, 50)
+        second_circle = self._create_test_circle(2, 150, 150)
+
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+        self.app.canvas_locked = True  # Simulate locked canvas
+
+        result = self.app.add_connection(1, 2)
+
+        self.assertFalse(result)
+        self.assertNotIn(2, first_circle["connected_to"])
+        self.assertNotIn(1, second_circle["connected_to"])
+        self.assertEqual(self.app.connections, {})
+
+    def test_add_connection_invalid_curve_points(self):
+        """Test adding a connection with invalid curve points."""
+        first_circle = self._create_test_circle(1, 50, 50)
+        second_circle = self._create_test_circle(2, 150, 150)
+
+        self.app.circles = [first_circle, second_circle]
+        self.app.circle_lookup = {1: first_circle, 2: second_circle}
+
+        # Mock calculate_curve_points to return invalid points
+        with patch.object(self.app, '_calculate_curve_points', return_value=None):
+            result = self.app.add_connection(1, 2)
+
+            self.assertFalse(result)
+            self.assertNotIn(2, first_circle["connected_to"])
+            self.assertNotIn(1, second_circle["connected_to"])
+            self.assertEqual(self.app.connections, {})
+
+    def test_update_ordered_connections_multiple_additions(self):
+        """Test updating ordered connections when multiple connections are added simultaneously."""
+        center_circle = self._create_test_circle(1, 100, 100, connections=[])
+        east_circle = self._create_test_circle(2, 200, 100, connections=[])
+        south_circle = self._create_test_circle(3, 100, 200, connections=[])
+
+        self.app.circles = [center_circle, east_circle, south_circle]
+        self.app.circle_lookup = {1: center_circle, 2: east_circle, 3: south_circle}
+
+        # Add multiple connections dynamically
+        center_circle["connected_to"].extend([2, 3])
+        east_circle["connected_to"].append(1)
+        south_circle["connected_to"].append(1)
+
+        self.app.connections.update({
+            "1_2": {"line_id": 201, "from_circle": 1, "to_circle": 2, "curve_X": 0, "curve_Y": 0},
+            "1_3": {"line_id": 202, "from_circle": 1, "to_circle": 3, "curve_X": 0, "curve_Y": 0}
+        })
+
+        # Update ordered connections
+        self.app.connection_manager.update_ordered_connections(1)
+
+        # Verify the new connections are included in the correct order
+        self.assertIn(2, center_circle["ordered_connections"])
+        self.assertIn(3, center_circle["ordered_connections"])
+
+    def test_update_ordered_connections_multiple_removals(self):
+        """Test updating ordered connections when multiple connections are removed simultaneously."""
+        center_circle = self._create_test_circle(1, 100, 100, connections=[2, 3])
+        east_circle = self._create_test_circle(2, 200, 100, connections=[1])
+        south_circle = self._create_test_circle(3, 100, 200, connections=[1])
+
+        self.app.circles = [center_circle, east_circle, south_circle]
+        self.app.circle_lookup = {1: center_circle, 2: east_circle, 3: south_circle}
+
+        # Initial ordered connections
+        center_circle["ordered_connections"] = [2, 3]
+
+        # Remove multiple connections dynamically
+        center_circle["connected_to"].clear()
+        east_circle["connected_to"].remove(1)
+        south_circle["connected_to"].remove(1)
+        self.app.connections.clear()
+
+        # Update ordered connections
+        self.app.connection_manager.update_ordered_connections(1)
+
+        # Verify the removed connections are no longer in the ordered list
+        self.assertEqual(center_circle["ordered_connections"], [])

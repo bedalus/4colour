@@ -8,7 +8,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 from test_utils import MockAppTestCase
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from app_enums import ApplicationMode
 
 class TestCanvasApplication(MockAppTestCase):
@@ -104,3 +104,74 @@ class TestCanvasApplication(MockAppTestCase):
         with patch.object(self.app.color_manager, 'assign_color_based_on_connections') as mock_assign:
             self.app._assign_color_based_on_connections(1)
             mock_assign.assert_called_once_with(1)
+
+    def test_on_window_resize(self):
+        """Test handling of window resize events."""
+        with patch.object(self.app, '_update_canvas_dimensions') as mock_update:
+            event = MagicMock(widget=self.root)
+            self.app._on_window_resize(event)
+            self.root.after.assert_called_with(100, mock_update)
+
+    def test_update_canvas_dimensions(self):
+        """Test updating canvas dimensions and related UI updates."""
+        self.app.canvas.winfo_width.return_value = 900
+        self.app.canvas.winfo_height.return_value = 600
+        self.app.debug_enabled = True
+        self.app.hint_text_id = 101
+        self.app.edit_hint_text_id = 102
+
+        with patch.object(self.app.ui_manager, 'show_debug_info') as mock_debug, \
+             patch.object(self.app.ui_manager, 'show_hint_text') as mock_hint, \
+             patch.object(self.app.ui_manager, 'show_edit_hint_text') as mock_edit_hint:
+            self.app._update_canvas_dimensions()
+
+            self.assertEqual(self.app.canvas_width, 900)
+            self.assertEqual(self.app.canvas_height, 600)
+            mock_debug.assert_called_once()
+            mock_hint.assert_called_once()
+            mock_edit_hint.assert_called_once()
+
+    def test_reset_drag_state(self):
+        """Test resetting the drag state."""
+        self.app.drag_state = {
+            "active": True,
+            "type": "circle",
+            "id": 1,
+            "start_x": 50,
+            "start_y": 50,
+            "last_x": 60,
+            "last_y": 60
+        }
+
+        self.app._reset_drag_state()
+
+        self.assertEqual(self.app.drag_state, {
+            "active": False,
+            "type": None,
+            "id": None,
+            "start_x": 0,
+            "start_y": 0,
+            "last_x": 0,
+            "last_y": 0
+        })
+
+    def test_drag_circle_motion(self):
+        """Test dragging a circle."""
+        with patch.object(self.app.interaction_handler, 'drag_circle_motion') as mock_drag:
+            self.app._drag_circle_motion(100, 100, 10, 10)
+            mock_drag.assert_called_once_with(100, 100, 10, 10)
+
+    def test_drag_midpoint_motion(self):
+        """Test dragging a midpoint."""
+        with patch.object(self.app.interaction_handler, 'drag_midpoint_motion') as mock_drag:
+            self.app._drag_midpoint_motion(150, 150)
+            mock_drag.assert_called_once_with(150, 150)
+
+    def test_main_entry_point(self):
+        """Test the main entry point of the application."""
+        with patch('canvas_app.tk.Tk') as mock_tk, patch('canvas_app.CanvasApplication') as mock_app:
+            from canvas_app import main
+            main()
+            mock_tk.assert_called_once()
+            mock_app.assert_called_once_with(mock_tk.return_value)
+            mock_tk.return_value.mainloop.assert_called_once()

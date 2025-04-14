@@ -425,3 +425,158 @@ class TestColorManager(MockAppTestCase):
         """Test updating a circle's color with an invalid ID."""
         result = self.app.color_manager.update_circle_color(999, 2)
         self.assertFalse(result)
+
+    def test_assign_color_all_priorities_used(self):
+        """Test color assignment when all priorities are used by connected circles."""
+        circles = [
+            self._create_test_circle(1, 50, 50, priority=1, connections=[2, 3, 4]),
+            self._create_test_circle(2, 100, 50, priority=2, connections=[1]),
+            self._create_test_circle(3, 150, 50, priority=3, connections=[1]),
+            self._create_test_circle(4, 200, 50, priority=4, connections=[1])
+        ]
+
+        self.app.circles = circles
+        self.app.circle_lookup = {c["id"]: c for c in circles}
+
+        priority = self.app.color_manager.assign_color_based_on_connections(1)
+        self.assertEqual(priority, 5)  # Assign a new priority since all are used
+
+    def test_reassign_color_network_new_circle(self):
+        """Test reassigning colors when a new circle is added to a saturated network."""
+        circles = [
+            self._create_test_circle(1, 50, 50, priority=1, connections=[2, 3, 4]),
+            self._create_test_circle(2, 100, 50, priority=2, connections=[1]),
+            self._create_test_circle(3, 150, 50, priority=3, connections=[1]),
+            self._create_test_circle(4, 200, 50, priority=4, connections=[1])
+        ]
+
+        self.app.circles = circles
+        self.app.circle_lookup = {c["id"]: c for c in circles}
+
+        # Add a new circle connected to all others
+        new_circle = self._create_test_circle(5, 250, 50, priority=1, connections=[1, 2, 3, 4])
+        self.app.circles.append(new_circle)
+        self.app.circle_lookup[5] = new_circle
+
+        # Update connections
+        for i in range(1, 5):
+            self.app.connections[f"{i}_5"] = {
+                "line_id": 1000 + i,
+                "from_circle": i,
+                "to_circle": 5
+            }
+
+        priority = self.app.color_manager.reassign_color_network(5)
+        self.assertEqual(priority, 5)  # New priority assigned to the new circle
+
+    def test_assign_color_disconnected_node(self):
+        """Test color assignment for a disconnected node."""
+        circle = self._create_test_circle(1, 50, 50)
+        self.app.circles = [circle]
+        self.app.circle_lookup = {1: circle}
+
+        priority = self.app.color_manager.assign_color_based_on_connections(1)
+        self.assertEqual(priority, 1)  # Default priority for disconnected nodes
+
+    def test_assign_color_no_valid_priorities(self):
+        """Test color assignment when no valid priorities are available."""
+        circles = [
+            self._create_test_circle(1, 50, 50, priority=1, connections=[2, 3, 4]),
+            self._create_test_circle(2, 100, 50, priority=2, connections=[1]),
+            self._create_test_circle(3, 150, 50, priority=3, connections=[1]),
+            self._create_test_circle(4, 200, 50, priority=4, connections=[1])
+        ]
+
+        self.app.circles = circles
+        self.app.circle_lookup = {c["id"]: c for c in circles}
+
+        # Add a new circle connected to all others
+        new_circle = self._create_test_circle(5, 250, 50, priority=1, connections=[1, 2, 3, 4])
+        self.app.circles.append(new_circle)
+        self.app.circle_lookup[5] = new_circle
+
+        # Update connections
+        for i in range(1, 5):
+            self.app.connections[f"{i}_5"] = {
+                "line_id": 1000 + i,
+                "from_circle": i,
+                "to_circle": 5
+            }
+
+        priority = self.app.color_manager.assign_color_based_on_connections(5)
+        self.assertEqual(priority, 5)  # Assign a new priority since all are used
+
+    def test_reassign_color_network_with_new_node(self):
+        """Test reassigning colors when a new node is added to a saturated network."""
+        circles = [
+            self._create_test_circle(1, 50, 50, priority=1, connections=[2, 3, 4]),
+            self._create_test_circle(2, 100, 50, priority=2, connections=[1]),
+            self._create_test_circle(3, 150, 50, priority=3, connections=[1]),
+            self._create_test_circle(4, 200, 50, priority=4, connections=[1])
+        ]
+
+        self.app.circles = circles
+        self.app.circle_lookup = {c["id"]: c for c in circles}
+
+        # Add a new circle connected to all others
+        new_circle = self._create_test_circle(5, 250, 50, priority=1, connections=[1, 2, 3, 4])
+        self.app.circles.append(new_circle)
+        self.app.circle_lookup[5] = new_circle
+
+        # Update connections
+        for i in range(1, 5):
+            self.app.connections[f"{i}_5"] = {
+                "line_id": 1000 + i,
+                "from_circle": i,
+                "to_circle": 5
+            }
+
+        priority = self.app.color_manager.reassign_color_network(5)
+        self.assertEqual(priority, 5)  # New priority assigned to the new circle
+
+    def test_assign_color_invalid_circle(self):
+        """Test color assignment for an invalid circle ID."""
+        priority = self.app.color_manager.assign_color_based_on_connections(999)
+        self.assertIsNone(priority)  # Should return None for invalid ID
+
+    def test_reassign_color_network_multiple_additions(self):
+        """Test reassigning colors when multiple nodes are dynamically added."""
+        # Create initial graph with 3 nodes
+        circles = [
+            self._create_test_circle(1, 50, 50, priority=1, connections=[2, 3]),
+            self._create_test_circle(2, 100, 50, priority=2, connections=[1, 3]),
+            self._create_test_circle(3, 150, 50, priority=3, connections=[1, 2])
+        ]
+
+        self.app.circles = circles
+        self.app.circle_lookup = {c["id"]: c for c in circles}
+
+        # Add connections
+        self.app.connections = {
+            "1_2": {"line_id": 1012, "from_circle": 1, "to_circle": 2},
+            "1_3": {"line_id": 1013, "from_circle": 1, "to_circle": 3},
+            "2_3": {"line_id": 1023, "from_circle": 2, "to_circle": 3}
+        }
+
+        # Dynamically add two new nodes
+        new_circle1 = self._create_test_circle(4, 200, 50, priority=1, connections=[1, 2])
+        new_circle2 = self._create_test_circle(5, 250, 50, priority=1, connections=[3])
+        self.app.circles.extend([new_circle1, new_circle2])
+        self.app.circle_lookup[4] = new_circle1
+        self.app.circle_lookup[5] = new_circle2
+
+        # Add new connections
+        self.app.connections.update({
+            "1_4": {"line_id": 1041, "from_circle": 1, "to_circle": 4},
+            "2_4": {"line_id": 1042, "from_circle": 2, "to_circle": 4},
+            "3_5": {"line_id": 1053, "from_circle": 3, "to_circle": 5}
+        })
+
+        # Reassign colors for the new nodes
+        priority1 = self.app.color_manager.reassign_color_network(4)
+        priority2 = self.app.color_manager.reassign_color_network(5)
+
+        # Verify the new priorities are valid and do not conflict
+        self.assertNotEqual(priority1, 1)
+        self.assertNotEqual(priority2, 1)
+        self.assertNotEqual(priority1, priority2)

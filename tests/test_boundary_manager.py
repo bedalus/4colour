@@ -970,5 +970,248 @@ class TestBoundaryManager(MockAppTestCase):
         for circle in self.app.circles:
             self.assertFalse(circle['enclosed'])
 
+    def test_update_enclosure_status_empty_graph(self):
+        """Test update_enclosure_status with an empty graph."""
+        self.app.circles = []
+        self.app.circle_lookup = {}
+        self.app.boundary_manager.update_enclosure_status()
+
+        # Verify no circles are marked as enclosed
+        self.assertEqual(len(self.app.circles), 0)
+
+    def test_update_enclosure_status_missing_ordered_connections(self):
+        """Test update_enclosure_status with missing ordered_connections."""
+        self._setup_triangle()
+        self.app.circle_lookup[2]['ordered_connections'] = []  # Remove connections for node 2
+
+        with patch('builtins.print') as mock_print:
+            self.app.boundary_manager.update_enclosure_status()
+
+            # Verify warning was printed
+            mock_print.assert_any_call("Warning: Boundary traversal stopped at node 2 (missing or no connections).")
+
+        # All nodes should be marked as not enclosed
+        for circle in self.app.circles:
+            self.assertFalse(circle['enclosed'])
+
+    def test_update_enclosure_status_infinite_loop_prevention(self):
+        """Test update_enclosure_status prevents infinite loops."""
+        self._setup_triangle()
+        self.app.circles.append(self.app.circles[0])  # Create a duplicate circle to simulate inconsistency
+
+        with patch('builtins.print') as mock_print:
+            self.app.boundary_manager.update_enclosure_status()
+
+            # Verify warning was printed
+            mock_print.assert_any_call("Warning: Boundary traversal exceeded expected length (4 > 3). Breaking loop.")
+
+        # All nodes should be marked as not enclosed
+        for circle in self.app.circles:
+            self.assertFalse(circle['enclosed'])
+
+    def test_calculate_corrected_angle_neighbor_not_found(self):
+        """Test _calculate_corrected_angle when neighbor is not found."""
+        circle = self._create_test_circle(1, 50, 50)
+        self.app.circle_lookup = {1: circle}
+
+        angle = self.app.boundary_manager._calculate_corrected_angle(circle, 2)  # Neighbor ID 2 does not exist
+
+        # Verify angle is 0
+        self.assertEqual(angle, 0)
+
+    def test_calculate_corrected_angle_extreme_offsets(self):
+        """Test _calculate_corrected_angle with extreme curve offsets."""
+        circle1 = self._create_test_circle(1, 100, 100)
+        circle2 = self._create_test_circle(2, 200, 200)
+        self.app.circle_lookup = {1: circle1, 2: circle2}
+
+        with patch.object(self.app.connection_manager, 'get_connection_curve_offset', return_value=(1000, 1000)):
+            angle = self.app.boundary_manager._calculate_corrected_angle(circle1, 2)
+
+        # Verify angle is calculated correctly
+        self.assertGreater(angle, 0)
+        self.assertLess(angle, 360)
+
+    def test_calculate_corrected_angle_overlapping_nodes(self):
+        """Test _calculate_corrected_angle with overlapping nodes."""
+        circle1 = self._create_test_circle(1, 100, 100)
+        circle2 = self._create_test_circle(2, 100, 100)  # Same coordinates as circle1
+        self.app.circle_lookup = {1: circle1, 2: circle2}
+
+        with patch.object(self.app.connection_manager, 'get_connection_curve_offset', return_value=(0, 0)):
+            angle = self.app.boundary_manager._calculate_corrected_angle(circle1, 2)
+
+        # Verify angle is 0 (or a default value) since nodes overlap
+        self.assertEqual(angle, 0)
+
+    def test_update_enclosure_status_dynamic_addition(self):
+        """Test update_enclosure_status when nodes are dynamically added."""
+        self._setup_triangle()
+
+        # Initially verify no nodes are enclosed
+        self.app.boundary_manager.update_enclosure_status()
+        for circle in self.app.circles:
+            self.assertFalse(circle['enclosed'])
+
+        # Dynamically add a new node inside the triangle
+        new_circle = self._create_test_circle(4, 100, 100)
+        self.app.circles.append(new_circle)
+        self.app.circle_lookup[4] = new_circle
+
+        # Connect the new node to all triangle corners
+        self.app.connection_manager.add_connection(4, 1)
+        self.app.connection_manager.add_connection(4, 2)
+        self.app.connection_manager.add_connection(4, 3)
+
+        # Update enclosure status
+        self.app.boundary_manager.update_enclosure_status()
+
+        # Verify the new node is enclosed
+        self.assertTrue(self.app.circle_lookup[4]['enclosed'])
+
+    def test_update_enclosure_status_dynamic_removal(self):
+        """Test update_enclosure_status when nodes are dynamically removed."""
+        self._setup_triangle_with_center()
+
+        # Initially verify the center node is enclosed
+        self.app.boundary_manager.update_enclosure_status()
+        self.assertTrue(self.app.circle_lookup[4]['enclosed'])
+
+        # Dynamically remove one of the triangle corners
+        self.app.circle_manager.remove_circle_by_id(1)
+
+        # Update enclosure status
+        self.app.boundary_manager.update_enclosure_status()
+
+        # Verify the center node is no longer enclosed
+        self.assertFalse(self.app.circle_lookup[4]['enclosed'])
+
+    def test_calculate_corrected_angle_invalid_circle(self):
+        """Test _calculate_corrected_angle with invalid circle data."""
+        circle = self._create_test_circle(1, 50, 50)
+        self.app.circle_lookup = {1: circle}
+
+        # Pass a non-existent neighbor ID
+        angle = self.app.boundary_manager._calculate_corrected_angle(circle, 99)
+
+        # Verify angle is 0 (default for invalid data)
+        self.assertEqual(angle, 0)
+
+    def test_calculate_corrected_angle_extreme_curve_offsets(self):
+        """Test _calculate_corrected_angle with extreme curve offsets."""
+        circle1 = self._create_test_circle(1, 100, 100)
+        circle2 = self._create_test_circle(2, 200, 200)
+        self.app.circle_lookup = {1: circle1, 2: circle2}
+
+        with patch.object(self.app.connection_manager, 'get_connection_curve_offset', return_value=(1000, 1000)):
+            angle = self.app.boundary_manager._calculate_corrected_angle(circle1, 2)
+
+        # Verify angle is calculated correctly
+        self.assertGreater(angle, 0)
+        self.assertLess(angle, 360)
+
+    def test_update_enclosure_status_dynamic_complex_addition(self):
+        """Test update_enclosure_status with complex dynamic additions."""
+        self._setup_square()
+
+        # Initially verify no nodes are enclosed
+        self.app.boundary_manager.update_enclosure_status()
+        for circle in self.app.circles:
+            self.assertFalse(circle['enclosed'])
+
+        # Dynamically add a new node inside the square
+        new_circle = self._create_test_circle(5, 100, 100)
+        self.app.circles.append(new_circle)
+        self.app.circle_lookup[5] = new_circle
+
+        # Connect the new node to all square corners
+        self.app.connection_manager.add_connection(5, 1)
+        self.app.connection_manager.add_connection(5, 2)
+        self.app.connection_manager.add_connection(5, 3)
+        self.app.connection_manager.add_connection(5, 4)
+
+        # Update enclosure status
+        self.app.boundary_manager.update_enclosure_status()
+
+        # Verify the new node is enclosed
+        self.assertTrue(self.app.circle_lookup[5]['enclosed'])
+
+    def test_update_enclosure_status_dynamic_complex_removal(self):
+        """Test update_enclosure_status with complex dynamic removals."""
+        self._setup_square()
+
+        # Dynamically add a new node inside the square
+        new_circle = self._create_test_circle(5, 100, 100)
+        self.app.circles.append(new_circle)
+        self.app.circle_lookup[5] = new_circle
+
+        # Connect the new node to all square corners
+        self.app.connection_manager.add_connection(5, 1)
+        self.app.connection_manager.add_connection(5, 2)
+        self.app.connection_manager.add_connection(5, 3)
+        self.app.connection_manager.add_connection(5, 4)
+
+        # Update enclosure status
+        self.app.boundary_manager.update_enclosure_status()
+
+        # Verify the new node is enclosed
+        self.assertTrue(self.app.circle_lookup[5]['enclosed'])
+
+        # Dynamically remove one of the square corners
+        self.app.circle_manager.remove_circle_by_id(1)
+
+        # Update enclosure status
+        self.app.boundary_manager.update_enclosure_status()
+
+        # Verify the new node is no longer enclosed
+        self.assertFalse(self.app.circle_lookup[5]['enclosed'])
+
+    def test_calculate_corrected_angle_zero_length_connection(self):
+        """Test _calculate_corrected_angle with zero-length connection."""
+        circle1 = self._create_test_circle(1, 100, 100)
+        circle2 = self._create_test_circle(2, 100, 100)  # Same coordinates as circle1
+        self.app.circle_lookup = {1: circle1, 2: circle2}
+
+        with patch.object(self.app.connection_manager, 'get_connection_curve_offset', return_value=(0, 0)):
+            angle = self.app.boundary_manager._calculate_corrected_angle(circle1, 2)
+
+        # Verify angle is 0 (or a default value) since nodes overlap
+        self.assertEqual(angle, 0)
+
+    def test_update_enclosure_status_multiple_dynamic_changes(self):
+        """Test update_enclosure_status with multiple dynamic additions and removals."""
+        self._setup_square()
+
+        # Initially verify no nodes are enclosed
+        self.app.boundary_manager.update_enclosure_status()
+        for circle in self.app.circles:
+            self.assertFalse(circle['enclosed'])
+
+        # Dynamically add a new node inside the square
+        new_circle = self._create_test_circle(5, 100, 100)
+        self.app.circles.append(new_circle)
+        self.app.circle_lookup[5] = new_circle
+
+        # Connect the new node to all square corners
+        self.app.connection_manager.add_connection(5, 1)
+        self.app.connection_manager.add_connection(5, 2)
+        self.app.connection_manager.add_connection(5, 3)
+        self.app.connection_manager.add_connection(5, 4)
+
+        # Update enclosure status
+        self.app.boundary_manager.update_enclosure_status()
+
+        # Verify the new node is enclosed
+        self.assertTrue(self.app.circle_lookup[5]['enclosed'])
+
+        # Dynamically remove one of the square corners
+        self.app.circle_manager.remove_circle_by_id(1)
+
+        # Update enclosure status
+        self.app.boundary_manager.update_enclosure_status()
+
+        # Verify the new node is no longer enclosed
+        self.assertFalse(self.app.circle_lookup[5]['enclosed'])
+
 if __name__ == "__main__":
     unittest.main()

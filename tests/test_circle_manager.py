@@ -147,3 +147,186 @@ class TestCircleManager(MockAppTestCase):
         self.assertEqual(created_circle["connected_to"], [])
         self.assertEqual(created_circle["ordered_connections"], [])
         self.assertIsNotNone(created_circle["canvas_id"])
+    
+    def test_get_circle_at_coords_multiple_overlapping(self):
+        """Test finding the topmost circle when multiple circles overlap."""
+        circle1 = self._create_test_circle(1, 50, 50)
+        circle2 = self._create_test_circle(2, 55, 55)  # Overlapping circle
+        self.app.circles = [circle1, circle2]
+        self.app.circle_lookup = {1: circle1, 2: circle2}
+        self.app.circle_radius = 10
+
+        result = self.app.get_circle_at_coords(55, 55)  # Inside both circles
+        self.assertEqual(result, 2)  # Topmost circle should be returned
+
+    def test_remove_circle_by_id_with_multiple_connections(self):
+        """Test removing a circle with multiple connections."""
+        circle1 = self._create_test_circle(1, 50, 50, connections=[2, 3])
+        circle2 = self._create_test_circle(2, 100, 50, connections=[1])
+        circle3 = self._create_test_circle(3, 50, 100, connections=[1])
+
+        self.app.circles = [circle1, circle2, circle3]
+        self.app.circle_lookup = {1: circle1, 2: circle2, 3: circle3}
+
+        # Create connections
+        self.app.connections = {
+            "1_2": {"line_id": 201, "from_circle": 1, "to_circle": 2},
+            "1_3": {"line_id": 202, "from_circle": 1, "to_circle": 3}
+        }
+
+        # Mock remove_circle_connections
+        with patch.object(self.app, '_remove_circle_connections') as mock_remove_connections:
+            result = self.app._remove_circle_by_id(1)
+
+            self.assertTrue(result)
+            mock_remove_connections.assert_called_once_with(1)
+            self.app.canvas.delete.assert_any_call(201)
+            self.app.canvas.delete.assert_any_call(202)
+            self.assertEqual(len(self.app.circles), 2)
+            self.assertNotIn(1, self.app.circle_lookup)
+
+    def test_handle_last_circle_removed_canvas_reset(self):
+        """Test that the canvas is reset when the last circle is removed."""
+        self.app.circles = []
+        self.app.circle_lookup = {}
+        self.app.connections = {}
+
+        with patch.object(self.app, '_set_application_mode') as mock_set_mode:
+            self.app._handle_last_circle_removed()
+
+            mock_set_mode.assert_called_with(ApplicationMode.CREATE)
+            self.app.canvas.delete.assert_called_with("all")
+            self.assertEqual(self.app.drawn_items, [])
+            self.assertEqual(self.app.connections, {})
+            self.assertIsNone(self.app.last_circle_id)
+            self.assertEqual(self.app.next_id, 1)
+
+    def test_get_circle_at_coords_no_circles(self):
+        """Test get_circle_at_coords when no circles exist."""
+        self.app.circles = []
+        self.app.circle_lookup = {}
+        self.app.circle_radius = 10
+
+        result = self.app.get_circle_at_coords(50, 50)
+        self.assertIsNone(result)
+
+    def test_get_circle_at_coords_on_edge(self):
+        """Test get_circle_at_coords when coordinates are on the edge of a circle."""
+        circle = self._create_test_circle(1, 50, 50)
+        self.app.circles = [circle]
+        self.app.circle_lookup = {1: circle}
+        self.app.circle_radius = 10
+
+        result = self.app.get_circle_at_coords(60, 50)  # Exactly on the edge
+        self.assertEqual(result, 1)
+
+    def test_remove_circle_by_id_complex_graph(self):
+        """Test removing a circle that is part of a complex graph."""
+        circle1 = self._create_test_circle(1, 50, 50, connections=[2, 3, 4])
+        circle2 = self._create_test_circle(2, 100, 50, connections=[1])
+        circle3 = self._create_test_circle(3, 50, 100, connections=[1])
+        circle4 = self._create_test_circle(4, 100, 100, connections=[1])
+
+        self.app.circles = [circle1, circle2, circle3, circle4]
+        self.app.circle_lookup = {1: circle1, 2: circle2, 3: circle3, 4: circle4}
+
+        # Create connections
+        self.app.connections = {
+            "1_2": {"line_id": 201, "from_circle": 1, "to_circle": 2},
+            "1_3": {"line_id": 202, "from_circle": 1, "to_circle": 3},
+            "1_4": {"line_id": 203, "from_circle": 1, "to_circle": 4}
+        }
+
+        # Mock remove_circle_connections
+        with patch.object(self.app, '_remove_circle_connections') as mock_remove_connections:
+            result = self.app._remove_circle_by_id(1)
+
+            self.assertTrue(result)
+            mock_remove_connections.assert_called_once_with(1)
+            self.app.canvas.delete.assert_any_call(201)
+            self.app.canvas.delete.assert_any_call(202)
+            self.app.canvas.delete.assert_any_call(203)
+            self.assertEqual(len(self.app.circles), 3)
+            self.assertNotIn(1, self.app.circle_lookup)
+
+    def test_get_circle_at_coords_boundary_overlap(self):
+        """Test get_circle_at_coords with coordinates on the boundary of overlapping circles."""
+        circle1 = self._create_test_circle(1, 50, 50)
+        circle2 = self._create_test_circle(2, 60, 50)  # Overlapping boundary
+        self.app.circles = [circle1, circle2]
+        self.app.circle_lookup = {1: circle1, 2: circle2}
+        self.app.circle_radius = 10
+
+        result = self.app.get_circle_at_coords(60, 50)  # On the boundary of both circles
+        self.assertEqual(result, 2)  # Topmost circle should be returned
+
+    def test_get_circle_at_coords_negative_coords(self):
+        """Test get_circle_at_coords with negative coordinates."""
+        circle = self._create_test_circle(1, 50, 50)
+        self.app.circles = [circle]
+        self.app.circle_lookup = {1: circle}
+        self.app.circle_radius = 10
+
+        result = self.app.get_circle_at_coords(-10, -10)  # Negative coordinates
+        self.assertIsNone(result)
+
+    def test_remove_circle_by_id_no_connections(self):
+        """Test removing a circle that has no connections."""
+        circle = self._create_test_circle(1, 50, 50)
+        self.app.circles = [circle]
+        self.app.circle_lookup = {1: circle}
+
+        # Mock remove_circle_connections
+        with patch.object(self.app, '_remove_circle_connections') as mock_remove_connections:
+            result = self.app._remove_circle_by_id(1)
+
+            self.assertTrue(result)
+            mock_remove_connections.assert_not_called()  # No connections to remove
+            self.app.canvas.delete.assert_called_once_with(101)
+            self.assertEqual(len(self.app.circles), 0)
+            self.assertNotIn(1, self.app.circle_lookup)
+
+    def test_get_circle_at_coords_invalid_radius(self):
+        """Test get_circle_at_coords with an invalid circle radius."""
+        circle = self._create_test_circle(1, 50, 50)
+        self.app.circles = [circle]
+        self.app.circle_lookup = {1: circle}
+        self.app.circle_radius = -10  # Invalid radius
+
+        result = self.app.get_circle_at_coords(50, 50)
+        self.assertIsNone(result)  # Should not find any circle
+
+    def test_remove_circle_by_id_dynamic_removal(self):
+        """Test removing circles dynamically in a complex graph."""
+        # Create a graph with multiple circles and connections
+        circles = [
+            self._create_test_circle(1, 50, 50, connections=[2, 3]),
+            self._create_test_circle(2, 100, 50, connections=[1, 3]),
+            self._create_test_circle(3, 150, 50, connections=[1, 2])
+        ]
+
+        self.app.circles = circles
+        self.app.circle_lookup = {c["id"]: c for c in circles}
+
+        # Add connections
+        self.app.connections = {
+            "1_2": {"line_id": 1012, "from_circle": 1, "to_circle": 2},
+            "1_3": {"line_id": 1013, "from_circle": 1, "to_circle": 3},
+            "2_3": {"line_id": 1023, "from_circle": 2, "to_circle": 3}
+        }
+
+        # Remove circle 1 dynamically
+        with patch.object(self.app, '_remove_circle_connections') as mock_remove_connections:
+            result = self.app._remove_circle_by_id(1)
+
+            self.assertTrue(result)
+            mock_remove_connections.assert_called_once_with(1)
+            self.app.canvas.delete.assert_any_call(1012)
+            self.app.canvas.delete.assert_any_call(1013)
+            self.assertEqual(len(self.app.circles), 2)
+            self.assertNotIn(1, self.app.circle_lookup)
+
+        # Verify remaining connections
+        self.assertNotIn("1_2", self.app.connections)
+        self.assertNotIn("1_3", self.app.connections)
+        self.assertIn("2_3", self.app.connections)

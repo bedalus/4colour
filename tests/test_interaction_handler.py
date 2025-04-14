@@ -534,3 +534,128 @@ class TestInteractionHandler(MockAppTestCase):
 
         # Verify no exceptions are raised and no actions are performed
         self.assertTrue(True)
+
+    def test_drag_start_invalid_target(self):
+        """Test that drag start does not activate for invalid targets."""
+        event = self._create_click_event(200, 200)  # No circle at this position
+        self.app.interaction_handler.drag_start(event)
+
+        # Verify drag state is not activated
+        self.assertFalse(self.app.drag_state["active"])
+
+    def test_drag_motion_outside_proximity_limit(self):
+        """Test that dragging outside the proximity limit is prevented."""
+        circle = self._create_test_circle(1, 50, 50)
+        self.app.circles = [circle]
+        self.app.circle_lookup = {1: circle}
+        self.app.drag_state = {
+            "active": True,
+            "type": "circle",
+            "id": 1,
+            "start_x": 50,
+            "start_y": 50,
+            "last_x": 50,
+            "last_y": 50
+        }
+
+        # Set proximity limit to 30 for testing
+        self.app.PROXIMITY_LIMIT = 30
+
+        event = self._create_click_event(100, 100)  # Outside proximity limit
+        self.app.interaction_handler.drag_motion(event)
+
+        # Verify the circle's position is not updated
+        self.assertEqual(circle["x"], 50)
+        self.assertEqual(circle["y"], 50)
+
+    def test_remove_circle_in_selection_mode(self):
+        """Test that remove_circle does nothing in selection mode."""
+        self.app.interaction_handler.set_application_mode(ApplicationMode.SELECTION)
+
+        with patch.object(self.app.circle_manager, 'get_circle_at_coords') as mock_get_circle:
+            with patch.object(self.app.circle_manager, 'remove_circle_by_id') as mock_remove_by_id:
+                event = self._create_click_event(50, 50, button=3)  # Right-click
+                self.app.interaction_handler.remove_circle(event)
+
+        mock_get_circle.assert_not_called()
+        mock_remove_by_id.assert_not_called()
+
+    def test_drag_motion_at_proximity_limit(self):
+        """Test dragging a circle to the exact boundary of the proximity limit."""
+        circle = self._create_test_circle(1, 50, 50)
+        self.app.circles = [circle]
+        self.app.circle_lookup = {1: circle}
+        self.app.drag_state = {
+            "active": True,
+            "type": "circle",
+            "id": 1,
+            "start_x": 50,
+            "start_y": 50,
+            "last_x": 50,
+            "last_y": 50
+        }
+
+        # Set proximity limit to 50 for testing
+        self.app.PROXIMITY_LIMIT = 50
+
+        event = self._create_click_event(100, 50)  # Exactly at the limit
+        self.app.interaction_handler.drag_motion(event)
+
+        # Verify the circle's position is updated
+        self.assertEqual(circle["x"], 100)
+        self.assertEqual(circle["y"], 50)
+
+    def test_drag_motion_with_overlapping_connections(self):
+        """Test dragging a circle with overlapping connections."""
+        circle1 = self._create_test_circle(1, 50, 50, connections=[2, 3])
+        circle2 = self._create_test_circle(2, 150, 50, connections=[1])
+        circle3 = self._create_test_circle(3, 50, 150, connections=[1])
+
+        self.app.circles = [circle1, circle2, circle3]
+        self.app.circle_lookup = {1: circle1, 2: circle2, 3: circle3}
+
+        # Set drag state as if circle 1 is being dragged
+        self.app.drag_state = {
+            "active": True,
+            "type": "circle",
+            "id": 1,
+            "start_x": 50,
+            "start_y": 50,
+            "last_x": 50,
+            "last_y": 50
+        }
+
+        # Mock update_connections to verify it is called for all connections
+        with patch.object(self.app.connection_manager, 'update_connections') as mock_update:
+            event = self._create_click_event(60, 60)
+            self.app.interaction_handler.drag_motion(event)
+
+            # Verify the circle's position is updated
+            self.assertEqual(circle1["x"], 60)
+            self.assertEqual(circle1["y"], 60)
+
+            # Verify connections are updated
+            mock_update.assert_called_once_with(1)
+
+    def test_remove_circle_in_complex_graph(self):
+        """Test removing a circle that is part of a complex graph."""
+        circle1 = self._create_test_circle(1, 50, 50, connections=[2, 3])
+        circle2 = self._create_test_circle(2, 150, 50, connections=[1])
+        circle3 = self._create_test_circle(3, 50, 150, connections=[1])
+
+        self.app.circles = [circle1, circle2, circle3]
+        self.app.circle_lookup = {1: circle1, 2: circle2, 3: circle3}
+
+        # Mock get_circle_at_coords to return the ID of the circle to remove
+        with patch.object(self.app.circle_manager, 'get_circle_at_coords', return_value=1):
+            # Mock the actual removal method in circle_manager
+            with patch.object(self.app.circle_manager, 'remove_circle_by_id', return_value=True) as mock_remove_by_id:
+                # Mock the enclosure update call
+                with patch.object(self.app, '_update_enclosure_status') as mock_update_enclosure:
+                    event = self._create_click_event(50, 50, button=3)  # Right-click
+                    self.app.interaction_handler.remove_circle(event)
+
+                    # Verify remove_circle_by_id was called
+                    mock_remove_by_id.assert_called_once_with(1)
+                    # Verify enclosure status was updated
+                    mock_update_enclosure.assert_called_once()

@@ -364,3 +364,53 @@ class TestUIManager(MockAppTestCase):
         self.app.ui_manager.visualization_items = []
         self.app.ui_manager.clear_angle_visualizations()
         self.app.canvas.delete.assert_not_called()
+
+    def test_show_debug_info_multiple_active_circles(self):
+        """Test showing debug info for multiple active circles."""
+        circle1 = self._create_test_circle(1, 50, 50, color_priority=1, connections=[2])
+        circle2 = self._create_test_circle(2, 100, 100, color_priority=2, connections=[1])
+        self.app.circles = [circle1, circle2]
+        self.app.circle_lookup = {1: circle1, 2: circle2}
+        self.app.ui_manager.set_active_circles(1, 2)
+
+        self.app.ui_manager.show_debug_info()
+
+        # Verify debug info is displayed for both circles
+        self.app.canvas.create_text.assert_called_once()
+        args, kwargs = self.app.canvas.create_text.call_args
+        self.assertIn("Circle ID: 1", kwargs['text'])
+        self.assertIn("Circle ID: 2", kwargs['text'])
+
+    def test_format_circle_info_missing_fields(self):
+        """Test formatting circle info with missing fields."""
+        circle = {
+            "id": 1,
+            "x": 50,
+            "y": 50,
+            "color_priority": 1,
+            "connected_to": []
+            # Missing 'ordered_connections' and 'enclosed'
+        }
+
+        formatted_info = self.app.ui_manager._format_circle_info(circle)
+
+        # Verify the formatted info handles missing fields gracefully
+        self.assertIn("Circle ID: 1", formatted_info)
+        self.assertIn("Position: (50, 50)", formatted_info)
+        self.assertIn("Connected to: None", formatted_info)
+        self.assertIn("Clockwise order: None", formatted_info)
+        self.assertIn("Enclosed: False", formatted_info)
+
+    def test_draw_connection_angle_visualizations_valid_key(self):
+        """Test drawing connection angle visualizations with a valid key."""
+        circle1 = self._create_test_circle(1, 50, 50, connections=[2])
+        circle2 = self._create_test_circle(2, 100, 100, connections=[1])
+        self.app.circles = [circle1, circle2]
+        self.app.circle_lookup = {1: circle1, 2: circle2}
+
+        with patch.object(self.app.connection_manager, 'calculate_connection_entry_angle', return_value=90):
+            viz_ids = self.app.ui_manager.draw_connection_angle_visualizations("1_2")
+
+        # Verify visualization lines are created
+        self.assertEqual(len(viz_ids), 2)
+        self.app.canvas.create_line.assert_called()
