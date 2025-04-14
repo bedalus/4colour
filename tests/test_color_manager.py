@@ -369,8 +369,8 @@ class TestColorManager(MockAppTestCase):
         # So we can optimize by reassigning it to color 2
         original_priority = circle1["color_priority"]
         
-        # Call color optimization method
-        self.app.color_manager.optimize_circle_color(1)
+        # Call color conflict resolution method instead of non-existent optimize_circle_color
+        self.app.color_manager.check_and_resolve_color_conflicts(1)
         
         # Circle 1 should now have lowest possible priority (2)
         self.assertLess(circle1["color_priority"], original_priority)

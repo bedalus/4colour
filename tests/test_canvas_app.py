@@ -152,7 +152,9 @@ class TestCanvasApplication(MockAppTestCase):
             "start_x": 0,
             "start_y": 0,
             "last_x": 0,
-            "last_y": 0
+            "last_y": 0,
+            "curve_x": 0,  # Added expected key
+            "curve_y": 0   # Added expected key
         })
 
     def test_drag_circle_motion(self):
