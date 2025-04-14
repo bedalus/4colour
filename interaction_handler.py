@@ -538,97 +538,62 @@ class InteractionHandler:
             self.app.ui_manager.show_debug_info()
     
     def drag_circle_motion(self, circle_id, dx, dy):
-        """Handle circle dragging motion.
-        
-        Args:
-            circle_id: ID of the circle being dragged
-            dx: Change in X position
-            dy: Change in Y position
-        """
+        """Handle circle dragging motion."""
         circle = self.app.circle_lookup.get(circle_id)
         if not circle:
             return
-        
-        # Update circle position on canvas
+
+        # Calculate the new position
+        new_x = circle["x"] + dx
+        new_y = circle["y"] + dy
+
+        # Prevent dragging into the protected zone
+        if new_x < self.app.PROXIMITY_LIMIT and new_y < self.app.PROXIMITY_LIMIT:
+            return
+
+        # Update circle position
         self.app.canvas.move(circle["canvas_id"], dx, dy)
-        
-        # Update circle data
-        circle["x"] += dx
-        circle["y"] += dy
-        
-        # Remove connection update during dragging - will be done at drag_end instead
-    
+        circle["x"] = new_x
+        circle["y"] = new_y
+
     def drag_midpoint_motion(self, x, y):
-        """Handle midpoint dragging motion.
-        
-        Args:
-            x: Current X coordinate
-            y: Current Y coordinate
-        """
+        """Handle midpoint dragging motion."""
         connection_key = self.app.drag_state["id"]
         connection = self.app.connections.get(connection_key)
         if not connection:
             return
-        
-        # Get the circle IDs for this connection
-        from_id = connection["from_circle"]
-        to_id = connection["to_circle"]
-        
-        # Get the circles
-        from_circle = self.app.circle_lookup.get(from_id)
-        to_circle = self.app.circle_lookup.get(to_id)
+
+        # Prevent dragging into the protected zone
+        if x < self.app.PROXIMITY_LIMIT and y < self.app.PROXIMITY_LIMIT:
+            return
+
+        # Calculate new curve offset
+        from_circle = self.app.circle_lookup.get(connection["from_circle"])
+        to_circle = self.app.circle_lookup.get(connection["to_circle"])
         if not from_circle or not to_circle:
             return
-        
-        # Check for proximity restrictions - prevent dragging into the restricted zone
-        if x < self.app.PROXIMITY_LIMIT and y < self.app.PROXIMITY_LIMIT:
-            # Position is in the restricted zone near origin and fixed nodes
-            return
-        
-        # Calculate the base midpoint (without any curve offset)
+
         base_mid_x, base_mid_y = self.app.connection_manager.calculate_midpoint(from_circle, to_circle)
-        
-        # Calculate the new curve offset based on the current position
-        # Double the offset to make the curve follow the handle correctly
         new_curve_x = (x - base_mid_x) * 2
         new_curve_y = (y - base_mid_y) * 2
-        
-        # Store the calculated curve offset in drag_state for use on drag_end
+
+        # Store curve offset and move handle visually
         self.app.drag_state["curve_x"] = new_curve_x
         self.app.drag_state["curve_y"] = new_curve_y
-        
-        # Just move the handle visually without updating the curve
         handle_id = self.app.midpoint_handles.get(connection_key)
         if handle_id:
-            # Move the handle rectangle to the new position
             self.app.canvas.coords(
                 handle_id,
-                x - self.app.midpoint_radius, 
-                y - self.app.midpoint_radius,
-                x + self.app.midpoint_radius, 
-                y + self.app.midpoint_radius
+                x - self.app.midpoint_radius, y - self.app.midpoint_radius,
+                x + self.app.midpoint_radius, y + self.app.midpoint_radius
             )
-        
-        # Update angle visualizations without updating the actual curve
-        # First clear existing visualizations
-        self.app.ui_manager.clear_angle_visualizations()
-        
-        # Temporarily update connection curve offsets for angle calculation
-        original_curve_x = connection.get("curve_X", 0)
-        original_curve_y = connection.get("curve_Y", 0)
-        connection["curve_X"] = new_curve_x
-        connection["curve_Y"] = new_curve_y
-        
-        # Draw angle visualizations based on temporary curve values
+
+        # Temporarily update connection for angle visualization
+        original_curve_x, original_curve_y = connection.get("curve_X", 0), connection.get("curve_Y", 0)
+        connection["curve_X"], connection["curve_Y"] = new_curve_x, new_curve_y
         self.app.ui_manager.draw_connection_angle_visualizations(connection_key)
-        
-        # Restore original curve offsets (since we're not updating the actual curve until drag_end)
-        connection["curve_X"] = original_curve_x
-        connection["curve_Y"] = original_curve_y
-        
-        # Stop event propagation
-        return "break"
-    
+        connection["curve_X"], connection["curve_Y"] = original_curve_x, original_curve_y
+
     def remove_circle(self, event):
         """Handler stub for backward compatibility."""
         pass
