@@ -588,6 +588,9 @@ class InteractionHandler:
                 x + self.app.midpoint_radius, y + self.app.midpoint_radius
             )
 
+        # Clear previous visualization lines before drawing new ones
+        self.app.ui_manager.clear_angle_visualizations()
+        
         # Temporarily update connection for angle visualization
         original_curve_x, original_curve_y = connection.get("curve_X", 0), connection.get("curve_Y", 0)
         connection["curve_X"], connection["curve_Y"] = new_curve_x, new_curve_y
