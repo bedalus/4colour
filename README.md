@@ -26,76 +26,52 @@ NOTE: These guidelines apply only to code in the 4colour repo.
 
 ## Test-Driven Development
 
-To ensure smooth development and avoid regressions:
+- Update unit tests whenever functionality changes - they're as important as the implementation
+- Tests should match the behavior of your implementation
+- Run tests before and after making changes to verify correctness
+- All new features must have corresponding tests
+- Consider writing tests before implementing features to clarify requirements
 
-- Update unit tests whenever functionality changes - this is as important as the implementation itself.
-- Tests should be updated to match the new behavior, not the other way around.
-- Run tests before and after making changes to verify that your implementation works correctly.
-- If a test fails, understand whether it's because of a bug in the implementation or because the test needs to be updated for new behavior.
-- All new features must have corresponding tests in the `tests` directory.
-- Consider writing tests before implementing a feature to clarify expected behavior.
+Note: Some tests may intentionally fail if they were written to describe future functionality that hasn't been implemented yet (especially in Phase 16).
 
-Note: Some tests may intentionally fail if they were written to describe future functionality that hasn't been implemented yet (especially in Phase 16). This is part of our test-driven development approach.
+```bash
+# Run basic tests
+python -m unittest discover -s tests
 
-Tests can be run with: python -m unittest discover -s tests
+# Run with runtime logging
+python log_function_calls.py
 
-If running with runtime logging: python log_function_calls.py
+# Run with coverage analysis (requires: pip install coverage pandas matplotlib)
+python -m tests.run_coverage
+```
 
-To analyse the results*: python analyze_call_logs.py
-
-(* if missing pandas/matplotlib, open a terminal as admin, then: pip install pandas matplotlib)
-
-Install coverage if missing: pip install coverage (as an admin)
-
-Run: python -m tests.run_coverage (normal user)
-
-This runs all tests with coverage management and produces a report. Read tests/README.md for more detail.
+Read tests/README.md for more details on test coverage analysis.
 
 ## Planning
 
-New work items should be itemized and preceded by an empty checkbox (`- [ ]`). When engaging in a new coding session to implement new features and improvements, follow the requirements in sequential order starting at the first unmarked checkbox. Once the feature and corresponding unit tests are written or updated to the required specification, mark the checkbox as complete ([x]) to track progress. Always remember to complete this step.
+Work items use checkboxes (`- [ ]`) and should be completed in sequential order. Mark tasks complete (`- [x]`) when both implementation and tests are finished. Update the Project Structure section when files change.
 
-If new files are introduced, or if files are removed, update the '## Project Structure' section below accordingly.
-
-**Introducing New Work Phases:**
-
-When the current phase's objectives are complete or a new major area of work is identified, introduce a new phase at the end of this ReadMe file. Follow the following format:
-
-1.  **Add a Phase Heading:** Use a level 3 Markdown heading with the format `### Phase [Number]: [Brief, Descriptive Title]`. Increment the phase number sequentially.
-2.  **Write a Summary:** Immediately below the heading, add a short paragraph summarizing the overall goal or focus of this new phase. Explain *why* this work is being undertaken.
-3.  **Structure Work Items:** List the specific tasks for the phase using the standard format:
-    *   Start each major task with `- [ ] **Task Description:**`. Use bold text for the main task description.
-    *   Use nested bullet points (`    * Sub-task or detail`) for breaking down the main task or adding specific implementation notes.
+When adding new phases:
+1. Use level 3 heading: `### Phase [Number]: [Brief Title]`
+2. Include a summary paragraph explaining the goal
+3. List tasks with main items in bold and nested bullet points for subtasks
 
 ## Project Structure
 
 The project is organized into the following key files and directories:
 
-*   `README.md`: The current file. This outlines the goals of the project and can be updated as required, e.g. when planning.
-*   `canvas_app.py`: The main application class that initializes the UI and managers.
-*   `ui_manager.py`: Handles UI elements like buttons, hint text, and the debug overlay.
-*   `circle_manager.py`: Manages circle data (creation, storage, retrieval, removal).
-*   `connection_manager.py`: Manages connections between circles, including drawing lines, handling curves, and midpoint interactions.
-*   `interaction_handler.py`: Processes user input events (clicks, drags, key presses) and manages application mode transitions.
-*   `color_manager.py`: Implements the logic for assigning colors based on priority and resolving conflicts between connected circles.
-*   `color_utils.py`: Provides utility functions for mapping color priorities to names and finding available priorities.
-*   `app_enums.py`: Defines enumerations used across the application, such as `ApplicationMode`.
-*   `boundary_manager.py`: Identifies outer boundary nodes and updates enclosure status.
-*   `function_logger.py`: Instruments modules to log function calls for debugging and analysis.
-*   `log_function_calls.py`: Runs the application with function call logging enabled.
-*   `analyze_call_logs.py`: Analyzes function call logs to generate insights.
-*   `tests/`: Contains all unit and integration tests:
-    * `test_app_enums.py`: Tests for application enum definitions.
-    * `test_boundary_manager.py`: Tests for boundary detection and enclosure status.
-    * `test_canvas_app.py`: Tests for the main canvas application class.
-    * `test_circle_manager.py`: Tests for circle creation, removal, and data management.
-    * `test_color_manager.py`: Tests for color assignment and conflict resolution logic.
-    * `test_color_utils.py`: Tests for color utility functions.
-    * `test_connection_manager.py`: Tests for connection creation, curve management, and angle calculations.
-    * `test_integration.py`: Tests for interactions between multiple components and workflows.
-    * `test_interaction_handler.py`: Tests for user input handling, mode transitions, and drag/drop logic.
-    * `test_ui_manager.py`: Tests for UI element management and display updates.
-    * `test_utils.py`: Contains testing utilities and mock objects like `MockAppTestCase`.
+*   `README.md`: Current file with project goals and planning
+*   `canvas_app.py`: Main application class
+*   `ui_manager.py`: UI element management
+*   `circle_manager.py`: Circle data operations
+*   `connection_manager.py`: Connection management and visualization
+*   `interaction_handler.py`: User input processing and mode transitions
+*   `color_manager.py`: Color assignment and conflict resolution
+*   `color_utils.py`: Color utility functions
+*   `app_enums.py`: Application enumerations
+*   `boundary_manager.py`: Boundary node identification
+*   `function_logger.py`, `log_function_calls.py`, `analyze_call_logs.py`: Debugging tools
+*   `tests/`: Unit and integration tests
 
 ### Resources
 
@@ -104,25 +80,19 @@ The project is organized into the following key files and directories:
 
 ### Phases 1-7 Summary
 
-The initial development phases (1-7) established the core functionality of the canvas application. This included setting up the Tkinter UI, implementing basic circle drawing and random coloring on click, adding data storage for circle properties (ID, coordinates, color, connections), and introducing a mechanism to connect circles. A selection mode was implemented, allowing users to place a circle and then select existing circles to connect to, confirming with the 'y' key. An "adjust" mode was added to allow moving circles via drag-and-drop and removing circles via right-click. Significant refactoring occurred, including centralizing event binding management based on application modes (CREATE, ADJUST, SELECTION), improving mode transitions, enhancing UI feedback (button text, hint text, canvas background color changes), and consolidating circle removal logic.
+The initial development phases established core functionality: Tkinter UI, circle drawing with coloring, data storage, connection mechanisms, selection mode for connecting circles, adjust mode for moving/removing circles, and event binding management with improved mode transitions and UI feedback.
 
 ### Phase 8-9: Summary
 
-Phases 8 and 9 focused on implementing deterministic coloring based on the Four Color Theorem, followed by optimization and refactoring. A color priority system (1=yellow, 2=green, 3=blue, 4=red) was established with utility functions to convert between priorities and color names. The application now assigns colors based on connections—when two connected circles have the same color, a conflict resolution algorithm assigns the lowest available priority color to ensure connected circles never share the same color. A placeholder for advanced network color reassignment was added for cases when all lower priorities are used. The codebase was then optimized by removing redundant color fields, since colors are now derived directly from priorities. Utility functions were extracted to a separate module to improve reusability and testability. Comprehensive unit tests were added for all the new functionality, ensuring the coloring logic works correctly across various scenarios.
+These phases implemented deterministic coloring based on the Four Color Theorem with a priority system (1=yellow, 2=green, 3=blue, 4=red), conflict resolution, and codebase optimization through extracted utility functions and comprehensive tests.
 
 ### Phase 10-11: Summary
 
-Phase 10 enhanced connections with curved lines using Tkinter's smoothing, adding draggable midpoints to adjust curve shapes. Displacement vectors store curve offsets, maintained when circles move. Unit tests verified curve behavior in various scenarios.
-
-Phase 11 expanded integration tests (`test_integration.py`) to cover complex component interactions. Tests were added for dragging circles and midpoints, ensuring coordinate and connection updates. Removal cascade tests were enhanced to verify neighbor updates and color conflict checks. New tests validated color conflict resolution during connections, the complete reset functionality of clearing the canvas, and the side effects of mode transitions (e.g., midpoint handle visibility, hint text display, background color changes).
+Phase 10 added curved connections with draggable midpoints using displacement vectors. Phase 11 expanded integration tests covering interactions between components, including drag behavior, removal cascades, color conflict resolution, and mode transition side effects.
 
 ### Phase 13-15: Summary
 
-Phase 13 established a method to determine the clockwise order of connections around each circle, storing this in ordered_connections (connection_manager.py). This is necessary functionality for the 'Right-hand' rule commonly used in planar graphs when establishing the 'outer face'.
-
-Phase 14 introduced the ability to distinguish between circles on the outer boundary and those enclosed within faces. The `enclosed` attribute was added to circle data, and the `_update_enclosure_status` method in `CanvasApplication` identifies boundary nodes on the 'outer face' using a traversal algorithm. The traversal relies on the clockwise `ordered_connections` list for each circle, ensuring accurate boundary detection even with curved connections. Tests were added to validate the enclosure status under various graph configurations.
-
-Phase 15 ensured a consistent starting point for the outer face traversal by introducing two fixed nodes (Node A and Node B) connected by a fixed edge. These nodes are created at initialization and cannot be moved or removed. Proximity restrictions prevent placing new nodes or dragging midpoint handles into a restricted zone near the fixed nodes. The `_update_enclosure_status` method was updated to always start traversal from Node A. Tests were updated and added to verify the behavior of fixed nodes, proximity restrictions, and traversal logic.
+Phase 13 implemented clockwise connection ordering. Phase 14 added boundary detection to distinguish between outer and enclosed circles. Phase 15 introduced fixed nodes for consistent traversal starting points and proximity restrictions.
 
 ### Phase 16: Advanced Color Network Reassignment
 
