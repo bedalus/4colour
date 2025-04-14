@@ -109,6 +109,41 @@ class CanvasApplication:
         
         # Create fixed outer nodes
         self._initialize_fixed_nodes()
+        
+        # Bind to window resize event
+        self.root.bind("<Configure>", self._on_window_resize)
+    
+    def _on_window_resize(self, event):
+        """Update canvas dimensions when window is resized.
+        
+        Args:
+            event: Window resize event
+        """
+        if event.widget == self.root:
+            # Small delay to allow canvas to finish resizing
+            self.root.after(100, self._update_canvas_dimensions)
+    
+    def _update_canvas_dimensions(self):
+        """Update stored canvas dimensions to match actual canvas size."""
+        # Get the actual canvas dimensions
+        new_width = self.canvas.winfo_width()
+        new_height = self.canvas.winfo_height()
+        
+        # Only update if dimensions have actually changed
+        if new_width != self.canvas_width or new_height != self.canvas_height:
+            self.canvas_width = new_width
+            self.canvas_height = new_height
+            
+            # If debug is enabled, refresh the debug display with new position
+            if self.debug_enabled:
+                self.ui_manager.show_debug_info()
+            
+            # Update any other UI elements that depend on canvas dimensions
+            if self.hint_text_id:
+                self.ui_manager.show_hint_text()
+            
+            if self.edit_hint_text_id:
+                self.ui_manager.show_edit_hint_text()
 
     def _setup_ui(self):
         """Create and configure all UI elements."""

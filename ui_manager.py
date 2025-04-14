@@ -85,14 +85,15 @@ class UIManager:
             info_text = "\n\n".join(circles_info)  # Separate multiple circle infos with blank line
             
             self.active_circle_ids = []  # Reset after showing
-            
-        # Display debug text on the right side of the canvas
+        
+        # Display debug text on the right side of the canvas using a monospaced font
+        # Use current canvas dimensions to position text correctly
         self.app.debug_text = self.app.canvas.create_text(
-            self.app.canvas_width - 10, 10, 
+            self.app.canvas_width - 50, 10, 
             text=info_text, 
             anchor=tk.NE,  # Right-align text at the top
             fill="black",
-            font=("Arial", 10)
+            font=("Courier", 10)  # Use Courier, which is a common monospaced font
         )
 
     def _format_circle_info(self, circle):
@@ -102,7 +103,7 @@ class UIManager:
             circle: Circle data dictionary
             
         Returns:
-            str: Formatted debug info text
+            str: Formatted debug info text with right-justified values
         """
         # Derive color name from priority for display
         from color_utils import get_color_from_priority
@@ -114,14 +115,26 @@ class UIManager:
             # Format as clockwise order: 1→2→3
             ordered_connections_str = "→".join(map(str, circle["ordered_connections"]))
         
-        return (
-            f"Circle ID: {circle['id']}\n"
-            f"Position: ({circle['x']}, {circle['y']})\n"
-            f"Color: {color_name} (priority: {circle['color_priority']})\n"
-            f"Connected to: {', '.join(map(str, circle['connected_to']))}\n"
-            f"Clockwise order: {ordered_connections_str}\n"
-            f"Enclosed: {circle['enclosed']}"
-        )
+        # Create individual lines with values and labels
+        lines = [
+            f"{circle['id']} : Circle ID",
+            f"({circle['x']}, {circle['y']}) : Position",
+            f"{color_name} (priority: {circle['color_priority']}) : Color",
+            f"{', '.join(map(str, circle['connected_to']))} : Connected to",
+            f"{ordered_connections_str} : Clockwise order",
+            f"{circle['enclosed']} : Enclosed"
+        ]
+        
+        # Calculate maximum line length for right justification
+        max_length = max(len(line) for line in lines)
+        
+        # Right-justify each line by adding leading spaces
+        justified_lines = []
+        for line in lines:
+            justified_lines.append(" " * (max_length - len(line)) + line)
+        
+        # Join lines into a single string
+        return "\n".join(justified_lines)
     
     def show_hint_text(self):
         """Display instructional hint text when in selection mode."""
@@ -129,7 +142,7 @@ class UIManager:
         if self.app.hint_text_id:
             self.app.canvas.delete(self.app.hint_text_id)
             
-        # Create new hint text
+        # Create new hint text - use current canvas width for horizontal centering
         self.app.hint_text_id = self.app.canvas.create_text(
             self.app.canvas_width // 2,
             20,
@@ -150,6 +163,7 @@ class UIManager:
             self.app.canvas.delete(self.app.edit_hint_text_id)
             
         # Create new adjust hint text - positioned slightly to the right to avoid debug text
+        # Use current canvas width for horizontal centering
         self.app.edit_hint_text_id = self.app.canvas.create_text(
             (self.app.canvas_width // 2) + 20,  # Moved 20 pixels to the right
             20,
