@@ -375,3 +375,53 @@ class TestColorManager(MockAppTestCase):
         # Circle 1 should now have lowest possible priority (2)
         self.assertLess(circle1["color_priority"], original_priority)
         self.assertEqual(circle1["color_priority"], 2)
+    
+    def test_assign_color_no_connections(self):
+        """Test color assignment for a circle with no connections."""
+        circle = self._create_test_circle(1, 50, 50)
+        self.app.circles = [circle]
+        self.app.circle_lookup = {1: circle}
+
+        priority = self.app.color_manager.assign_color_based_on_connections(1)
+        self.assertEqual(priority, 1)
+
+    def test_assign_color_all_same_priority(self):
+        """Test color assignment when all connected circles have the same priority."""
+        circle1 = self._create_test_circle(1, 50, 50, priority=1, connections=[2, 3])
+        circle2 = self._create_test_circle(2, 100, 50, priority=1, connections=[1])
+        circle3 = self._create_test_circle(3, 150, 50, priority=1, connections=[1])
+
+        self.app.circles = [circle1, circle2, circle3]
+        self.app.circle_lookup = {1: circle1, 2: circle2, 3: circle3}
+
+        priority = self.app.color_manager.assign_color_based_on_connections(1)
+        self.assertEqual(priority, 2)
+
+    def test_check_and_resolve_no_conflict(self):
+        """Test resolving color conflicts when no conflict exists."""
+        circle1 = self._create_test_circle(1, 50, 50, priority=1, connections=[2])
+        circle2 = self._create_test_circle(2, 100, 50, priority=2, connections=[1])
+
+        self.app.circles = [circle1, circle2]
+        self.app.circle_lookup = {1: circle1, 2: circle2}
+
+        priority = self.app.color_manager.check_and_resolve_color_conflicts(1)
+        self.assertEqual(priority, 1)
+
+    def test_reassign_color_network_triggered(self):
+        """Test reassigning colors when all lower priorities are used."""
+        circle1 = self._create_test_circle(1, 50, 50, priority=1, connections=[2, 3, 4])
+        circle2 = self._create_test_circle(2, 100, 50, priority=2, connections=[1])
+        circle3 = self._create_test_circle(3, 150, 50, priority=3, connections=[1])
+        circle4 = self._create_test_circle(4, 200, 50, priority=4, connections=[1])
+
+        self.app.circles = [circle1, circle2, circle3, circle4]
+        self.app.circle_lookup = {1: circle1, 2: circle2, 3: circle3, 4: circle4}
+
+        priority = self.app.color_manager.reassign_color_network(1)
+        self.assertEqual(priority, 4)
+
+    def test_update_circle_color_invalid_id(self):
+        """Test updating a circle's color with an invalid ID."""
+        result = self.app.color_manager.update_circle_color(999, 2)
+        self.assertFalse(result)

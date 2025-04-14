@@ -333,3 +333,34 @@ class TestUIManager(MockAppTestCase):
         
         self.app.canvas.delete.assert_called_with(101)
         self.assertIsNone(self.app.debug_text)
+    
+    def test_set_active_circle(self):
+        """Test setting a single active circle for debug info."""
+        self.app.ui_manager.set_active_circle(1)
+        self.assertEqual(self.app.ui_manager.active_circle_id, 1)
+
+    def test_set_active_circles(self):
+        """Test setting multiple active circles for debug info."""
+        self.app.ui_manager.set_active_circles(1, 2, 3)
+        self.assertEqual(self.app.ui_manager.active_circle_ids, [1, 2, 3])
+
+    def test_draw_angle_visualization_line(self):
+        """Test drawing an angle visualization line."""
+        circle = self._create_test_circle(1, 100, 100)
+        self.app.circles = [circle]
+        self.app.circle_lookup = {1: circle}
+
+        line_id = self.app.ui_manager.draw_angle_visualization_line(1, None, 90)
+        self.assertIsNotNone(line_id)
+        self.app.canvas.create_line.assert_called_once()
+
+    def test_draw_connection_angle_visualizations_invalid_key(self):
+        """Test drawing connection angle visualizations with an invalid key."""
+        viz_ids = self.app.ui_manager.draw_connection_angle_visualizations("invalid_key")
+        self.assertEqual(viz_ids, [])
+
+    def test_clear_angle_visualizations_no_items(self):
+        """Test clearing angle visualizations when no items are present."""
+        self.app.ui_manager.visualization_items = []
+        self.app.ui_manager.clear_angle_visualizations()
+        self.app.canvas.delete.assert_not_called()

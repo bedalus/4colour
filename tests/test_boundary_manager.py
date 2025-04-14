@@ -4,6 +4,7 @@ Unit tests for boundary_manager.py.
 
 import sys
 import os
+import unittest
 # Add parent directory to Python path
 sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 
@@ -926,6 +927,48 @@ class TestBoundaryManager(MockAppTestCase):
         
         # Verify inner node is enclosed
         self.assertTrue(c4['enclosed'], "Inner node should be enclosed")
+
+    def test_boundary_traversal_with_missing_connections(self):
+        """Test boundary traversal when some nodes have missing ordered connections."""
+        self._setup_triangle()
+        self.app.circle_lookup[2]['ordered_connections'] = []  # Remove connections for node 2
+
+        with patch('builtins.print') as mock_print:
+            self.app.boundary_manager.update_enclosure_status()
+
+            # Verify warning was printed
+            mock_print.assert_any_call("Warning: Boundary traversal stopped at node 2 (missing or no connections).")
+
+        # All nodes should be marked as not enclosed
+        for circle in self.app.circles:
+            self.assertFalse(circle['enclosed'])
+
+    def test_calculate_corrected_angle_with_large_offsets(self):
+        """Test angle calculation with extreme curve offsets."""
+        circle1 = self._create_test_circle(1, 100, 100)
+        circle2 = self._create_test_circle(2, 200, 200)
+        self.app.circle_lookup = {1: circle1, 2: circle2}
+
+        with patch.object(self.app.connection_manager, 'get_connection_curve_offset', return_value=(100, 100)):
+            angle = self.app.boundary_manager._calculate_corrected_angle(circle1, 2)
+
+        # Verify angle is calculated correctly with offsets
+        self.assertGreater(angle, 0)
+        self.assertLess(angle, 360)
+
+    def test_update_enclosure_status_missing_fixed_node(self):
+        """Test enclosure status update when FIXED_NODE_A_ID is missing."""
+        self.app.FIXED_NODE_A_ID = -999  # Set to a non-existent ID
+
+        with patch('builtins.print') as mock_print:
+            self.app.boundary_manager.update_enclosure_status()
+
+            # Verify warning was printed
+            mock_print.assert_any_call("Warning: Boundary traversal stopped at node -999 (missing or no connections).")
+
+        # All nodes should be marked as not enclosed
+        for circle in self.app.circles:
+            self.assertFalse(circle['enclosed'])
 
 if __name__ == "__main__":
     unittest.main()
