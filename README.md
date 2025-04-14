@@ -39,6 +39,12 @@ To analyse the results*: python analyze_call_logs.py
 
 (* if missing pandas/matplotlib, open a terminal as admin, then: pip install pandas matplotlib)
 
+Install coverage if missing: pip install coverage (as an admin)
+
+Run: python -m tests.run_coverage (normal user)
+
+This runs all tests with coverage management and produces a report. Read tests/README.md for more detail.
+
 ## Planning
 
 New work items should be itemized and preceded by an empty checkbox (`- [ ]`). When engaging in a new coding session to implement new features and improvements, follow the requirements in sequential order starting at the first unmarked checkbox. Once the feature and corresponding unit tests are written or updated to the required specification, mark the checkbox as complete ([x]) to track progress. Always remember to complete this step.
@@ -59,6 +65,7 @@ When the current phase's objectives are complete or a new major area of work is 
 
 The project is organized into the following key files and directories:
 
+*   `README.md`: The current file. This outlines the goals of the project and can be updated as required, e.g. when planning.
 *   `canvas_app.py`: The main application class that initializes the UI and managers.
 *   `ui_manager.py`: Handles UI elements like buttons, hint text, and the debug overlay.
 *   `circle_manager.py`: Manages circle data (creation, storage, retrieval, removal).
@@ -67,8 +74,22 @@ The project is organized into the following key files and directories:
 *   `color_manager.py`: Implements the logic for assigning colors based on priority and resolving conflicts between connected circles.
 *   `color_utils.py`: Provides utility functions for mapping color priorities to names and finding available priorities.
 *   `app_enums.py`: Defines enumerations used across the application, such as `ApplicationMode`.
-*   `tests/`: Contains all unit and integration tests.
-*   `README.md`: This file, providing project documentation, guidelines, and planning.
+*   `boundary_manager.py`: Identifies outer boundary nodes and updates enclosure status.
+*   `function_logger.py`: Instruments modules to log function calls for debugging and analysis.
+*   `log_function_calls.py`: Runs the application with function call logging enabled.
+*   `analyze_call_logs.py`: Analyzes function call logs to generate insights.
+*   `tests/`: Contains all unit and integration tests:
+    * `test_app_enums.py`: Tests for application enum definitions.
+    * `test_boundary_manager.py`: Tests for boundary detection and enclosure status.
+    * `test_canvas_app.py`: Tests for the main canvas application class.
+    * `test_circle_manager.py`: Tests for circle creation, removal, and data management.
+    * `test_color_manager.py`: Tests for color assignment and conflict resolution logic.
+    * `test_color_utils.py`: Tests for color utility functions.
+    * `test_connection_manager.py`: Tests for connection creation, curve management, and angle calculations.
+    * `test_integration.py`: Tests for interactions between multiple components and workflows.
+    * `test_interaction_handler.py`: Tests for user input handling, mode transitions, and drag/drop logic.
+    * `test_ui_manager.py`: Tests for UI element management and display updates.
+    * `test_utils.py`: Contains testing utilities and mock objects like `MockAppTestCase`.
 
 ### Phases 1-7 Summary
 
@@ -84,60 +105,65 @@ Phase 10 enhanced connections with curved lines using Tkinter's smoothing, addin
 
 Phase 11 expanded integration tests (`test_integration.py`) to cover complex component interactions. Tests were added for dragging circles and midpoints, ensuring coordinate and connection updates. Removal cascade tests were enhanced to verify neighbor updates and color conflict checks. New tests validated color conflict resolution during connections, the complete reset functionality of clearing the canvas, and the side effects of mode transitions (e.g., midpoint handle visibility, hint text display, background color changes).
 
-### Phase 13: Track the Clockwise Sequence of Connections to Circles
+### Phase 13-15: Summary
 
-Phase 13 established a method to determine the clockwise order of connections around each circle, storing this in ordered_connections (connection_manager.py). 
+Phase 13 established a method to determine the clockwise order of connections around each circle, storing this in ordered_connections (connection_manager.py). This is necessary functionality for the 'Right-hand' rule commonly used in planar graphs when establishing the 'outer face'.
 
-### Phase 14: Identify Outer Boundary Nodes - Summary
+Phase 14 introduced the ability to distinguish between circles on the outer boundary and those enclosed within faces. The `enclosed` attribute was added to circle data, and the `_update_enclosure_status` method in `CanvasApplication` identifies boundary nodes on the 'outer face' using a traversal algorithm. The traversal relies on the clockwise `ordered_connections` list for each circle, ensuring accurate boundary detection even with curved connections. Tests were added to validate the enclosure status under various graph configurations.
 
-Phase 14 introduced the capability to distinguish between circles on the outer boundary of the graph and those enclosed within faces. An `enclosed` boolean attribute was added to each circle's data structure, defaulting to `False`. The core logic resides in the `_update_enclosure_status` method within `CanvasApplication` (`canvas_app.py`). This method implements an outer face traversal algorithm to identify all circles belonging to the outer boundary.
+Phase 15 ensured a consistent starting point for the outer face traversal by introducing two fixed nodes (Node A and Node B) connected by a fixed edge. These nodes are created at initialization and cannot be moved or removed. Proximity restrictions prevent placing new nodes or dragging midpoint handles into a restricted zone near the fixed nodes. The `_update_enclosure_status` method was updated to always start traversal from Node A. Tests were updated and added to verify the behavior of fixed nodes, proximity restrictions, and traversal logic.
 
-The algorithm critically depends on the `ordered_connections` list maintained for each circle by the `ConnectionManager`, which stores neighbors in clockwise order based on the calculated angle of the connection line (including any curve adjustments).
+### Phase 16: Update unit tests
 
-To start the traversal, the algorithm first identifies the connection edge whose midpoint handle position is "most extreme" (minimum y, then minimum x, accounting for curves). The starting node for the traversal is then chosen as the endpoint of this extreme edge that is itself most extreme (minimum y, then minimum x).
+Phase 13-15 took more development effort that originally anticipated, and the unit tests have drifted out of alignment.
 
-Once the starting node is determined, the traversal identifies the first outgoing edge to follow by finding the connection leaving the start node with the smallest angle (measured clockwise from North, 0 degrees). From this initial edge, the algorithm "walks" the outer boundary using the Right-Hand Rule (see below). At each circle (`current_node`), it identifies the connection it arrived from (`previous_node`). Using the `ordered_connections` of the `current_node`, it finds the index of the `previous_node` and selects the *next* connection in the clockwise sequence as the path to the next circle on the outer boundary. This process repeats until the walk returns to the starting circle. All circles visited during this walk are marked as `enclosed=False`, and all others are marked `enclosed=True`.
+- [ ] **Conduct Test-Code Alignment Analysis:**
+    * Systematically compare each application module with its corresponding test module
+    * Create a detailed inventory of outdated tests, broken tests, and missing test coverage
+    * Prioritize critical areas affected by recent changes (ordered_connections, boundary traversal, fixed nodes)
+    * Determine which tests can be repaired versus which need complete rewrites
 
-A key complexity arises from curved connections. A significant curve can alter the effective angle of a connection line where it meets the circle, potentially changing its position within the `ordered_connections` list compared to a straight line. The angle calculation methods (`_calculate_corrected_angle` in `canvas_app.py` and related methods in `connection_manager.py`) account for these curves when determining the order, ensuring the traversal algorithm correctly follows the topological outer face even when geometric shapes are distorted by curves.
+- [ ] **Update Boundary Manager Tests:**
+    * Enhance test_boundary_manager.py to properly test the new boundary traversal algorithm
+    * Add tests for edge cases (disconnected components, single nodes, linear chains)
+    * Create tests for boundary detection with various curve offsets that might affect angle calculations
+    * Test boundary traversal with reused edges and revisited nodes
 
-The `_update_enclosure_status` calculation is triggered after operations that modify the graph's topology or geometry: circle creation (`draw_on_click`), connection creation (`confirm_selection`), circle removal (`remove_circle_by_id`), and drag completion (`drag_end`). Comprehensive integration tests were added in `test_integration.py` to validate the enclosure status under various graph structures and modifications.
+- [ ] **Enhance Connection Manager Tests:**
+    * Add tests for ordered_connections calculation and clockwise sorting logic
+    * Create tests for connection angle calculations with and without curve offsets
+    * Test midpoint handle positioning with relation to boundary traversal
+    * Ensure connection updates properly trigger ordered connection recalculation
 
-**The Right-Hand Rule:** In the context of traversing faces in a planar graph embedding (where edges around each node have a defined cyclic order, like our clockwise `ordered_connections`), the Right-Hand Rule provides a consistent way to trace a face boundary. Imagine walking along an edge towards a node. When you arrive, you look at the available edges leaving that node, ordered clockwise. To follow the Right-Hand Rule, you always choose the *next* edge in the clockwise order immediately after the edge you just arrived on. If you consistently apply this rule, you will trace the boundary of a single face in a clockwise direction. The Left-Hand Rule is analogous, choosing the next edge *counter-clockwise*, tracing the face in the opposite direction. For finding the outer face (often considered the "infinite" face), starting on a known outer edge and consistently applying one of these rules allows traversal of its boundary.
+- [ ] **Update Fixed Node Tests:**
+    * Add tests for initialization and properties of fixed nodes
+    * Verify fixed nodes cannot be moved or removed
+    * Test proximity restrictions for circle placement near fixed nodes
+    * Validate that fixed connections cannot be modified
 
-### Phase 15: Guaranteeing an Outer Face Starting Point
+- [ ] **Enhance Integration Tests:**
+    * Update existing test workflows to account for fixed nodes and proximity restrictions
+    * Create complex test scenarios combining boundary detection, ordered connections, and user interactions
+    * Test proper enclosure detection in nested graph configurations
+    * Verify that mode transitions work correctly with updated functionality
 
-This phase aims to simplify the identification of the outer face boundary by establishing a guaranteed starting point that is always part of the outer face and remains the "most extreme" element geometrically. This avoids complexities with curved connections potentially altering which node or edge appears most extreme.
+- [ ] **Update TestUtils and MockAppTestCase:**
+    * Enhance the MockAppTestCase to properly initialize fixed nodes
+    * Add helper methods for testing boundary detection
+    * Create utilities for testing angle calculations and ordered connections
+    * Update test circle creation to include the enclosure status field
 
-- [x] **Initialize with Fixed Outer Nodes:**
-    *   Modify `CanvasApplication.__init__` to automatically create two specific nodes upon startup (e.g., Node A at (10, 40), Node B at (40, 10)).
-    *   Automatically create a connection between these two initial nodes.
-    *   Assign unique, reserved IDs (e.g., -1, -2) or use a flag to mark these nodes as special/fixed.
-    *   Be sure to reinitialize if the clear canvas button is pressed.
+- [ ] **Implement Test Coverage Analysis:**
+    * Set up coverage measurement for the test suite
+    * Generate visual coverage reports to identify gaps
+    * Ensure critical logic paths in boundary detection are well-tested
+    * Add tests for any identified coverage gaps
 
-- [x] **Make Initial Nodes Non-Adjustable:**
-    *   Modify `InteractionHandler.drag_start` to prevent dragging of these fixed nodes.
-    *   Modify `CircleManager.remove_circle_by_id` (or related interaction logic) to prevent deletion of these fixed nodes.
-    *   Ensure the connection between them cannot be removed or its midpoint handle dragged.
-
-- [x] **Implement Proximity Restrictions:**
-    *   Modify `InteractionHandler.draw_on_click` to prevent placing new nodes within a defined radius of the origin or the fixed nodes (e.g., disallow placement if x < 50 and y < 50).
-    *   Modify `InteractionHandler.drag_midpoint_motion` (or `drag_end`) to prevent midpoint handles from being dragged into this restricted zone. This ensures no new element can become "more extreme" than the initial fixed nodes/edge.
-
-- [x] **Adapt Outer Face Traversal Start:**
-    *   Modify `CanvasApplication._update_enclosure_status` to *always* use one of the fixed nodes (e.g., Node A) as the `start_node` for the outer face traversal.
-    *   The logic to find the first outgoing edge (minimum angle clockwise from North) can remain, starting from this fixed node.
-    *   We no longer need to find the starting point, as we can use the Node A -> Node B connection as a guaranteed outer edge, so the existing code that does this is redundant and can be removed.
-
-- [x] **Update Tests:**
-    *   Adjust existing tests (`test_integration.py`, `test_canvas_app.py`) to account for the presence and behavior of the fixed initial nodes.
-    *   Add new tests specifically verifying the non-adjustability and proximity restrictions.
-    *   When working on the tests, anticipate that there may be undocumented reasons why they are out of alignment with the revised application code, so may need multiple passes to fully repair.
-
-### Phase 16: Deal with current bugs
-
-E.g. error: Warning: Boundary traversal revisited node 4 and edge (4, 5) unexpectedly. Breaking loop.
-
-This happens when there's one sticking out on its own. But this should be allowed. Or if a single edge joins two more complex graphs. Its a boundary you pass with the right-hand rule in one direction, then the other. You still traverse the entire outer perimeter. Fix the code to allow this.
+- [ ] **Review and Document Test Improvements:**
+    * Document test patterns or edge cases for future reference
+    * Create diagrams or visual aids to explain complex test scenarios
+    * Update any test documentation to reflect new application behavior
+    * Ensure all test files follow the same naming conventions and patterns
 
 ### Phase 17: Advanced Color Network Reassignment
 

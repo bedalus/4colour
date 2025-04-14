@@ -7,7 +7,7 @@ import os
 # Add parent directory to Python path
 sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, call
 from test_utils import MockAppTestCase
 from app_enums import ApplicationMode
 from boundary_manager import BoundaryManager
@@ -60,6 +60,43 @@ class TestBoundaryManager(MockAppTestCase):
         self.app.connection_manager.add_connection(4, 1)
         self.app.connection_manager.add_connection(4, 2)
         self.app.connection_manager.add_connection(4, 3)
+        
+    def _setup_disconnected_components(self):
+        """Sets up a graph with two disconnected components."""
+        # Component 1: A simple triangle
+        c1 = self._create_test_circle(1, 50, 50)
+        c2 = self._create_test_circle(2, 100, 50)
+        c3 = self._create_test_circle(3, 75, 100)
+        
+        # Component 2: A separate pair
+        c4 = self._create_test_circle(4, 200, 50)
+        c5 = self._create_test_circle(5, 250, 50)
+        
+        self.app.circles = [c1, c2, c3, c4, c5]
+        self.app.circle_lookup = {c["id"]: c for c in self.app.circles}
+        
+        # Connect triangle
+        self.app.connection_manager.add_connection(1, 2)
+        self.app.connection_manager.add_connection(2, 3)
+        self.app.connection_manager.add_connection(3, 1)
+        
+        # Connect pair
+        self.app.connection_manager.add_connection(4, 5)
+        
+    def _setup_linear_chain(self):
+        """Sets up a linear chain of circles (no enclosure)."""
+        c1 = self._create_test_circle(1, 50, 100)
+        c2 = self._create_test_circle(2, 100, 100)
+        c3 = self._create_test_circle(3, 150, 100)
+        c4 = self._create_test_circle(4, 200, 100)
+        
+        self.app.circles = [c1, c2, c3, c4]
+        self.app.circle_lookup = {c["id"]: c for c in self.app.circles}
+        
+        # Connect in a chain
+        self.app.connection_manager.add_connection(1, 2)
+        self.app.connection_manager.add_connection(2, 3)
+        self.app.connection_manager.add_connection(3, 4)
 
     def test_enclosure_empty_graph(self):
         """Test enclosure status with no circles."""
@@ -186,6 +223,100 @@ class TestBoundaryManager(MockAppTestCase):
         # Center node should be enclosed
         self.assertTrue(self.app.circle_lookup[4]['enclosed'], "Center Circle 4 should be enclosed")
 
+    def test_boundary_traversal_with_disconnected_components(self):
+        """Test boundary traversal with disconnected graph components."""
+        self._setup_disconnected_components()
+        
+        # Mock the connection angle calculation for predictable traversal
+        with patch.object(self.app.boundary_manager, '_calculate_corrected_angle') as mock_angle:
+            # Define angles for component 1 (triangle)
+            def angle_side_effect(circle, neighbor_id):
+                # Just ensure we have predictable clockwise ordering
+                source_id = circle['id']
+                if source_id == 1:
+                    return 0 if neighbor_id == 2 else 180
+                elif source_id == 2:
+                    return 90 if neighbor_id == 3 else 270
+                elif source_id == 3:
+                    return 45 if neighbor_id == 1 else 225
+                elif source_id == 4:
+                    return 0 if neighbor_id == 5 else 180
+                elif source_id == 5:
+                    return 0 if neighbor_id == 4 else 180
+                return 0
+                
+            mock_angle.side_effect = angle_side_effect
+            
+            # Execute update with print mocking to catch warnings
+            with patch('builtins.print') as mock_print:
+                self.app.boundary_manager.update_enclosure_status()
+        
+        # All nodes should be correctly marked as not enclosed
+        for node_id in range(1, 6):
+            node = self.app.circle_lookup[node_id]
+            self.assertFalse(node['enclosed'], f"Node {node_id} should be on boundary")
+            
+    def test_boundary_traversal_with_linear_chain(self):
+        """Test boundary traversal with a linear chain graph (no enclosure)."""
+        self._setup_linear_chain()
+        
+        # Mock angle calculations for consistent ordering
+        with patch.object(self.app.boundary_manager, '_calculate_corrected_angle') as mock_angle:
+            mock_angle.return_value = 0  # Any consistent value is fine for a chain
+            
+            # Update enclosure status
+            self.app.boundary_manager.update_enclosure_status()
+            
+        # All nodes should be on boundary
+        for node_id in range(1, 5):
+            node = self.app.circle_lookup[node_id]
+            self.assertFalse(node['enclosed'], f"Node {node_id} in chain should be on boundary")
+            
+    def test_ordered_connections_impact_on_traversal(self):
+        """Test how ordered connections impact the boundary traversal."""
+        # Create a simple square
+        c1 = self._create_test_circle(1, 0, 0)   # Top-left
+        c2 = self._create_test_circle(2, 100, 0)  # Top-right
+        c3 = self._create_test_circle(3, 100, 100) # Bottom-right
+        c4 = self._create_test_circle(4, 0, 100)  # Bottom-left
+        c5 = self._create_test_circle(5, 50, 50)   # Center
+        
+        self.app.circles = [c1, c2, c3, c4, c5]
+        self.app.circle_lookup = {c["id"]: c for c in self.app.circles}
+        
+        # Setup connections for a square with center connected to all corners
+        for i in range(1, 5):
+            # Connect to adjacent corners in the square
+            next_id = i + 1 if i < 4 else 1
+            self.app.circle_lookup[i]["connected_to"] = [next_id, 5]
+            self.app.circle_lookup[5]["connected_to"].append(i)
+            
+            # Connect to previous corner (to close the square)
+            if i == 1:
+                self.app.circle_lookup[i]["connected_to"].append(4)
+                
+        # Set ordered connections in a way that would affect traversal
+        # Clockwise ordering
+        self.app.circle_lookup[1]["ordered_connections"] = [4, 5, 2]
+        self.app.circle_lookup[2]["ordered_connections"] = [1, 5, 3]
+        self.app.circle_lookup[3]["ordered_connections"] = [2, 5, 4]
+        self.app.circle_lookup[4]["ordered_connections"] = [3, 5, 1]
+        
+        # Center connects to all corners in clockwise order
+        self.app.circle_lookup[5]["ordered_connections"] = [1, 2, 3, 4]
+        
+        # Mock the connection curve offset method
+        with patch.object(self.app.connection_manager, 'get_connection_curve_offset', return_value=(0, 0)):
+            # Update enclosure status
+            self.app.boundary_manager.update_enclosure_status()
+        
+        # All corners should be on boundary
+        for i in range(1, 5):
+            self.assertFalse(self.app.circle_lookup[i]['enclosed'])
+            
+        # Center should be enclosed
+        self.assertTrue(self.app.circle_lookup[5]['enclosed'])
+        
     def test_boundary_traversal_with_reused_edges(self):
         """Test that boundary traversal correctly handles edges that appear twice in the boundary."""
         # Create a mock setup where the fixed nodes are already defined
@@ -322,3 +453,137 @@ class TestBoundaryManager(MockAppTestCase):
                 offset_angle = self.boundary_manager._calculate_corrected_angle(circle1, 2)
                 # The angle should now be affected by the curve offset
                 self.assertNotAlmostEqual(offset_angle, 0, places=1)
+                
+    def test_fixed_nodes_in_boundary_traversal(self):
+        """Test that fixed nodes are properly handled during boundary traversal."""
+        # Create a triangle with one fixed node
+        self.app.FIXED_NODE_A_ID = -1
+        self.app.FIXED_NODE_B_ID = -2
+        
+        # Create the fixed nodes
+        fixed_node_a = self._create_test_circle(self.app.FIXED_NODE_A_ID, 15, 60)
+        fixed_node_b = self._create_test_circle(self.app.FIXED_NODE_B_ID, 60, 15)
+        
+        # Set them as fixed
+        fixed_node_a["fixed"] = True
+        fixed_node_b["fixed"] = True
+        
+        # Create a third, regular node
+        regular_node = self._create_test_circle(1, 100, 100)
+        
+        self.app.circles = [fixed_node_a, fixed_node_b, regular_node]
+        self.app.circle_lookup = {
+            self.app.FIXED_NODE_A_ID: fixed_node_a,
+            self.app.FIXED_NODE_B_ID: fixed_node_b,
+            1: regular_node
+        }
+        
+        # Connect nodes to form a triangle
+        fixed_node_a["connected_to"] = [self.app.FIXED_NODE_B_ID, 1]
+        fixed_node_a["ordered_connections"] = [self.app.FIXED_NODE_B_ID, 1]
+        
+        fixed_node_b["connected_to"] = [self.app.FIXED_NODE_A_ID, 1]
+        fixed_node_b["ordered_connections"] = [self.app.FIXED_NODE_A_ID, 1]
+        
+        regular_node["connected_to"] = [self.app.FIXED_NODE_A_ID, self.app.FIXED_NODE_B_ID]
+        regular_node["ordered_connections"] = [self.app.FIXED_NODE_A_ID, self.app.FIXED_NODE_B_ID]
+        
+        # Mock angle calculations for consistent traversal
+        with patch.object(self.app.boundary_manager, '_calculate_corrected_angle') as mock_angle:
+            # Define angles to ensure clockwise traversal
+            def angle_side_effect(circle, neighbor_id):
+                if circle['id'] == self.app.FIXED_NODE_A_ID:
+                    return 0 if neighbor_id == self.app.FIXED_NODE_B_ID else 45  # B then 1
+                elif circle['id'] == self.app.FIXED_NODE_B_ID:
+                    return 135 if neighbor_id == 1 else 180  # 1 then A
+                else:  # Regular node
+                    return 225 if neighbor_id == self.app.FIXED_NODE_A_ID else 315  # A then B
+                
+            mock_angle.side_effect = angle_side_effect
+            
+            # Run boundary traversal
+            self.app.boundary_manager.update_enclosure_status()
+            
+        # All nodes should be on boundary (not enclosed)
+        self.assertFalse(fixed_node_a['enclosed'], "Fixed node A should be on boundary")
+        self.assertFalse(fixed_node_b['enclosed'], "Fixed node B should be on boundary") 
+        self.assertFalse(regular_node['enclosed'], "Regular node should be on boundary")
+        
+    def test_enclosure_with_curved_connections(self):
+        """Test enclosure detection with curved connection lines."""
+        # Create a square with curved connections
+        c1 = self._create_test_circle(1, 50, 50)   # Top-left
+        c2 = self._create_test_circle(2, 150, 50)  # Top-right
+        c3 = self._create_test_circle(3, 150, 150) # Bottom-right
+        c4 = self._create_test_circle(4, 50, 150)  # Bottom-left
+        c5 = self._create_test_circle(5, 100, 100) # Center
+        
+        self.app.circles = [c1, c2, c3, c4, c5]
+        self.app.circle_lookup = {c["id"]: c for c in self.app.circles}
+        
+        # Set up connections for square with center
+        # Each corner connected to adjacent corners and center
+        for i in range(1, 5):
+            next_id = i + 1 if i < 4 else 1
+            c = self.app.circle_lookup[i]
+            c["connected_to"] = [next_id, 5]
+            c["ordered_connections"] = [next_id, 5]
+            
+            # Connect back to previous (close the square)
+            if i == 1:
+                c["connected_to"].append(4)
+                c["ordered_connections"].append(4)
+            
+        # Center connected to all corners
+        c5["connected_to"] = [1, 2, 3, 4]
+        c5["ordered_connections"] = [1, 2, 3, 4]
+        
+        # Mock connection curve offsets - simulating curves
+        def curve_offset_side_effect(from_id, to_id):
+            # Add significant curve offsets to connections
+            if (from_id == 1 and to_id == 2) or (from_id == 2 and to_id == 1):
+                return (0, 30)  # Curve the top edge down
+            elif (from_id == 3 and to_id == 4) or (from_id == 4 and to_id == 3):
+                return (0, -30)  # Curve the bottom edge up
+            return (0, 0)  # No curve for other connections
+            
+        with patch.object(self.app.connection_manager, 'get_connection_curve_offset') as mock_offset:
+            mock_offset.side_effect = curve_offset_side_effect
+            
+            # Also mock the angle calculation to return values affected by curves
+            with patch.object(self.boundary_manager, '_calculate_corrected_angle') as mock_angle:
+                def angle_side_effect(circle, neighbor_id):
+                    # Simplified angle mapping that accounts for curves
+                    circle_id = circle['id']
+                    if circle_id == 1:  # Top-left
+                        if neighbor_id == 2: return 70  # Curved to right
+                        elif neighbor_id == 4: return 180  # Straight down
+                        else: return 135  # Diagonal to center
+                    elif circle_id == 2:  # Top-right
+                        if neighbor_id == 1: return 250  # Curved to left
+                        elif neighbor_id == 3: return 180  # Straight down
+                        else: return 225  # Diagonal to center
+                    elif circle_id == 3:  # Bottom-right
+                        if neighbor_id == 2: return 0  # Straight up
+                        elif neighbor_id == 4: return 290  # Curved to left
+                        else: return 315  # Diagonal to center
+                    elif circle_id == 4:  # Bottom-left
+                        if neighbor_id == 3: return 110  # Curved to right
+                        elif neighbor_id == 1: return 0  # Straight up
+                        else: return 45  # Diagonal to center
+                    else:  # Center
+                        # Return angles to corners
+                        angles = {1: 315, 2: 45, 3: 135, 4: 225}
+                        return angles.get(neighbor_id, 0)
+                
+                mock_angle.side_effect = angle_side_effect
+                
+                # Run boundary traversal
+                self.app.boundary_manager.update_enclosure_status()
+        
+        # Verify boundary nodes
+        for i in range(1, 5):
+            self.assertFalse(self.app.circle_lookup[i]['enclosed'], f"Corner {i} should be on boundary")
+            
+        # Center should be enclosed
+        self.assertTrue(self.app.circle_lookup[5]['enclosed'], "Center should be enclosed")
