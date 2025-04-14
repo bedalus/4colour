@@ -3,7 +3,6 @@ Test utilities for the 4colour project tests.
 
 This module contains common utilities and setup code for tests.
 """
-
 import unittest
 from unittest.mock import Mock, MagicMock, patch
 import tkinter as tk
@@ -119,6 +118,61 @@ class BaseTestCase(unittest.TestCase):
         
         # Normalize to 0-360 range
         return (angle_deg) % 360
+        
+    # New helper method for boundary detection testing
+    def _verify_boundary_detection(self, app, expected_boundary_nodes, expected_enclosed_nodes):
+        """Verify that boundary detection correctly identifies boundary and enclosed nodes.
+        
+        Args:
+            app: The application instance
+            expected_boundary_nodes: List of node IDs expected to be on the boundary
+            expected_enclosed_nodes: List of node IDs expected to be enclosed
+            
+        Returns:
+            bool: True if boundary detection is correct, False otherwise
+        """
+        # Trigger boundary detection
+        app.boundary_manager.update_enclosure_status()
+        
+        # Check boundary nodes
+        for node_id in expected_boundary_nodes:
+            if node_id not in app.circle_lookup:
+                return False
+            if app.circle_lookup[node_id]['enclosed']:
+                return False
+                
+        # Check enclosed nodes
+        for node_id in expected_enclosed_nodes:
+            if node_id not in app.circle_lookup:
+                return False
+            if not app.circle_lookup[node_id]['enclosed']:
+                return False
+                
+        return True
+    
+    # New helper method for angle calculation testing
+    def _verify_ordered_connections(self, app, circle_id, expected_order):
+        """Verify that ordered connections are in the expected clockwise order.
+        
+        Args:
+            app: The application instance
+            circle_id: ID of the circle to check
+            expected_order: List of node IDs in expected clockwise order
+            
+        Returns:
+            bool: True if ordered connections match expected order, False otherwise
+        """
+        if circle_id not in app.circle_lookup:
+            return False
+            
+        circle = app.circle_lookup[circle_id]
+        
+        # Check if the length matches
+        if len(circle['ordered_connections']) != len(expected_order):
+            return False
+            
+        # Check if all elements match in order
+        return circle['ordered_connections'] == expected_order
 
 class MockAppTestCase(BaseTestCase):
     """Test case with a pre-configured mock app instance."""
@@ -253,6 +307,81 @@ class MockAppTestCase(BaseTestCase):
         # Establish ordered_connections based on angles
         self._update_test_ordered_connections()
     
+    # New helper method for testing nested boundaries
+    def _setup_nested_boundaries(self):
+        """Setup a graph with nested boundaries (islands) for testing.
+        
+        Creates an outer boundary with an enclosed subgraph that contains
+        its own boundary and enclosed nodes.
+        
+        Returns:
+            tuple: (outer_boundary_ids, outer_enclosed_ids, inner_boundary_ids, inner_enclosed_ids)
+        """
+        # Ensure fixed nodes exist
+        self._setup_fixed_nodes()
+        
+        # Create outer boundary (pentagon)
+        c1 = self._create_test_circle(1, 100, 50)   # Top
+        c2 = self._create_test_circle(2, 50, 100)   # Left
+        c3 = self._create_test_circle(3, 75, 200)   # Bottom-left
+        c4 = self._create_test_circle(4, 150, 200)  # Bottom-right
+        c5 = self._create_test_circle(5, 175, 100)  # Right
+        
+        # Add to lookup
+        self.app.circles.extend([c1, c2, c3, c4, c5])
+        self.app.circle_lookup.update({
+            1: c1, 2: c2, 3: c3, 4: c4, 5: c5
+        })
+        
+        # Connect outer boundary edges
+        self._add_test_connection(1, 2)
+        self._add_test_connection(2, 3)
+        self._add_test_connection(3, 4)
+        self._add_test_connection(4, 5)
+        self._add_test_connection(5, 1)
+        
+        # Create inner boundary (triangle)
+        c6 = self._create_test_circle(6, 100, 100)  # Inner top
+        c7 = self._create_test_circle(7, 85, 150)   # Inner bottom-left
+        c8 = self._create_test_circle(8, 135, 150)  # Inner bottom-right
+        
+        # Add inner nodes to lookup
+        self.app.circles.extend([c6, c7, c8])
+        self.app.circle_lookup.update({
+            6: c6, 7: c7, 8: c8
+        })
+        
+        # Connect inner boundary edges
+        self._add_test_connection(6, 7)
+        self._add_test_connection(7, 8)
+        self._add_test_connection(8, 6)
+        
+        # Create center node inside inner boundary
+        c9 = self._create_test_circle(9, 110, 130)  # Center of inner triangle
+        self.app.circles.append(c9)
+        self.app.circle_lookup[9] = c9
+        
+        # Connect inner center to all inner boundary nodes
+        self._add_test_connection(9, 6)
+        self._add_test_connection(9, 7)
+        self._add_test_connection(9, 8)
+        
+        # Connect inner and outer boundaries to ensure inner is enclosed
+        self._add_test_connection(1, 6)
+        self._add_test_connection(3, 7)
+        self._add_test_connection(4, 8)
+        
+        # Establish ordered_connections based on angles
+        self._update_test_ordered_connections()
+        
+        # Return the node groupings
+        outer_boundary = [1, 2, 3, 4, 5]
+        outer_enclosed = [6, 7, 8, 9]  # All inner nodes should be enclosed by outer boundary
+        inner_boundary = [6, 7, 8]
+        inner_enclosed = [9]  # Only center node should be enclosed by inner boundary
+        
+        return outer_boundary, outer_enclosed, inner_boundary, inner_enclosed
+    
     def _add_test_connection(self, from_id, to_id):
         """Add a test connection between two circles.
         
@@ -363,6 +492,66 @@ class TestUtilsTests(unittest.TestCase):
         # West
         self.assertAlmostEqual(base_test._calculate_angle_between_points(
             100, 100, 0, 100), 270.0, places=1)
+    
+    # Test new utility methods
+    def test_verify_boundary_detection(self):
+        """Test the boundary detection verification method."""
+        mock_app = MagicMock()
+        mock_app.boundary_manager = MagicMock()
+        mock_app.circle_lookup = {
+            1: {"enclosed": False},
+            2: {"enclosed": False},
+            3: {"enclosed": True},
+            4: {"enclosed": True}
+        }
+        
+        base_test = BaseTestCase()
+        # Test correct boundary detection
+        self.assertTrue(base_test._verify_boundary_detection(
+            mock_app, [1, 2], [3, 4]))
+        
+        # Test incorrect boundary node (expected boundary but is enclosed)
+        mock_app.circle_lookup[1]["enclosed"] = True
+        self.assertFalse(base_test._verify_boundary_detection(
+            mock_app, [1, 2], [3, 4]))
+        
+        # Reset for next test
+        mock_app.circle_lookup[1]["enclosed"] = False
+        
+        # Test incorrect enclosed node (expected enclosed but is not)
+        mock_app.circle_lookup[3]["enclosed"] = False
+        self.assertFalse(base_test._verify_boundary_detection(
+            mock_app, [1, 2], [3, 4]))
+        
+        # Test missing node
+        mock_app.circle_lookup = {1: {"enclosed": False}, 3: {"enclosed": True}}
+        self.assertFalse(base_test._verify_boundary_detection(
+            mock_app, [1, 2], [3]))
+    
+    def test_verify_ordered_connections(self):
+        """Test the ordered connections verification method."""
+        mock_app = MagicMock()
+        mock_app.circle_lookup = {
+            1: {"ordered_connections": [2, 3, 4]},
+            2: {"ordered_connections": [1, 5]}
+        }
+        
+        base_test = BaseTestCase()
+        # Test correct ordering
+        self.assertTrue(base_test._verify_ordered_connections(
+            mock_app, 1, [2, 3, 4]))
+        
+        # Test incorrect ordering
+        self.assertFalse(base_test._verify_ordered_connections(
+            mock_app, 1, [2, 4, 3]))
+        
+        # Test different length
+        self.assertFalse(base_test._verify_ordered_connections(
+            mock_app, 1, [2, 3]))
+        
+        # Test missing circle
+        self.assertFalse(base_test._verify_ordered_connections(
+            mock_app, 3, [1, 2]))
 
 if __name__ == "__main__":
     unittest.main()

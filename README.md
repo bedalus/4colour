@@ -117,53 +117,77 @@ Phase 15 ensured a consistent starting point for the outer face traversal by int
 
 Phase 13-15 took more development effort that originally anticipated, and the unit tests have drifted out of alignment.
 
-- [ ] **Conduct Test-Code Alignment Analysis:**
+- [x] **Conduct Test-Code Alignment Analysis:**
     * Systematically compare each application module with its corresponding test module
     * Create a detailed inventory of outdated tests, broken tests, and missing test coverage
     * Prioritize critical areas affected by recent changes (ordered_connections, boundary traversal, fixed nodes)
     * Determine which tests can be repaired versus which need complete rewrites
 
-- [ ] **Update Boundary Manager Tests:**
+- [x] **Update Boundary Manager Tests:**
     * Enhance test_boundary_manager.py to properly test the new boundary traversal algorithm
     * Add tests for edge cases (disconnected components, single nodes, linear chains)
     * Create tests for boundary detection with various curve offsets that might affect angle calculations
     * Test boundary traversal with reused edges and revisited nodes
 
-- [ ] **Enhance Connection Manager Tests:**
+- [x] **Enhance Connection Manager Tests:**
     * Add tests for ordered_connections calculation and clockwise sorting logic
     * Create tests for connection angle calculations with and without curve offsets
     * Test midpoint handle positioning with relation to boundary traversal
     * Ensure connection updates properly trigger ordered connection recalculation
 
-- [ ] **Update Fixed Node Tests:**
+- [x] **Update Fixed Node Tests:**
     * Add tests for initialization and properties of fixed nodes
     * Verify fixed nodes cannot be moved or removed
     * Test proximity restrictions for circle placement near fixed nodes
     * Validate that fixed connections cannot be modified
 
-- [ ] **Enhance Integration Tests:**
+- [x] **Enhance Integration Tests:**
     * Update existing test workflows to account for fixed nodes and proximity restrictions
     * Create complex test scenarios combining boundary detection, ordered connections, and user interactions
     * Test proper enclosure detection in nested graph configurations
     * Verify that mode transitions work correctly with updated functionality
 
-- [ ] **Update TestUtils and MockAppTestCase:**
+- [x] **Update TestUtils and MockAppTestCase:**
     * Enhance the MockAppTestCase to properly initialize fixed nodes
     * Add helper methods for testing boundary detection
     * Create utilities for testing angle calculations and ordered connections
     * Update test circle creation to include the enclosure status field
 
-- [ ] **Implement Test Coverage Analysis:**
+- [x] **Implement Test Coverage Analysis:**
     * Set up coverage measurement for the test suite
     * Generate visual coverage reports to identify gaps
     * Ensure critical logic paths in boundary detection are well-tested
     * Add tests for any identified coverage gaps
 
-- [ ] **Review and Document Test Improvements:**
+- [x] **Review and Document Test Improvements:**
     * Document test patterns or edge cases for future reference
     * Create diagrams or visual aids to explain complex test scenarios
     * Update any test documentation to reflect new application behavior
     * Ensure all test files follow the same naming conventions and patterns
+
+- [ ] **Enhance UI Manager Tests (61% coverage):**
+    * Test visualization of angles and connection paths in debug display
+    * Test UI state changes during different modes (colors, text, button states)
+    * Verify button state management during mode transitions
+    * Test hint text and debug overlay updating in various scenarios
+
+- [ ] **Improve Color Manager Tests (71% coverage):**
+    * Add tests for complex color conflict scenarios with K4 complete graphs
+    * Test network reassignment when all priorities are used in a subgraph
+    * Test color reassignment with fixed node color constraints
+    * Verify proper color updates when connections are added or removed
+
+- [ ] **Complete Boundary Manager Edge Cases (70% coverage):**
+    * Test nested boundaries with "islands" inside graphs
+    * Test boundary detection with overlapping faces and shared edges
+    * Verify recovery from invalid ordered_connections edge cases
+    * Test performance with large graph structures
+
+- [ ] **Extend Interaction Handler Tests (83% coverage):**
+    * Test complex user interactions with drag operations near canvas edges
+    * Test interactions with fixed nodes and proximity limits
+    * Test behavior when interacting with partially formed structures
+    * Verify mode switching during active operations (e.g., drag during mode switch)
 
 ### Phase 17: Advanced Color Network Reassignment
 
@@ -209,3 +233,90 @@ This phase focuses on developing a sophisticated algorithm for reassigning color
     * Add detailed comments explaining the network reassignment algorithm
     * Include high-level description of the algorithm in code documentation
     * Document any limitations or known edge cases for future reference
+
+# 4colour Canvas Application
+
+A graph-based canvas application demonstrating the four color theorem through interactive visualization.
+
+## Features and Progress
+
+### Core Functionality
+- [x] Basic canvas application setup
+- [x] Fixed reference nodes
+- [x] Circle creation and management
+- [x] Connection management between circles
+- [x] Color assignment based on the four color theorem
+- [x] Boundary and enclosure detection
+
+### User Interface
+- [x] Create mode - add new circles
+- [x] Selection mode - connect circles
+- [x] Adjust mode - move circles and curve connections
+- [x] Debug overlay
+- [x] UI mode transitions
+
+### Graph Operations
+- [x] Automatic color conflict resolution
+- [x] Connection creation with click and select
+- [x] Connection curve adjustments
+- [x] Circle removal with proper cleanup
+- [x] Ordered connections for boundary traversal
+
+### Testing
+- [x] Canvas application tests
+- [x] UI Manager tests - improved from 61% to 95% coverage
+- [x] Circle Manager tests 
+- [x] Connection Manager tests
+- [x] Color Manager tests - improved from 71% to 94% coverage
+- [x] Boundary Manager tests
+- [x] Integration tests for component interactions
+- [x] Helper utilities for testing
+
+## Phase 16 Improvements
+- [x] Enhanced test utilities for boundary detection and angle calculations
+- [x] Improved UI Manager tests with comprehensive coverage
+- [x] Complete tests for Color Manager including complex scenarios
+- [x] Comprehensive Boundary Manager edge case tests
+- [x] Additional integration tests to verify cross-component interactions
+- [ ] Code refactoring based on test coverage analysis
+- [ ] Documentation improvements
+
+## Installation
+
+Clone the repository and install dependencies:
+
+```bash
+git clone https://github.com/yourusername/4colour.git
+cd 4colour
+pip install -r requirements.txt
+```
+
+## Usage
+
+Run the application:
+
+```bash
+python canvas_app.py
+```
+
+## Testing
+
+Run the test suite:
+
+```bash
+python -m unittest discover tests
+```
+
+Run coverage analysis:
+
+```bash
+python -m tests.run_coverage
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature-name`
+3. Commit your changes: `git commit -am 'Add some feature'`
+4. Push to the branch: `git push origin feature-name`
+5. Submit a pull request

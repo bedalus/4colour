@@ -142,3 +142,194 @@ class TestUIManager(MockAppTestCase):
         self.assertEqual(len(self.app.midpoint_handles), 0)
         self.assertIsNone(self.app.last_circle_id)
         self.assertEqual(self.app.next_id, 1)
+        
+    # New tests for UI Manager to improve coverage
+    
+    def test_visualize_connection_angles(self):
+        """Test visualization of connection angles in debug display."""
+        # Set up a circle with connections
+        circle1 = self._create_test_circle(1, 100, 100, connections=[2, 3])
+        circle2 = self._create_test_circle(2, 200, 100, connections=[1])
+        circle3 = self._create_test_circle(3, 100, 200, connections=[1])
+        
+        self.app.circles = [circle1, circle2, circle3]
+        self.app.circle_lookup = {1: circle1, 2: circle2, 3: circle3}
+        
+        # Mock UI manager's internal methods
+        with patch.object(self.app.ui_manager, 'draw_connection_angle_visualizations') as mock_draw:
+            self.app.ui_manager.visualize_connection_angles(1)
+            
+            # Verify visualization method was called with the right parameters
+            mock_draw.assert_called_once_with(1)
+    
+    def test_draw_connection_angle_visualizations(self):
+        """Test drawing angle visualizations for connections."""
+        # Set up a circle with connections
+        circle1 = self._create_test_circle(1, 100, 100, connections=[2, 3])
+        circle2 = self._create_test_circle(2, 200, 100, connections=[1])
+        circle3 = self._create_test_circle(3, 100, 200, connections=[1])
+        
+        self.app.circles = [circle1, circle2, circle3]
+        self.app.circle_lookup = {1: circle1, 2: circle2, 3: circle3}
+        
+        # Test with mock canvas
+        self.app.canvas.create_line.return_value = 101
+        self.app.canvas.create_text.return_value = 102
+        
+        # Mock connection manager's angle calculation
+        with patch.object(self.app.connection_manager, 'calculate_connection_entry_angle') as mock_angle:
+            mock_angle.side_effect = lambda circle_id, other_id: 90.0 if other_id == 2 else 180.0
+            
+            # Call the method under test
+            self.app.ui_manager.draw_connection_angle_visualizations(1)
+            
+            # Verify angle visualization elements were created
+            self.app.canvas.create_line.assert_called()
+            self.app.canvas.create_text.assert_called()
+            
+            # Verify the visualization items were stored
+            self.assertGreater(len(self.app.ui_manager.visualization_items), 0)
+    
+    def test_clear_angle_visualizations(self):
+        """Test clearing angle visualizations."""
+        # Set up visualization items
+        self.app.ui_manager.visualization_items = [101, 102, 103]
+        
+        # Call the method under test
+        self.app.ui_manager.clear_angle_visualizations()
+        
+        # Verify all items were deleted
+        self.app.canvas.delete.assert_any_call(101)
+        self.app.canvas.delete.assert_any_call(102)
+        self.app.canvas.delete.assert_any_call(103)
+        self.assertEqual(len(self.app.ui_manager.visualization_items), 0)
+    
+    def test_ui_state_changes_during_mode_transitions(self):
+        """Test UI state changes during different mode transitions."""
+        # Initial mode is CREATE
+        self.app._mode = ApplicationMode.CREATE
+        
+        # TEST 1: Transition to SELECTION mode
+        # Setup
+        self.app.newly_placed_circle_id = 1
+        
+        with patch.object(self.app.ui_manager, 'show_hint_text') as mock_hint:
+            # Transition to SELECTION mode
+            self.app._set_application_mode(ApplicationMode.SELECTION)
+            
+            # Verify UI state changes
+            mock_hint.assert_called_once()
+            self.assertEqual(self.app._mode, ApplicationMode.SELECTION)
+        
+        # TEST 2: Transition to ADJUST mode
+        with patch.object(self.app.ui_manager, 'show_edit_hint_text') as mock_edit_hint:
+            with patch.object(self.app.connection_manager, 'show_midpoint_handles') as mock_handles:
+                # Transition to ADJUST mode
+                self.app._mode = ApplicationMode.CREATE  # Reset first since SELECTION→ADJUST is blocked
+                self.app._set_application_mode(ApplicationMode.ADJUST)
+                
+                # Verify UI state changes
+                mock_edit_hint.assert_called_once()
+                mock_handles.assert_called_once()
+                self.assertEqual(self.app._mode, ApplicationMode.ADJUST)
+                self.app.canvas.config.assert_called_with(bg="#FFEEEE")  # Pink background
+        
+        # TEST 3: Transition back to CREATE mode
+        self.app.edit_hint_text_id = 200
+        
+        with patch.object(self.app.connection_manager, 'hide_midpoint_handles') as mock_hide:
+            # Transition to CREATE mode
+            self.app._set_application_mode(ApplicationMode.CREATE)
+            
+            # Verify UI state changes
+            mock_hide.assert_called_once()
+            self.assertEqual(self.app._mode, ApplicationMode.CREATE)
+            self.app.canvas.config.assert_called_with(bg="white")  # White background
+            self.app.canvas.delete.assert_called_with(200)  # Delete edit hint text
+    
+    def test_button_state_management(self):
+        """Test button state management during mode transitions."""
+        # Mock the toggle button
+        self.app.toggle_button = MagicMock()
+        
+        # Test CREATE mode button state
+        self.app._mode = ApplicationMode.CREATE
+        self.app.ui_manager.update_button_states()
+        self.app.toggle_button.config.assert_called_with(text="Adjust Mode")
+        
+        # Test ADJUST mode button state
+        self.app._mode = ApplicationMode.ADJUST
+        self.app.ui_manager.update_button_states()
+        self.app.toggle_button.config.assert_called_with(text="Create Mode")
+        
+        # Test SELECTION mode button state (button should be disabled)
+        self.app._mode = ApplicationMode.SELECTION
+        self.app.ui_manager.update_button_states()
+        self.app.toggle_button.config.assert_called_with(state="disabled")
+    
+    def test_hint_text_updating_in_various_scenarios(self):
+        """Test hint text updating in various scenarios."""
+        # Test scenario 1: Selection mode with newly placed circle
+        self.app._mode = ApplicationMode.SELECTION
+        self.app.newly_placed_circle_id = 1
+        self.app.hint_text_id = None
+        self.app.canvas.create_text.return_value = 101
+        
+        self.app.ui_manager.update_hint_text()
+        
+        self.app.canvas.create_text.assert_called()
+        self.assertEqual(self.app.hint_text_id, 101)
+        
+        # Test scenario 2: Edit mode with hint text
+        self.app._mode = ApplicationMode.ADJUST
+        self.app.hint_text_id = 101
+        self.app.edit_hint_text_id = None
+        self.app.canvas.create_text.return_value = 102
+        
+        self.app.ui_manager.update_hint_text()
+        
+        self.app.canvas.delete.assert_called_with(101)  # Delete old hint text
+        self.app.canvas.create_text.assert_called()
+        self.assertEqual(self.app.edit_hint_text_id, 102)
+        
+        # Test scenario 3: Create mode with edit text
+        self.app._mode = ApplicationMode.CREATE
+        self.app.edit_hint_text_id = 102
+        
+        self.app.ui_manager.update_hint_text()
+        
+        self.app.canvas.delete.assert_called_with(102)  # Delete edit hint text
+        self.assertIsNone(self.app.edit_hint_text_id)
+    
+    def test_debug_overlay_updating_various_scenarios(self):
+        """Test debug overlay updating in various scenarios."""
+        # Test scenario 1: Debug enabled, show debug info for circle
+        self.app.debug_enabled = True
+        self.app.debug_text = None
+        circle = self._create_test_circle(1, 100, 100)
+        self.app.circles = [circle]
+        self.app.circle_lookup = {1: circle}
+        self.app.canvas.create_text.return_value = 101
+        
+        self.app.ui_manager.update_debug_overlay()
+        
+        self.app.canvas.create_text.assert_called()
+        self.assertEqual(self.app.debug_text, 101)
+        
+        # Test scenario 2: Debug enabled, update existing debug info
+        self.app.debug_enabled = True
+        self.app.debug_text = 101
+        
+        self.app.ui_manager.update_debug_overlay()
+        
+        self.app.canvas.delete.assert_called_with(101)
+        self.app.canvas.create_text.assert_called()
+        
+        # Test scenario 3: Debug disabled, remove debug info
+        self.app.debug_enabled = False
+        self.app.debug_text = 101
+        
+        self.app.ui_manager.update_debug_overlay()
+        
+        self.app.canvas.delete.assert_called_with(101)
+        self.assertIsNone(self.app.debug_text)
