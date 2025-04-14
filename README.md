@@ -1,3 +1,7 @@
+# 4colour - Visual Four Color Theorem Implementation
+
+This project provides an interactive visualization and implementation of the Four Color Theorem, demonstrating that any planar graph can be colored using at most four colors such that no adjacent vertices share the same color.
+
 # Contribution Guidelines
 
 NOTE: These guidelines apply only to code in the 4colour repo.
@@ -30,6 +34,8 @@ To ensure smooth development and avoid regressions:
 - If a test fails, understand whether it's because of a bug in the implementation or because the test needs to be updated for new behavior.
 - All new features must have corresponding tests in the `tests` directory.
 - Consider writing tests before implementing a feature to clarify expected behavior.
+
+Note: Some tests may intentionally fail if they were written to describe future functionality that hasn't been implemented yet (especially in Phase 16). This is part of our test-driven development approach.
 
 Tests can be run with: python -m unittest discover -s tests
 
@@ -90,6 +96,11 @@ The project is organized into the following key files and directories:
     * `test_interaction_handler.py`: Tests for user input handling, mode transitions, and drag/drop logic.
     * `test_ui_manager.py`: Tests for UI element management and display updates.
     * `test_utils.py`: Contains testing utilities and mock objects like `MockAppTestCase`.
+
+### Resources
+
+* [Four Color Theorem (Wikipedia)](https://en.wikipedia.org/wiki/Four_color_theorem) - Background on the mathematical theorem this project demonstrates
+* [Graph Coloring Algorithms](https://www.geeksforgeeks.org/graph-coloring-applications/) - Overview of common graph coloring approaches
 
 ### Phases 1-7 Summary
 
