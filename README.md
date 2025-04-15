@@ -115,10 +115,11 @@ This phase focuses on enhancing the color management system to handle complex gr
         - After the priority swap, the two representative circles must be redrawn to show their new color
         - Also, a check must be performed for any conflict on these two nodes. If a conflict is found, a warning should be displayed for debugging purposes. Additional logic to handle this will be added later.
 
-- [ ] **Investigate `_remove_on_right_click`:**
-    * Determine the purpose and current usage of the `_remove_on_right_click` method in `canvas_app.py`.
-    * Verify if it's still needed or if its functionality is handled elsewhere (e.g., within `InteractionHandler`).
-    * If needed, ensure it correctly respects the new `locked` attribute.
+- [ ] **Prevent excessive curves:**
+    * Curved lines are allowed, but should be constrained to help prevent overlaps
+    * Do not allow the midpoint too close to either of its attached nodes
+    * If connections at either connected node are within 2 degrees, automatically adjust the midpoint to increase the angle of separation to at least 3 degrees.
+    * When the user creates a new node, assess the distance to the closest node that the user wants to connect too, and if it is too close, move the node further away from the average position of all the connected nodes
 
 - [ ] **Fix and Enhance Unit Tests:**
     * Update test expectations in `test_color_manager.py` to match the new algorithm behavior
@@ -128,22 +129,3 @@ This phase focuses on enhancing the color management system to handle complex gr
 
 - [ ] **Document Algorithm and Implementation:**
     * Add detailed comments explaining color reassignment strategy
-
-## Phase 16 Implementation Details
-
-This section summarizes the code changes made to address the completed work items in Phase 16 and subsequent bug fixes.
-
-### Item 3: Enhance Core Color Management Functions (`reassign_color_network`)
-
-The `reassign_color_network` method in `color_manager.py` was significantly modified to implement the color swap logic when a node is initially assigned priority 4 (red).
-
-1.  **Trigger:** The method is called from `assign_color_based_on_connections` and `check_and_resolve_color_conflicts` when priority 4 is determined as the necessary color.
-2.  **Swap Target Search:** The method iterates through the neighbors (`connected_to`) of the `circle_id` that triggered the reassignment. It looks for the first neighbor with `enclosed=True`.
-3.  **Swap Execution:**
-    *   If an enclosed neighbor (`swap_target_id`) is found:
-        *   The original circle (`circle_id`) receives the neighbor's original priority (`swap_target_original_priority`).
-        *   The enclosed neighbor (`swap_target_id`) receives priority 4.
-        *   The `update_circle_color` method is called for both circles to update their data and visual appearance on the canvas.
-4.  **Post-Swap Conflict Check:** After the swap, `check_and_resolve_color_conflicts` is called on both the original circle and the swapped neighbor to handle any *new* conflicts introduced by the swap. Debug `print` statements were added to warn if the final priorities differ from the intended swap priorities.
-5.  **Return Value:** The method returns the final priority assigned to the original `circle_id` after the swap and subsequent conflict check.
-6.  **Fallback:** If no suitable enclosed neighbor is found, the original circle retains priority 4, and the method returns 4. `update_circle_color` is still called to ensure the circle is visually red.
