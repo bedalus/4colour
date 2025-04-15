@@ -1,6 +1,6 @@
 # 4colour - Visual Four Color Theorem Implementation
 
-This project provides an interactive visualization and implementation of the Four Color Theorem, demonstrating that any planar graph can be colored using at most four colors such that no adjacent vertices share the same color.
+This project provides an interactive visualization and implementation of the Four Color Theorem, demonstrating that any planar graph can be colored using at most four colors such that no adjacent vertices share the same color. [Four Color Theorem (Wikipedia)](https://en.wikipedia.org/wiki/Four_color_theorem) - Background on the mathematical theorem this project demonstrates
 
 # Contribution Guidelines
 
@@ -69,11 +69,6 @@ The project is organized into the following key files and directories:
 *   `function_logger.py`, `log_function_calls.py`, `analyze_call_logs.py`: Debugging tools
 *   `tests/`: Unit and integration tests
 
-### Resources
-
-* [Four Color Theorem (Wikipedia)](https://en.wikipedia.org/wiki/Four_color_theorem) - Background on the mathematical theorem this project demonstrates
-* [Graph Coloring Algorithms](https://www.geeksforgeeks.org/graph-coloring-applications/) - Overview of common graph coloring approaches
-
 ### Phases 1-7 Summary
 
 The initial development phases established core functionality: Tkinter UI, circle drawing with coloring, data storage, connection mechanisms, selection mode for connecting circles, adjust mode for moving/removing circles, and event binding management with improved mode transitions and UI feedback.
@@ -115,7 +110,7 @@ This phase focuses on enhancing the color management system to handle complex gr
         - After the priority swap, the two representative circles must be redrawn to show their new color
         - Also, a check must be performed for any conflict on these two nodes. If a conflict is found, a warning should be displayed for debugging purposes. Additional logic to handle this will be added later.
 
-- [ ] **Prevent excessive curves:**
+- [ ] **Prevent excessive curvature of connections:**
     * Curved lines are allowed, but should be constrained to help prevent overlaps
     * Do not allow the midpoint too close to either of its attached nodes
     * If connections at either connected node are within 2 degrees, automatically adjust the midpoint to increase the angle of separation to at least 3 degrees.
