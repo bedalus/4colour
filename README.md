@@ -115,6 +115,7 @@ This phase focuses on enhancing the color management system to handle complex gr
     * Do not allow the midpoint too close to either of its attached nodes
     * If connections at either connected node are within 2 degrees, automatically adjust the midpoint to increase the angle of separation to at least 3 degrees.
     * When the user creates a new node, assess the distance to the closest node that the user wants to connect too, and if it is too close, move the node further away from the average position of all the connected nodes
+    * DO NOT ALLOW the user to place a node that is connected to any enclosed node. If so, delete the new node and its connections
 
 - [ ] **Fix and Enhance Unit Tests:**
     * Update test expectations in `test_color_manager.py` to match the new algorithm behavior
