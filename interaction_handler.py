@@ -39,100 +39,27 @@ class InteractionHandler:
         
         old_mode = self.app._mode  # Store the old mode before changing
         
-        # First clean up the current mode
-        if self.app._mode == ApplicationMode.CREATE:
-             # Lock all non-fixed circles and connections when exiting CREATE mode
+        # Special handling for exiting CREATE mode
+        if old_mode == ApplicationMode.CREATE:
+             # Lock all non-fixed circles and connections
             for circle in self.app.circles:
                 if not circle.get("fixed", False):
                     circle["locked"] = True
             for connection_key, connection in self.app.connections.items():
                  if not connection.get("fixed", False):
                     connection["locked"] = True
-
-        elif self.app._mode == ApplicationMode.SELECTION:  # Fixed: Using imported ApplicationMode
-            # Clear selections
-            for indicator_id in self.app.selection_indicators.values():
-                self.app.canvas.delete(indicator_id)
-            self.app.selection_indicators = {}
-            self.app.selected_circles = []
-            if self.app.hint_text_id:
-                self.app.canvas.delete(self.app.hint_text_id)
-                self.app.hint_text_id = None
-                
-        elif self.app._mode == ApplicationMode.ADJUST:  # Fixed: Using imported ApplicationMode
-            # Hide midpoint handles when exiting ADJUST mode
-            self.app.connection_manager.hide_midpoint_handles()
-            
-            # Clear angle visualizations when exiting ADJUST mode
-            self.app.ui_manager.clear_angle_visualizations()
-            
-            # Clear adjust mode state
-            if self.app.edit_hint_text_id:
-                self.app.canvas.delete(self.app.edit_hint_text_id)
-                self.app.edit_hint_text_id = None
-            # Reset canvas background color when exiting ADJUST mode
-            self.app.canvas.config(bg="white")
-
-            # Clear highlight if it exists when exiting ADJUST mode
-            if self.app.highlighted_circle_id:
-                self.app.canvas.delete(self.app.highlighted_circle_id)
-                self.app.highlighted_circle_id = None
-
-        # Unbind events for the current mode
-        self.unbind_mode_events(self.app._mode)
-
-        # Set the new mode
-        self.app._mode = new_mode
         
-        # Update the button text based on current mode
-        if self.app.mode_button:
-            # Only update text if we're not in "Fix Red" mode
-            if not hasattr(self.app, '_stored_mode_button_command'):
-                if new_mode == ApplicationMode.ADJUST:
-                    self.app.mode_button.config(text="Engage create mode")
-                else:
-                    self.app.mode_button.config(text="Engage adjust mode")
+        # Common mode transition handling
+        self._prepare_mode_transition(new_mode)
         
-        # Bind events for the new mode
-        self.bind_mode_events(new_mode)
+        # Update button text
+        if self.app.mode_button and not hasattr(self.app, '_stored_mode_button_command'):
+            if new_mode == ApplicationMode.ADJUST:
+                self.app.mode_button.config(text="Engage create mode")
+            else:
+                self.app.mode_button.config(text="Engage adjust mode")
         
-        # Setup additional mode-specific UI elements
-        if new_mode == ApplicationMode.ADJUST:  # Fixed: Using imported ApplicationMode
-            self.app.ui_manager.show_edit_hint_text() # Hint text updated in UIManager
-            # Set canvas background to pale pink in ADJUST mode
-            self.app.canvas.config(bg="#FFDDDD")  # Pale pink
-            # Show midpoint handles in ADJUST mode
-            self.app.connection_manager.show_midpoint_handles()
-            # Update enclosure status to show indicators
-            self.app._update_enclosure_status()
-
-            # Unlock and highlight the last placed circle and its connections
-            if self.app.last_circle_id is not None and self.app.last_circle_id > 0: # Ensure it's not a fixed node
-                last_circle_data = self.app.circle_lookup.get(self.app.last_circle_id)
-                if last_circle_data and not last_circle_data.get("fixed", False):
-                    # Unlock the circle
-                    last_circle_data["locked"] = False
-
-                    # Draw highlight
-                    radius = self.app.circle_radius
-                    x, y = last_circle_data["x"], last_circle_data["y"]
-                    # Delete previous highlight if it exists
-                    if self.app.highlighted_circle_id:
-                        self.app.canvas.delete(self.app.highlighted_circle_id)
-                    self.app.highlighted_circle_id = self.app.canvas.create_oval(
-                        x - radius - 3, y - radius - 3,
-                        x + radius + 3, y + radius + 3,
-                        outline='purple', width=3, tags="temp_highlight"
-                    )
-
-                    # --- Verify this section is correctly applied ---
-                    # Unlock its connections
-                    for connected_id in last_circle_data.get("connected_to", []):
-                        connection_key = self.app.connection_manager.get_connection_key(self.app.last_circle_id, connected_id)
-                        connection = self.app.connections.get(connection_key)
-                        if connection and not connection.get("fixed", False):
-                            connection["locked"] = False # Ensure this line is present and correct
-                    # --- End verification section ---
+        # The unlocking of the last node is now handled in _prepare_mode_transition
     
     def bind_mode_events(self, mode):
         """Bind the appropriate events for the given mode.
@@ -207,13 +134,14 @@ class InteractionHandler:
     
     def toggle_mode(self):
         """Toggle between create and adjust modes."""
-        # Simply toggle between create and adjust modes
         if self.app._mode == ApplicationMode.ADJUST:
-            self.set_application_mode(ApplicationMode.CREATE)
+            self._prepare_mode_transition(ApplicationMode.CREATE)
+            if self.app.mode_button:
+                self.app.mode_button.config(text="Engage adjust mode")
         elif self.app._mode == ApplicationMode.CREATE:
-            # Only enter adjust mode from create mode, not selection mode
-            self.set_application_mode(ApplicationMode.ADJUST)
-        # Selection mode can't transition to adjust mode - do nothing
+            self._prepare_mode_transition(ApplicationMode.ADJUST)
+            if self.app.mode_button:
+                self.app.mode_button.config(text="Engage create mode")
 
     def draw_on_click(self, event):
         """Draw a circle at the clicked position or select an existing circle.
@@ -231,8 +159,7 @@ class InteractionHandler:
             return
             
         # Check for proximity restrictions - prevent placement too close to origin or fixed nodes
-        if x < self.app.PROXIMITY_LIMIT and y < self.app.PROXIMITY_LIMIT:
-            # Position is in the restricted zone near origin and fixed nodes
+        if self._is_in_protected_zone(x, y):
             return
             
         # Normal mode: draw a new circle
@@ -385,17 +312,7 @@ class InteractionHandler:
             
             # Reset selection state
             self.app.newly_placed_circle_id = None
-            self.app.selected_circles = []
-            
-            # Clear selection indicators
-            for indicator_id in self.app.selection_indicators.values():
-                self.app.canvas.delete(indicator_id)
-            self.app.selection_indicators = {}
-            
-            # Clear hint text
-            if self.app.hint_text_id:
-                self.app.canvas.delete(self.app.hint_text_id)
-                self.app.hint_text_id = None
+            self._clear_selection_state()
             
             # Exit selection mode
             self.app.in_selection_mode = False
@@ -467,9 +384,7 @@ class InteractionHandler:
                                     self.app.drag_state["id"] = tag
                                     
                                     # Update debug display
-                                    if self.app.debug_enabled and debug_circle_ids:
-                                        self.app.ui_manager.set_active_circles(*debug_circle_ids)
-                                        self.app.ui_manager.show_debug_info()
+                                    self._update_debug_for_circles(*debug_circle_ids)
                                     return
                         except (ValueError, AttributeError):
                             pass
@@ -477,9 +392,7 @@ class InteractionHandler:
                         # For non-last circle connections, check lock status
                         if connection and (connection.get("fixed", False) or connection.get("locked", False)):
                             # FIX: Update debug display even if locked
-                            if self.app.debug_enabled and debug_circle_ids:
-                                self.app.ui_manager.set_active_circles(*debug_circle_ids)
-                                self.app.ui_manager.show_debug_info()
+                            self._update_debug_for_circles(*debug_circle_ids)
                             return # Stop if locked
 
                         self.app.drag_state["active"] = True
@@ -487,9 +400,7 @@ class InteractionHandler:
                         self.app.drag_state["id"] = tag
                         
                         # Update debug display
-                        if self.app.debug_enabled and debug_circle_ids:
-                            self.app.ui_manager.set_active_circles(*debug_circle_ids)
-                            self.app.ui_manager.show_debug_info()
+                        self._update_debug_for_circles(*debug_circle_ids)
                         return
 
         # Check circles second
@@ -500,9 +411,7 @@ class InteractionHandler:
             
             # Check fixed and locked status from the circle data
             # FIX: Update debug display even if locked
-            if self.app.debug_enabled and debug_circle_ids:
-                self.app.ui_manager.set_active_circles(*debug_circle_ids)
-                self.app.ui_manager.show_debug_info()
+            self._update_debug_for_circles(*debug_circle_ids)
                 
             if circle and (circle.get("fixed", False) or circle.get("locked", False)):
                 return  # Stop if locked
@@ -631,9 +540,7 @@ class InteractionHandler:
              # The extreme node/midpoint indicators will be updated as part of _update_enclosure_status
              
         # Set the active circles for debug display before updating
-        if debug_circle_ids and self.app.debug_enabled:
-            self.app.ui_manager.set_active_circles(*debug_circle_ids)
-            self.app.ui_manager.show_debug_info()
+        self._update_debug_for_circles(*debug_circle_ids)
     
     def drag_circle_motion(self, circle_id, dx, dy):
         """Handle circle dragging motion."""
@@ -646,7 +553,7 @@ class InteractionHandler:
         new_y = circle["y"] + dy
         
         # Prevent dragging into the protected zone
-        if new_x < self.app.PROXIMITY_LIMIT and new_y < self.app.PROXIMITY_LIMIT:
+        if self._is_in_protected_zone(new_x, new_y):
             return
         
         # Update circle position
@@ -662,7 +569,7 @@ class InteractionHandler:
             return
         
         # Prevent dragging into the protected zone
-        if x < self.app.PROXIMITY_LIMIT and y < self.app.PROXIMITY_LIMIT:
+        if self._is_in_protected_zone(x, y):
             return
 
         # Calculate new curve offset
@@ -701,49 +608,147 @@ class InteractionHandler:
         Args:
             circle_id: ID of the red node that needs fixing
         """
-        # Clear selection mode state if active
-        if self.app._mode == ApplicationMode.SELECTION:
-            # Clean up selection state
-            for indicator_id in self.app.selection_indicators.values():
-                self.app.canvas.delete(indicator_id)
-            self.app.selection_indicators = {}
-            self.app.selected_circles = []
-            if self.app.hint_text_id:
-                self.app.canvas.delete(self.app.hint_text_id)
-                self.app.hint_text_id = None
+        # Handle mode transition with specialized flag
+        is_transition = self._prepare_mode_transition(ApplicationMode.ADJUST, for_red_node=True)
         
-        # Only change mode if we're not already in ADJUST mode
-        if self.app._mode != ApplicationMode.ADJUST:
-            print(f"DEBUG: Switching to ADJUST mode for red node fixing from {self.app._mode}")
-            # Unbind current mode events
-            self.unbind_mode_events(self.app._mode)
-            # Set new mode
-            self.app._mode = ApplicationMode.ADJUST
+        # Additional setup for red node fix mode
+        if is_transition and self.app.mode_button:
             # Update button text
-            if self.app.mode_button:
-                self.app.mode_button.config(text="Fix Red")
-            # Set up ADJUST mode UI
-            self.app.ui_manager.show_edit_hint_text()
-            self.app.canvas.config(bg="#FFDDDD")  # Pale pink
-            # Bind new mode events
-            self.bind_mode_events(ApplicationMode.ADJUST)
-            # Update connections and show handles
-            self.app.connection_manager.show_midpoint_handles()
-            self.app._update_enclosure_status()
+            self.app.mode_button.config(text="Fix Red")
             
             # Store the original mode button's command
-            if hasattr(self.app, 'mode_button'):
-                original_command = self.app.mode_button['command']
-                self.app._stored_mode_button_command = original_command
-                self.app.mode_button.config(
-                    command=lambda: self.app._focus_after(
-                        self.app.color_manager.handle_fix_red_node_button
-                    )
+            original_command = self.app.mode_button['command']
+            self.app._stored_mode_button_command = original_command
+            self.app.mode_button.config(
+                command=lambda: self.app._focus_after(
+                    self.app.color_manager.handle_fix_red_node_button
                 )
-                print("DEBUG: Changed mode button to 'Fix Red'")
+            )
+            print("DEBUG: Changed mode button to 'Fix Red'")
         
         # Ensure the red node is unlocked for movement
         red_node = self.app.circle_lookup.get(circle_id)
         if red_node:
             red_node["locked"] = False
             print(f"DEBUG: Unlocked red node {circle_id} for movement")
+    
+    def _clear_selection_state(self):
+        """Clear all selection-related state and UI elements."""
+        # Remove selection indicators
+        for indicator_id in self.app.selection_indicators.values():
+            self.app.canvas.delete(indicator_id)
+        self.app.selection_indicators = {}
+        self.app.selected_circles = []
+        
+        # Clear hint text
+        if self.app.hint_text_id:
+            self.app.canvas.delete(self.app.hint_text_id)
+            self.app.hint_text_id = None
+    
+    def _update_debug_for_circles(self, *circle_ids):
+        """Update debug display for specified circles if debug is enabled.
+        
+        Args:
+            *circle_ids: Variable number of circle IDs to show in debug
+        """
+        if self.app.debug_enabled and circle_ids:
+            self.app.ui_manager.set_active_circles(*circle_ids)
+            self.app.ui_manager.show_debug_info()
+    
+    def _is_in_protected_zone(self, x, y):
+        """Check if coordinates are in the protected zone.
+        
+        Args:
+            x: X coordinate to check
+            y: Y coordinate to check
+            
+        Returns:
+            bool: True if coordinates are in protected zone
+        """
+        return x < self.app.PROXIMITY_LIMIT and y < self.app.PROXIMITY_LIMIT
+    
+    def _prepare_mode_transition(self, new_mode, for_red_node=False):
+        """Handle common mode transition tasks.
+        
+        Args:
+            new_mode: Mode to transition to
+            for_red_node: Whether this transition is for fixing a red node
+        """
+        old_mode = self.app._mode
+        
+        # Skip if already in the target mode
+        if old_mode == new_mode:
+            return
+            
+        # Clean up previous mode
+        if old_mode == ApplicationMode.SELECTION:
+            self._clear_selection_state()
+        elif old_mode == ApplicationMode.ADJUST:
+            # Hide midpoint handles
+            self.app.connection_manager.hide_midpoint_handles()
+            
+            # Clear angle visualizations
+            self.app.ui_manager.clear_angle_visualizations()
+            
+            # Clear adjust mode state
+            if self.app.edit_hint_text_id:
+                self.app.canvas.delete(self.app.edit_hint_text_id)
+                self.app.edit_hint_text_id = None
+                
+            # Reset canvas background
+            self.app.canvas.config(bg="white")
+            
+            # Clear highlight
+            if self.app.highlighted_circle_id:
+                self.app.canvas.delete(self.app.highlighted_circle_id)
+                self.app.highlighted_circle_id = None
+        
+        # Unbind events for previous mode
+        self.unbind_mode_events(old_mode)
+        
+        # Set new mode
+        self.app._mode = new_mode
+        
+        # Bind events for new mode
+        self.bind_mode_events(new_mode)
+        
+        # Setup for new mode
+        if new_mode == ApplicationMode.ADJUST:
+            # Set up ADJUST mode UI
+            self.app.ui_manager.show_edit_hint_text()
+            self.app.canvas.config(bg="#FFDDDD" if for_red_node else "#FFEEEE")
+            self.app.connection_manager.show_midpoint_handles()
+            self.app._update_enclosure_status()
+            
+            # Always unlock the last placed circle and its connections
+            if self.app.last_circle_id is not None and self.app.last_circle_id > 0:  # Ensure it's not a fixed node
+                last_circle_data = self.app.circle_lookup.get(self.app.last_circle_id)
+                if last_circle_data and not last_circle_data.get("fixed", False):
+                    # Unlock the circle
+                    last_circle_data["locked"] = False
+                    print(f"DEBUG: Unlocked last node {self.app.last_circle_id} for ADJUST mode")
+
+                    # Draw highlight
+                    radius = self.app.circle_radius
+                    x, y = last_circle_data["x"], last_circle_data["y"]
+                    # Delete previous highlight if it exists
+                    if self.app.highlighted_circle_id:
+                        self.app.canvas.delete(self.app.highlighted_circle_id)
+                    self.app.highlighted_circle_id = self.app.canvas.create_oval(
+                        x - radius - 3, y - radius - 3,
+                        x + radius + 3, y + radius + 3,
+                        outline='purple', width=3, tags="temp_highlight"
+                    )
+
+                    # Unlock its connections
+                    for connected_id in last_circle_data.get("connected_to", []):
+                        connection_key = self.app.connection_manager.get_connection_key(self.app.last_circle_id, connected_id)
+                        connection = self.app.connections.get(connection_key)
+                        if connection and not connection.get("fixed", False):
+                            connection["locked"] = False  # Unlock connections
+            
+            if for_red_node:
+                # Special handling for red node fix
+                return True
+                
+        return False
