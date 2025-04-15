@@ -144,14 +144,27 @@ class ColorManager:
         swap_target_original_priority = None
 
         # Find an enclosed neighbor to swap with
+        # BUG FIX: The current implementation stops at the first enclosed neighbor, but
+        # not all neighbors might be suitable for swap. We need to check them all.
+        enclosed_neighbors = []
+        
         for connected_id in circle_data.get("connected_to", []):
             connected_circle_data = self.app.circle_lookup.get(connected_id)
             if connected_circle_data and connected_circle_data.get("enclosed") is True:
-                swap_target_id = connected_id
-                swap_target_original_priority = connected_circle_data["color_priority"]
-                break # Stop after finding the first enclosed neighbor
-
-        if swap_target_id is not None:
+                enclosed_neighbors.append((connected_id, connected_circle_data))
+        
+        # If no enclosed neighbors found, this is unexpected according to Four Color Theorem logic
+        if not enclosed_neighbors:
+            print(f"WARNING: Node {circle_id} has no enclosed neighbors for swapping red priority!")
+            # Ensure the circle is visually red and return priority 4
+            self.update_circle_color(circle_id, original_circle_priority)
+            return original_circle_priority
+        
+        # Try each enclosed neighbor until we find one that works
+        for neighbor_id, neighbor_data in enclosed_neighbors:
+            swap_target_id = neighbor_id
+            swap_target_original_priority = neighbor_data["color_priority"]
+            
             # Perform the swap
             print(f"DEBUG: Swapping priority 4 from node {circle_id} with priority {swap_target_original_priority} from enclosed node {swap_target_id}")
             self.update_circle_color(circle_id, swap_target_original_priority)
@@ -161,19 +174,21 @@ class ColorManager:
             final_priority_original = self.check_and_resolve_color_conflicts(circle_id)
             final_priority_swapped = self.check_and_resolve_color_conflicts(swap_target_id)
 
-            # Issue warnings if conflicts arose *after* the swap
-            if final_priority_original != swap_target_original_priority:
-                print(f"WARNING: Conflict detected for original node {circle_id} after swap. Expected {swap_target_original_priority}, got {final_priority_original}.")
-            if final_priority_swapped != original_circle_priority:
-                print(f"WARNING: Conflict detected for swapped node {swap_target_id} after swap. Expected {original_circle_priority}, got {final_priority_swapped}.")
-
-            return final_priority_original # Return the final priority of the original circle
-        else:
-            # No enclosed neighbor found, keep priority 4 for the original circle
-            print(f"DEBUG: Node {circle_id} assigned priority 4, no enclosed neighbor found for swap.")
-            # Ensure the circle is visually red
+            # If no conflicts arose, we're done
+            if final_priority_original == swap_target_original_priority and final_priority_swapped == original_circle_priority:
+                return final_priority_original
+            
+            # Otherwise, try the next neighbor
+            print(f"WARNING: Swap with node {swap_target_id} resulted in conflicts. Trying next neighbor.")
+            
+            # Undo this swap since it didn't work
             self.update_circle_color(circle_id, original_circle_priority)
-            return original_circle_priority # Return 4
+            self.update_circle_color(swap_target_id, swap_target_original_priority)
+        
+        # If we get here, no viable swaps were found
+        print(f"WARNING: No viable enclosed neighbor found for node {circle_id} to swap with.")
+        self.update_circle_color(circle_id, original_circle_priority)
+        return original_circle_priority
 
     def update_circle_color(self, circle_id, color_priority):
         """Update a circle's color priority both in data and visually.

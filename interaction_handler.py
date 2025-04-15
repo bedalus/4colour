@@ -438,7 +438,7 @@ class InteractionHandler:
                         connection_key = tag
                         connection = self.app.connections.get(connection_key)
                         
-                        # Extract the circle IDs from the connection key for debug info
+                        # Extract circle IDs from connection key for debug display
                         try:
                             parts = connection_key.split("_")
                             if len(parts) == 2:
@@ -446,8 +446,8 @@ class InteractionHandler:
                                 circle2_id = int(parts[1])
                                 debug_circle_ids = [circle1_id, circle2_id]
                                 
-                                # If either circle is the last circle, we should allow dragging the midpoint
-                                # regardless of lock status (connections of the last node should be interactive)
+                                # FIX: Allow dragging midpoint handles connected to the last circle,
+                                # regardless of lock status
                                 if (self.app.last_circle_id == circle1_id or 
                                     self.app.last_circle_id == circle2_id):
                                     self.app.drag_state["active"] = True
@@ -462,9 +462,13 @@ class InteractionHandler:
                         except (ValueError, AttributeError):
                             pass
                             
-                        # Fall back to normal lock checking if not connected to last circle
+                        # For non-last circle connections, check lock status
                         if connection and (connection.get("fixed", False) or connection.get("locked", False)):
-                            return  # Stop if locked
+                            # FIX: Update debug display even if locked
+                            if self.app.debug_enabled and debug_circle_ids:
+                                self.app.ui_manager.set_active_circles(*debug_circle_ids)
+                                self.app.ui_manager.show_debug_info()
+                            return # Stop if locked
 
                         self.app.drag_state["active"] = True
                         self.app.drag_state["type"] = "midpoint"
@@ -483,21 +487,17 @@ class InteractionHandler:
             circle = self.app.circle_lookup.get(circle_id)
             
             # Check fixed and locked status from the circle data
+            # FIX: Update debug display even if locked
+            if self.app.debug_enabled and debug_circle_ids:
+                self.app.ui_manager.set_active_circles(*debug_circle_ids)
+                self.app.ui_manager.show_debug_info()
+                
             if circle and (circle.get("fixed", False) or circle.get("locked", False)):
-                # Even if locked, update debug display
-                if self.app.debug_enabled:
-                    self.app.ui_manager.set_active_circles(*debug_circle_ids)
-                    self.app.ui_manager.show_debug_info()
                 return  # Stop if locked
 
             self.app.drag_state["active"] = True
             self.app.drag_state["type"] = "circle"
             self.app.drag_state["id"] = circle_id
-            
-            # Update debug display
-            if self.app.debug_enabled:
-                self.app.ui_manager.set_active_circles(*debug_circle_ids)
-                self.app.ui_manager.show_debug_info()
 
     def drag_motion(self, event):
         """Handle any object's dragging motion.
