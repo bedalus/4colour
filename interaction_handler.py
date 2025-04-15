@@ -625,12 +625,6 @@ class InteractionHandler:
                 )
             )
             print("DEBUG: Changed mode button to 'Fix Red'")
-        
-        # Ensure the red node is unlocked for movement
-        red_node = self.app.circle_lookup.get(circle_id)
-        if red_node:
-            red_node["locked"] = False
-            print(f"DEBUG: Unlocked red node {circle_id} for movement")
     
     def _clear_selection_state(self):
         """Clear all selection-related state and UI elements."""
