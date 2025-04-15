@@ -178,9 +178,7 @@ class ColorManager:
         swap_target_id = None
         swap_target_original_priority = None
 
-        # Find an enclosed neighbor to swap with
-        # BUG FIX: The current implementation stops at the first enclosed neighbor, but
-        # not all neighbors might be suitable for swap. We need to check them all.
+        # Find an enclosed neighbor to swap color with
         enclosed_neighbors = []
         
         for connected_id in circle_data.get("connected_to", []):
@@ -201,37 +199,17 @@ class ColorManager:
             swap_target_original_priority = neighbor_data["color_priority"]
             
             # Perform the swap
-            print(f"DEBUG: Swapping priority 4 from node {circle_id} with priority {swap_target_original_priority} from enclosed node {swap_target_id}")
+            print(f"DEBUG: Swapping red node (ID:{circle_id}) with enclosed {get_color_from_priority(swap_target_original_priority)} node (ID:{swap_target_id})")
             self.update_circle_color(circle_id, swap_target_original_priority)
             self.update_circle_color(swap_target_id, original_circle_priority) # Assign red (4) to the target
 
             # Check for conflicts after the swap
             final_priority_original = self.check_and_resolve_color_conflicts(circle_id)
-            final_priority_swapped = self.check_and_resolve_color_conflicts(swap_target_id)
-
-            # If we created a new red node elsewhere during swap, handle it specially
-            if self.red_node_id is not None and self.red_node_id != circle_id:
-                print(f"WARNING: Swap created a new red node {self.red_node_id}. This will need manual fixing.")
-                # Store info about this new problem
-                self.next_red_node_id = self.red_node_id
-                # Clear current red node ID to complete current fix operation
-                self.red_node_id = None
-
-            # If no conflicts arose, we're done
-            if final_priority_original == swap_target_original_priority and final_priority_swapped == original_circle_priority:
-                return final_priority_original
-            
-            # Otherwise, try the next neighbor
-            print(f"WARNING: Swap with node {swap_target_id} resulted in conflicts. Trying next neighbor.")
-            
-            # Undo this swap since it didn't work
-            self.update_circle_color(circle_id, original_circle_priority)
-            self.update_circle_color(swap_target_id, swap_target_original_priority)
+            final_priority_target = self.check_internal_red_conflict(swap_target_id)
+            return final_priority_original
         
         # If we get here, no viable swaps were found
-        print(f"WARNING: No viable enclosed neighbor found for node {circle_id} to swap with.")
-        self.update_circle_color(circle_id, original_circle_priority)
-        return original_circle_priority
+        raise RuntimeError(f"ERROR: No viable enclosed neighbor found for node {circle_id} to swap with.")
 
     def fix_red_node(self):
         """Manually triggered function to fix a red node by swapping with an enclosed neighbor."""
@@ -276,26 +254,26 @@ class ColorManager:
             fill=color_name
         )
         
-        # Check for adjacent red nodes whenever we assign a red color
-        if color_priority == 4:
-            self.check_for_adjacent_red_nodes(circle_id)
-
         # Update debug display if enabled and this circle is active
         if self.app.debug_enabled and (self.app.ui_manager.active_circle_id == circle_id or circle_id in self.app.ui_manager.active_circle_ids):
             self.app.ui_manager.show_debug_info()
 
         return True
-
-    def check_for_adjacent_red_nodes(self, circle_id):
+        
+    def check_internal_red_conflict(self, circle_id):
         """Check if a circle has any adjacent red nodes and log a warning if found.
         
         Args:
             circle_id: ID of the circle to check
+            
+        Returns:
+            int: The current color priority of the circle
         """
         circle = self.app.circle_lookup.get(circle_id)
         if not circle:
-            return
+            return None
             
+        current_priority = circle["color_priority"]
         connected_circles = circle.get("connected_to", [])
         adjacent_red_nodes = []
         
@@ -305,8 +283,10 @@ class ColorManager:
                 adjacent_red_nodes.append(connected_id)
                 
         if adjacent_red_nodes:
-            warning_msg = f"WARNING: Red node {circle_id} is adjacent to other red nodes: {adjacent_red_nodes}"
+            warning_msg = f"UNHANDLED INTERNAL RED CONFLICT: Red node {circle_id} is adjacent to other red nodes: {adjacent_red_nodes}"
             print(warning_msg)
+        
+        return current_priority
 
     def handle_red_node_creation(self, circle_id):
         """Handle the creation of a red node by showing the fix button and entering adjust mode."""
