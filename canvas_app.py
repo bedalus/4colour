@@ -114,10 +114,6 @@ class CanvasApplication:
         # Bind to window resize event
         self.root.bind("<Configure>", self._on_window_resize)
 
-        # Add these properties
-        self.next_red_node_id = None  # Tracks a red node that will need fixing after current operation
-        self.warning_text_id = None  # For displaying warnings on canvas
-    
     def _on_window_resize(self, event):
         """Update canvas dimensions when window is resized.
         

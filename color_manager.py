@@ -19,6 +19,7 @@ class ColorManager:
         """
         self.app = app
         self.red_node_id = None  # Track the ID of a node that needs color fixing
+        self.next_red_node_id = None  # Track a red node that will need fixing after current operation
     
     def assign_color_based_on_connections(self, circle_id=None):
         """Assign a color priority to a circle based on its connections.
@@ -153,8 +154,8 @@ class ColorManager:
             if adjacent_red_nodes:
                 warning_msg = f"WARNING: Red node {circle_id} is adjacent to other red nodes: {adjacent_red_nodes}"
                 print(warning_msg)
-                # Display warning to user through UI manager (more appropriate)
-                self.app.show_warning(warning_msg)
+                # Display warning to user via UI manager
+                self.app.ui_manager.show_warning(warning_msg)
         
         return new_priority
     
@@ -213,7 +214,7 @@ class ColorManager:
             if self.red_node_id is not None and self.red_node_id != circle_id:
                 print(f"WARNING: Swap created a new red node {self.red_node_id}. This will need manual fixing.")
                 # Store info about this new problem
-                self.app.next_red_node_id = self.red_node_id
+                self.next_red_node_id = self.red_node_id
                 # Clear current red node ID to complete current fix operation
                 self.red_node_id = None
 
@@ -351,12 +352,12 @@ class ColorManager:
             print("DEBUG: Re-enabled mode toggle button")
         
         # Check if we have a pending red node to fix
-        if self.app.next_red_node_id is not None:
+        if self.next_red_node_id is not None:
             # We have another red node that needs fixing
-            print(f"DEBUG: Found pending red node {self.app.next_red_node_id} to fix")
+            print(f"DEBUG: Found pending red node {self.next_red_node_id} to fix")
             # Set it as the current red node
-            self.red_node_id = self.app.next_red_node_id
-            self.app.next_red_node_id = None
+            self.red_node_id = self.next_red_node_id
+            self.next_red_node_id = None
             # Handle the new red node (stays in ADJUST mode)
             self.handle_red_node_creation(self.red_node_id)
         else:

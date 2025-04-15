@@ -1,7 +1,7 @@
 """
 UI Manager for the 4colour project.
 
-This module handles the UI elements and their behavior.
+This module manages the UI elements and interactions with the canvas.
 """
 
 import tkinter as tk
@@ -9,7 +9,7 @@ import math
 from app_enums import ApplicationMode  # Import from app_enums instead
 
 class UIManager:
-    """Manages the UI components and their operations."""
+    """Manages UI elements and display features."""
     
     def __init__(self, app):
         """Initialize with a reference to the main application.
@@ -18,8 +18,9 @@ class UIManager:
             app: The main CanvasApplication instance
         """
         self.app = app
-        self.active_circle_id = None  # Add this line
-        self.active_circle_ids = []  # Change from single ID to list
+        self.warning_text_id = None  # For displaying warnings on canvas
+        self.active_circle_id = None
+        self.active_circle_ids = []
         
     def focus_after(self, command_func):
         """Execute a command and then set focus to the debug button.
@@ -291,13 +292,13 @@ class UIManager:
         
         Args:
             message: Warning message text
-            duration: How long to display the warning in milliseconds
+            duration: How long to display the warning in milliseconds (default: 5000ms)
         """
         # Clear any existing warning
         self.clear_warning()
         
         # Display new warning at the bottom of the canvas
-        self.app.warning_text_id = self.app.canvas.create_text(
+        self.warning_text_id = self.app.canvas.create_text(
             self.app.canvas_width // 2,
             self.app.canvas_height - 20,
             text=message,
@@ -311,6 +312,6 @@ class UIManager:
 
     def clear_warning(self):
         """Remove the warning message from the canvas."""
-        if hasattr(self.app, 'warning_text_id') and self.app.warning_text_id:
-            self.app.canvas.delete(self.app.warning_text_id)
-            self.app.warning_text_id = None
+        if self.warning_text_id:
+            self.app.canvas.delete(self.warning_text_id)
+            self.warning_text_id = None
