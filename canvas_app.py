@@ -166,6 +166,11 @@ class CanvasApplication:
                                      command=lambda: self._focus_after(self._toggle_mode))
         self.mode_button.pack(side=tk.LEFT, padx=2)
         
+        # The fix_red button starts hidden and will be shown when needed
+        self.fix_red_button = ttk.Button(control_frame, text="Fix Red", 
+                                        command=lambda: self._focus_after(self._fix_red_node))
+        # Don't pack it yet - we'll do that when a red node is created
+        
         # Create canvas for drawing
         self.canvas = tk.Canvas(
             self.root, 
@@ -474,6 +479,32 @@ class CanvasApplication:
         
         # Update enclosure status after creating fixed nodes
         self._update_enclosure_status()
+
+    def handle_red_node_creation(self, circle_id):
+        """Handle the creation of a red node by showing a fix button and entering adjust mode."""
+        # Show the fix red button if it exists
+        if hasattr(self, 'fix_red_button'):
+            self.fix_red_button.pack(side=tk.LEFT, padx=2)
+            
+        # Automatically enter adjust mode
+        self._set_application_mode(ApplicationMode.ADJUST)
+        
+        # Highlight the red node
+        circle = self.circle_lookup.get(circle_id)
+        if circle:
+            self.last_circle_id = circle_id
+    
+    def hide_fix_red_button(self):
+        """Hide the fix red button when no longer needed."""
+        if hasattr(self, 'fix_red_button'):
+            self.fix_red_button.pack_forget()
+    
+    def _fix_red_node(self):
+        """Handler for the Fix Red button click."""
+        if self.color_manager.fix_red_node():
+            # If successful, update the debug info
+            if self.debug_enabled:
+                self.ui_manager.show_debug_info()
 
 def main():
     """Application entry point."""

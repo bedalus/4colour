@@ -332,6 +332,9 @@ class InteractionHandler:
             # Check and resolve color conflicts for the newly placed circle
             priority = self.app.color_manager.check_and_resolve_color_conflicts(self.app.newly_placed_circle_id)
             
+            # Note: We don't need to check if priority is 4 here, as the color_manager
+            # will handle showing the fix button and entering adjust mode if needed
+        
         # Exit selection mode
         self.app.in_selection_mode = False
         self.app.last_circle_id = self.app.newly_placed_circle_id

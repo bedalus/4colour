@@ -16,7 +16,8 @@ class ColorManager:
             app: The main CanvasApplication instance
         """
         self.app = app
-        
+        self.red_node_id = None  # Track the ID of a node that needs color fixing
+    
     # No ApplicationMode references in this class, so no fixes needed
     
     def assign_color_based_on_connections(self, circle_id=None):
@@ -53,10 +54,12 @@ class ColorManager:
         # Use the color utility function to determine the appropriate priority
         priority = determine_color_priority_for_connections(used_priorities)
         
-        # If all priorities 1-3 are used, handle special case
+        # If priority 4 (red) is assigned, track it but don't swap automatically
         if priority == 4:
-            self.reassign_color_network(circle_id)
-        
+            self.red_node_id = circle_id
+            # Trigger the UI to show the fix button and enter adjust mode
+            self.app.handle_red_node_creation(circle_id)
+            
         return priority
     
     def check_and_resolve_color_conflicts(self, circle_id):
@@ -109,8 +112,17 @@ class ColorManager:
         if available_priority is not None:
             new_priority = available_priority
         else:
-            # If all lower priorities are used, call network reassignment
-            return self.reassign_color_network(circle_id)
+            # If all lower priorities are used, tag this node for manual fixing
+            new_priority = 4
+            circle_data["color_priority"] = new_priority
+            new_color_name = get_color_from_priority(new_priority)
+            self.app.canvas.itemconfig(circle_data["canvas_id"], fill=new_color_name)
+            
+            self.red_node_id = circle_id
+            # Trigger the UI to show the fix button and enter adjust mode
+            self.app.handle_red_node_creation(circle_id)
+            
+            return new_priority
         
         # Update the circle with the new priority
         circle_data["color_priority"] = new_priority
@@ -189,6 +201,23 @@ class ColorManager:
         print(f"WARNING: No viable enclosed neighbor found for node {circle_id} to swap with.")
         self.update_circle_color(circle_id, original_circle_priority)
         return original_circle_priority
+
+    def fix_red_node(self):
+        """Manually triggered function to fix a red node by swapping with an enclosed neighbor."""
+        if self.red_node_id is None:
+            return False
+            
+        # Store the ID and clear the tracking variable
+        circle_id = self.red_node_id
+        self.red_node_id = None
+        
+        # Now perform the actual swap using reassign_color_network
+        new_priority = self.reassign_color_network(circle_id)
+        
+        # Hide the fix button after we're done
+        self.app.hide_fix_red_button()
+        
+        return new_priority != 4  # Return True if we successfully changed from red
 
     def update_circle_color(self, circle_id, color_priority):
         """Update a circle's color priority both in data and visually.
