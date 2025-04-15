@@ -120,8 +120,8 @@ class InteractionHandler:
                     if self.app.highlighted_circle_id:
                         self.app.canvas.delete(self.app.highlighted_circle_id)
                     self.app.highlighted_circle_id = self.app.canvas.create_oval(
-                        x - radius - 2, y - radius - 2,
-                        x + radius + 2, y + radius + 2,
+                        x - radius - 3, y - radius - 3,
+                        x + radius + 3, y + radius + 3,
                         outline='purple', width=3, tags="temp_highlight"
                     )
 
@@ -133,13 +133,6 @@ class InteractionHandler:
                         if connection and not connection.get("fixed", False):
                             connection["locked"] = False # Ensure this line is present and correct
                     # --- End verification section ---
-        
-        # If there's a red node, make sure it's unlocked
-        red_node_id = self.app.color_manager.red_node_id
-        if (red_node_id and red_node_id in self.app.circle_lookup):
-            red_node = self.app.circle_lookup[red_node_id]
-            red_node["locked"] = False
-            print(f"DEBUG: Ensured red node {red_node_id} is unlocked in ADJUST mode")
     
     def bind_mode_events(self, mode):
         """Bind the appropriate events for the given mode.

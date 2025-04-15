@@ -275,12 +275,38 @@ class ColorManager:
             circle["canvas_id"],
             fill=color_name
         )
+        
+        # Check for adjacent red nodes whenever we assign a red color
+        if color_priority == 4:
+            self.check_for_adjacent_red_nodes(circle_id)
 
         # Update debug display if enabled and this circle is active
         if self.app.debug_enabled and (self.app.ui_manager.active_circle_id == circle_id or circle_id in self.app.ui_manager.active_circle_ids):
             self.app.ui_manager.show_debug_info()
 
         return True
+
+    def check_for_adjacent_red_nodes(self, circle_id):
+        """Check if a circle has any adjacent red nodes and log a warning if found.
+        
+        Args:
+            circle_id: ID of the circle to check
+        """
+        circle = self.app.circle_lookup.get(circle_id)
+        if not circle:
+            return
+            
+        connected_circles = circle.get("connected_to", [])
+        adjacent_red_nodes = []
+        
+        for connected_id in connected_circles:
+            connected_circle = self.app.circle_lookup.get(connected_id)
+            if connected_circle and connected_circle["color_priority"] == 4:
+                adjacent_red_nodes.append(connected_id)
+                
+        if adjacent_red_nodes:
+            warning_msg = f"WARNING: Red node {circle_id} is adjacent to other red nodes: {adjacent_red_nodes}"
+            print(warning_msg)
 
     def handle_red_node_creation(self, circle_id):
         """Handle the creation of a red node by showing the fix button and entering adjust mode."""
@@ -312,7 +338,7 @@ class ColorManager:
                 self.app.mode_button.config(text="Fix Red")
             # Set up ADJUST mode UI
             self.app.ui_manager.show_edit_hint_text()
-            self.app.canvas.config(bg="#FFEEEE")  # Pale pink
+            self.app.canvas.config(bg="#FFDDDD")  # Pale pink
             # Bind new mode events AFTER setting the mode to ensure proper setup
             self.app.interaction_handler.bind_mode_events(ApplicationMode.ADJUST)
             # Update connections and show handles
