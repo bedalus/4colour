@@ -100,7 +100,7 @@ class InteractionHandler:
         if new_mode == ApplicationMode.ADJUST:  # Fixed: Using imported ApplicationMode
             self.app.ui_manager.show_edit_hint_text() # Hint text updated in UIManager
             # Set canvas background to pale pink in ADJUST mode
-            self.app.canvas.config(bg="#FFEEEE")  # Pale pink
+            self.app.canvas.config(bg="#FFDDDD")  # Pale pink
             # Show midpoint handles in ADJUST mode
             self.app.connection_manager.show_midpoint_handles()
             # Update enclosure status to show indicators
@@ -694,3 +694,56 @@ class InteractionHandler:
         connection["curve_X"], connection["curve_Y"] = new_curve_x, new_curve_y
         self.app.ui_manager.draw_connection_angle_visualizations(connection_key)
         connection["curve_X"], connection["curve_Y"] = original_curve_x, original_curve_y
+
+    def switch_to_red_fix_mode(self, circle_id):
+        """Switch to ADJUST mode specifically for fixing red nodes.
+        
+        Args:
+            circle_id: ID of the red node that needs fixing
+        """
+        # Clear selection mode state if active
+        if self.app._mode == ApplicationMode.SELECTION:
+            # Clean up selection state
+            for indicator_id in self.app.selection_indicators.values():
+                self.app.canvas.delete(indicator_id)
+            self.app.selection_indicators = {}
+            self.app.selected_circles = []
+            if self.app.hint_text_id:
+                self.app.canvas.delete(self.app.hint_text_id)
+                self.app.hint_text_id = None
+        
+        # Only change mode if we're not already in ADJUST mode
+        if self.app._mode != ApplicationMode.ADJUST:
+            print(f"DEBUG: Switching to ADJUST mode for red node fixing from {self.app._mode}")
+            # Unbind current mode events
+            self.unbind_mode_events(self.app._mode)
+            # Set new mode
+            self.app._mode = ApplicationMode.ADJUST
+            # Update button text
+            if self.app.mode_button:
+                self.app.mode_button.config(text="Fix Red")
+            # Set up ADJUST mode UI
+            self.app.ui_manager.show_edit_hint_text()
+            self.app.canvas.config(bg="#FFDDDD")  # Pale pink
+            # Bind new mode events
+            self.bind_mode_events(ApplicationMode.ADJUST)
+            # Update connections and show handles
+            self.app.connection_manager.show_midpoint_handles()
+            self.app._update_enclosure_status()
+            
+            # Store the original mode button's command
+            if hasattr(self.app, 'mode_button'):
+                original_command = self.app.mode_button['command']
+                self.app._stored_mode_button_command = original_command
+                self.app.mode_button.config(
+                    command=lambda: self.app._focus_after(
+                        self.app.color_manager.handle_fix_red_node_button
+                    )
+                )
+                print("DEBUG: Changed mode button to 'Fix Red'")
+        
+        # Ensure the red node is unlocked for movement
+        red_node = self.app.circle_lookup.get(circle_id)
+        if red_node:
+            red_node["locked"] = False
+            print(f"DEBUG: Unlocked red node {circle_id} for movement")

@@ -315,53 +315,11 @@ class ColorManager:
         # Store the circle ID for ADJUST mode
         self.app.last_circle_id = circle_id
         
-        # IMPORTANT: Exit selection mode first to properly clean up any pending state
-        if self.app._mode == ApplicationMode.SELECTION:
-            # Complete any pending selection operations
-            for indicator_id in self.app.selection_indicators.values():
-                self.app.canvas.delete(indicator_id)
-            self.app.selection_indicators = {}
-            self.app.selected_circles = []
-            if self.app.hint_text_id:
-                self.app.canvas.delete(self.app.hint_text_id)
-                self.app.hint_text_id = None
+        # Delegate mode switching to interaction handler
+        self.app.interaction_handler.switch_to_red_fix_mode(circle_id)
         
-        # Ensure we're completely out of CREATE or SELECTION mode
-        if self.app._mode != ApplicationMode.ADJUST:
-            print(f"DEBUG: Explicitly switching to ADJUST mode from {self.app._mode}")
-            # Unbind current mode events
-            self.app.interaction_handler.unbind_mode_events(self.app._mode)
-            # Set new mode
-            self.app._mode = ApplicationMode.ADJUST
-            # Update button text
-            if self.app.mode_button:
-                self.app.mode_button.config(text="Fix Red")
-            # Set up ADJUST mode UI
-            self.app.ui_manager.show_edit_hint_text()
-            self.app.canvas.config(bg="#FFDDDD")  # Pale pink
-            # Bind new mode events AFTER setting the mode to ensure proper setup
-            self.app.interaction_handler.bind_mode_events(ApplicationMode.ADJUST)
-            # Update connections and show handles
-            self.app.connection_manager.show_midpoint_handles()
-            self.app._update_enclosure_status()
-            
-            # Ensure the red node is unlocked so it can be moved
-            red_node = self.app.circle_lookup.get(circle_id)
-            if red_node:
-                red_node["locked"] = False
-                print(f"DEBUG: Unlocked red node {circle_id} for movement")
-            
-            # Store the original mode button's command function
-            if hasattr(self.app, 'mode_button'):
-                # Store original command and replace with fix red command
-                original_command = self.app.mode_button['command']
-                self.app._stored_mode_button_command = original_command
-                self.app.mode_button.config(command=lambda: self.app._focus_after(self.handle_fix_red_node_button))
-                
-                print("DEBUG: Changed mode button to 'Fix Red'")
-            
-            # Add a small delay to ensure all UI updates are processed
-            self.app.root.after(100, lambda: print("DEBUG: Mode transition complete"))
+        # Add a small delay to ensure all UI updates are processed
+        self.app.root.after(100, lambda: print("DEBUG: Mode transition complete"))
 
     def handle_red_node_fixed(self):
         """Handle operations after a red node has been fixed."""
