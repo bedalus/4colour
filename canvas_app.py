@@ -113,6 +113,10 @@ class CanvasApplication:
         
         # Bind to window resize event
         self.root.bind("<Configure>", self._on_window_resize)
+
+        # Add these properties
+        self.next_red_node_id = None  # Tracks a red node that will need fixing after current operation
+        self.warning_text_id = None  # For displaying warnings on canvas
     
     def _on_window_resize(self, event):
         """Update canvas dimensions when window is resized.
@@ -166,10 +170,10 @@ class CanvasApplication:
                                      command=lambda: self._focus_after(self._toggle_mode))
         self.mode_button.pack(side=tk.LEFT, padx=2)
         
-        # The fix_red button starts hidden and will be shown when needed
+        # Create the "Fix Red" button but don't pack it yet - it will be shown when needed
         self.fix_red_button = ttk.Button(control_frame, text="Fix Red", 
                                         command=lambda: self._focus_after(self._fix_red_node))
-        # Don't pack it yet - we'll do that when a red node is created
+        # Don't pack it initially
         
         # Create canvas for drawing
         self.canvas = tk.Canvas(
@@ -355,40 +359,8 @@ class CanvasApplication:
         return self.boundary_manager.update_enclosure_status()
 
     def _calculate_corrected_angle(self, circle, neighbor_id):
-        """Calculate angle between circles with correction for inverted y-axis.
-        
-        Args:
-            circle: Dictionary containing the source circle's data
-            neighbor_id: ID of the neighboring circle
-            
-        Returns:
-            float: Corrected angle in degrees (0-360)
-        """
-        neighbor = self.circle_lookup.get(neighbor_id)
-        if not neighbor:
-            return 0
-            
-        # Get vector components
-        dx = neighbor['x'] - circle['x']
-        dy = neighbor['y'] - circle['y']
-        
-        # Account for any curve offset
-        curve_x, curve_y = self.connection_manager.get_connection_curve_offset(
-            circle['id'], 
-            neighbor_id
-        )
-        
-        # Adjust vector by half the curve offset
-        dx += curve_x / 2
-        dy += curve_y / 2
-        
-        # Calculate angle with correction for inverted y-axis
-        # atan2 with -dy to flip the y-axis back to mathematical convention
-        angle_rad = math.atan2(dx, -dy)  # Note: swapped order and negated dy
-        angle_deg = math.degrees(angle_rad)
-        
-        # Normalize to 0-360 range, maintaining clockwise orientation
-        return (angle_deg) % 360
+        """Delegates angle calculation to the connection manager."""
+        return self.connection_manager.calculate_corrected_angle(circle, neighbor_id)
 
     def _initialize_fixed_nodes(self):
         """Create and connect the two fixed outer nodes that guarantee a starting point for outer face traversal."""
@@ -481,30 +453,25 @@ class CanvasApplication:
         self._update_enclosure_status()
 
     def handle_red_node_creation(self, circle_id):
-        """Handle the creation of a red node by showing a fix button and entering adjust mode."""
-        # Show the fix red button if it exists
-        if hasattr(self, 'fix_red_button'):
-            self.fix_red_button.pack(side=tk.LEFT, padx=2)
-            
-        # Automatically enter adjust mode
-        self._set_application_mode(ApplicationMode.ADJUST)
-        
-        # Highlight the red node
-        circle = self.circle_lookup.get(circle_id)
-        if circle:
-            self.last_circle_id = circle_id
-    
-    def hide_fix_red_button(self):
-        """Hide the fix red button when no longer needed."""
-        if hasattr(self, 'fix_red_button'):
-            self.fix_red_button.pack_forget()
-    
+        """Delegate to color manager's handle_red_node_creation method."""
+        return self.color_manager.handle_red_node_creation(circle_id)
+
+    def handle_red_node_fixed(self):
+        """Delegate to color manager's handle_red_node_fixed method."""
+        return self.color_manager.handle_red_node_fixed()
+
     def _fix_red_node(self):
-        """Handler for the Fix Red button click."""
-        if self.color_manager.fix_red_node():
-            # If successful, update the debug info
-            if self.debug_enabled:
-                self.ui_manager.show_debug_info()
+        """Delegate to color manager's handle_fix_red_node_button method."""
+        return self.color_manager.handle_fix_red_node_button()
+
+    # Replace the existing show_warning and clear_warning methods with delegates
+    def show_warning(self, message, duration=5000):
+        """Delegate to UI manager's show_warning method."""
+        return self.ui_manager.show_warning(message, duration)
+
+    def clear_warning(self):
+        """Delegate to UI manager's clear_warning method."""
+        return self.ui_manager.clear_warning()
 
 def main():
     """Application entry point."""

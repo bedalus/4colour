@@ -4,7 +4,9 @@ Color Manager for the 4colour project.
 This module handles color assignment and color conflict resolution.
 """
 
+import tkinter as tk
 from color_utils import get_color_from_priority, find_lowest_available_priority, determine_color_priority_for_connections
+from app_enums import ApplicationMode
 
 class ColorManager:
     """Manages color assignment and conflict resolution."""
@@ -17,8 +19,6 @@ class ColorManager:
         """
         self.app = app
         self.red_node_id = None  # Track the ID of a node that needs color fixing
-    
-    # No ApplicationMode references in this class, so no fixes needed
     
     def assign_color_based_on_connections(self, circle_id=None):
         """Assign a color priority to a circle based on its connections.
@@ -57,9 +57,13 @@ class ColorManager:
         # If priority 4 (red) is assigned, track it but don't swap automatically
         if priority == 4:
             self.red_node_id = circle_id
-            # Trigger the UI to show the fix button and enter adjust mode
-            self.app.handle_red_node_creation(circle_id)
-            
+            print(f"DEBUG: Red node {circle_id} created in assign_color_based_on_connections")
+            try:
+                # Try to call the method - if it fails, we'll know
+                self.app.handle_red_node_creation(circle_id)
+            except Exception as e:
+                print(f"ERROR: Failed to handle red node creation: {e}")
+        
         return priority
     
     def check_and_resolve_color_conflicts(self, circle_id):
@@ -119,8 +123,12 @@ class ColorManager:
             self.app.canvas.itemconfig(circle_data["canvas_id"], fill=new_color_name)
             
             self.red_node_id = circle_id
-            # Trigger the UI to show the fix button and enter adjust mode
-            self.app.handle_red_node_creation(circle_id)
+            print(f"DEBUG: Red node {circle_id} created in check_and_resolve_color_conflicts")
+            try:
+                # Try to call the method - if it fails, we'll know
+                self.app.handle_red_node_creation(circle_id)
+            except Exception as e:
+                print(f"ERROR: Failed to handle red node creation: {e}")
             
             return new_priority
         
@@ -132,6 +140,21 @@ class ColorManager:
         
         # Update the visual appearance of the circle
         self.app.canvas.itemconfig(circle_data["canvas_id"], fill=new_color_name)
+        
+        # Check for adjacent red nodes after conflict resolution
+        if new_priority == 4:  # If this node is now red
+            # Check all neighbors for red
+            adjacent_red_nodes = []
+            for connected_id in connected_circles:
+                connected_circle = self.app.circle_lookup.get(connected_id)
+                if connected_circle and connected_circle["color_priority"] == 4:
+                    adjacent_red_nodes.append(connected_id)
+                    
+            if adjacent_red_nodes:
+                warning_msg = f"WARNING: Red node {circle_id} is adjacent to other red nodes: {adjacent_red_nodes}"
+                print(warning_msg)
+                # Display warning to user through UI manager (more appropriate)
+                self.app.show_warning(warning_msg)
         
         return new_priority
     
@@ -186,6 +209,14 @@ class ColorManager:
             final_priority_original = self.check_and_resolve_color_conflicts(circle_id)
             final_priority_swapped = self.check_and_resolve_color_conflicts(swap_target_id)
 
+            # If we created a new red node elsewhere during swap, handle it specially
+            if self.red_node_id is not None and self.red_node_id != circle_id:
+                print(f"WARNING: Swap created a new red node {self.red_node_id}. This will need manual fixing.")
+                # Store info about this new problem
+                self.app.next_red_node_id = self.red_node_id
+                # Clear current red node ID to complete current fix operation
+                self.red_node_id = None
+
             # If no conflicts arose, we're done
             if final_priority_original == swap_target_original_priority and final_priority_swapped == original_circle_priority:
                 return final_priority_original
@@ -214,8 +245,8 @@ class ColorManager:
         # Now perform the actual swap using reassign_color_network
         new_priority = self.reassign_color_network(circle_id)
         
-        # Hide the fix button after we're done
-        self.app.hide_fix_red_button()
+        # Hide the fix button and transition back to CREATE mode
+        self.app.handle_red_node_fixed()
         
         return new_priority != 4  # Return True if we successfully changed from red
 
@@ -247,6 +278,95 @@ class ColorManager:
 
         # Update debug display if enabled and this circle is active
         if self.app.debug_enabled and (self.app.ui_manager.active_circle_id == circle_id or circle_id in self.app.ui_manager.active_circle_ids):
-             self.app.ui_manager.show_debug_info()
+            self.app.ui_manager.show_debug_info()
 
         return True
+
+    def handle_red_node_creation(self, circle_id):
+        """Handle the creation of a red node by showing the fix button and entering adjust mode."""
+        print(f"DEBUG: handle_red_node_creation called for circle {circle_id}")
+        
+        # Show the fix button
+        if hasattr(self.app, 'fix_red_button') and not self.app.fix_red_button.winfo_ismapped():
+            print("DEBUG: Showing fix red button")
+            self.app.fix_red_button.pack(side=tk.LEFT, padx=2)
+        
+        # Store the circle ID for ADJUST mode
+        self.app.last_circle_id = circle_id
+        
+        # IMPORTANT: Exit selection mode first to properly clean up any pending state
+        if self.app._mode == ApplicationMode.SELECTION:
+            # Complete any pending selection operations
+            for indicator_id in self.app.selection_indicators.values():
+                self.app.canvas.delete(indicator_id)
+            self.app.selection_indicators = {}
+            self.app.selected_circles = []
+            if self.app.hint_text_id:
+                self.app.canvas.delete(self.app.hint_text_id)
+                self.app.hint_text_id = None
+        
+        # Ensure we're completely out of CREATE or SELECTION mode
+        if self.app._mode != ApplicationMode.ADJUST:
+            print(f"DEBUG: Explicitly switching to ADJUST mode from {self.app._mode}")
+            # Unbind current mode events
+            self.app.interaction_handler.unbind_mode_events(self.app._mode)
+            # Set new mode
+            self.app._mode = ApplicationMode.ADJUST
+            # Update button text
+            if self.app.mode_button:
+                self.app.mode_button.config(text="Engage create mode")
+            # Set up ADJUST mode UI
+            self.app.ui_manager.show_edit_hint_text()
+            self.app.canvas.config(bg="#FFEEEE")  # Pale pink
+            # Bind new mode events AFTER setting the mode to ensure proper setup
+            self.app.interaction_handler.bind_mode_events(ApplicationMode.ADJUST)
+            # Update connections and show handles
+            self.app.connection_manager.show_midpoint_handles()
+            self.app._update_enclosure_status()
+            
+            # Ensure the red node is unlocked so it can be moved
+            red_node = self.app.circle_lookup.get(circle_id)
+            if red_node:
+                red_node["locked"] = False
+                print(f"DEBUG: Unlocked red node {circle_id} for movement")
+            
+            # Disable the mode toggle button until the red node is fixed
+            if self.app.mode_button:
+                self.app.mode_button.config(state=tk.DISABLED)
+                print("DEBUG: Disabled mode toggle button until red node is fixed")
+            
+            # Add a small delay to ensure all UI updates are processed
+            self.app.root.after(100, lambda: print("DEBUG: Mode transition complete"))
+
+    def handle_red_node_fixed(self):
+        """Handle operations after a red node has been fixed."""
+        # Hide the fix button
+        if hasattr(self.app, 'fix_red_button'):
+            self.app.fix_red_button.pack_forget()
+            print("DEBUG: Hiding fix red button")
+        
+        # Re-enable the mode toggle button (always do this)
+        if hasattr(self.app, 'mode_button'):
+            self.app.mode_button.config(state=tk.NORMAL)
+            print("DEBUG: Re-enabled mode toggle button")
+        
+        # Check if we have a pending red node to fix
+        if self.app.next_red_node_id is not None:
+            # We have another red node that needs fixing
+            print(f"DEBUG: Found pending red node {self.app.next_red_node_id} to fix")
+            # Set it as the current red node
+            self.red_node_id = self.app.next_red_node_id
+            self.app.next_red_node_id = None
+            # Handle the new red node (stays in ADJUST mode)
+            self.handle_red_node_creation(self.red_node_id)
+        else:
+            # No pending red nodes, return to CREATE mode
+            print("DEBUG: Auto transitioning back to CREATE mode")
+            self.app._set_application_mode(ApplicationMode.CREATE)
+    
+    def handle_fix_red_node_button(self):
+        """Handler for the Fix Red button click."""
+        if self.fix_red_node():
+            # If successful, update the debug info
+            if self.app.debug_enabled:
+                self.app.ui_manager.show_debug_info()

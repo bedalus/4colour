@@ -4,6 +4,7 @@ Interaction Handler for the 4colour project.
 This module handles user interactions and event bindings.
 """
 
+import tkinter as tk  # Add this import for tk.DISABLED
 from color_utils import get_color_from_priority
 from app_enums import ApplicationMode  # Import from app_enums instead
 
@@ -19,18 +20,24 @@ class InteractionHandler:
         self.app = app
         
     def set_application_mode(self, new_mode):
-        """Set the application mode and handle all related state transitions.
-        
-        Args:
-            new_mode: The ApplicationMode to switch to
-        """
+        """Set the application mode and handle all related state transitions."""
         # Validate the mode transition
         if new_mode == self.app._mode:
+            print(f"DEBUG: Already in {new_mode} mode, ignoring transition")
             return
             
         # Don't allow transition to ADJUST mode from SELECTION mode
-        if self.app._mode == ApplicationMode.SELECTION and new_mode == ApplicationMode.ADJUST:  # Fixed: Using imported ApplicationMode
-            return
+        # EXCEPTION: Allow if it's for a red node
+        if self.app._mode == ApplicationMode.SELECTION and new_mode == ApplicationMode.ADJUST:
+            if not self.app.color_manager.red_node_id:
+                print("DEBUG: Blocking SELECTION to ADJUST transition (not for red node)")
+                return
+            else:
+                print("DEBUG: Allowing SELECTION to ADJUST transition for red node")
+        
+        print(f"DEBUG: Transitioning from {self.app._mode} to {new_mode}")
+        
+        old_mode = self.app._mode  # Store the old mode before changing
         
         # First clean up the current mode
         if self.app._mode == ApplicationMode.CREATE:
@@ -124,6 +131,17 @@ class InteractionHandler:
                         if connection and not connection.get("fixed", False):
                             connection["locked"] = False # Ensure this line is present and correct
                     # --- End verification section ---
+        
+        # If there's a red node, make sure it's unlocked
+        red_node_id = self.app.color_manager.red_node_id
+        if red_node_id and red_node_id in self.app.circle_lookup:
+            red_node = self.app.circle_lookup[red_node_id]
+            red_node["locked"] = False
+            print(f"DEBUG: Ensured red node {red_node_id} is unlocked in ADJUST mode")
+            
+            # Disable the mode toggle button until the red node is fixed
+            if self.app.mode_button:
+                self.app.mode_button.config(state=tk.DISABLED)
     
     def bind_mode_events(self, mode):
         """Bind the appropriate events for the given mode.

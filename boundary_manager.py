@@ -127,37 +127,5 @@ class BoundaryManager:
             self.app.ui_manager.show_debug_info()
 
     def _calculate_corrected_angle(self, circle, neighbor_id):
-        """Calculate angle between circles with correction for inverted y-axis.
-        
-        Args:
-            circle: Dictionary containing the source circle's data
-            neighbor_id: ID of the neighboring circle
-            
-        Returns:
-            float: Corrected angle in degrees (0-360)
-        """
-        neighbor = self.app.circle_lookup.get(neighbor_id)
-        if not neighbor:
-            return 0
-            
-        # Get vector components
-        dx = neighbor['x'] - circle['x']
-        dy = neighbor['y'] - circle['y']
-        
-        # Account for any curve offset
-        curve_x, curve_y = self.app.connection_manager.get_connection_curve_offset(
-            circle['id'], 
-            neighbor_id
-        )
-        
-        # Adjust vector by half the curve offset
-        dx += curve_x / 2
-        dy += curve_y / 2
-        
-        # Calculate angle with correction for inverted y-axis
-        # atan2 with -dy to flip the y-axis back to mathematical convention
-        angle_rad = math.atan2(dx, -dy)  # Note: swapped order and negated dy
-        angle_deg = math.degrees(angle_rad)
-        
-        # Normalize to 0-360 range, maintaining clockwise orientation
-        return (angle_deg) % 360
+        """Delegates angle calculation to the connection manager."""
+        return self.app.connection_manager.calculate_corrected_angle(circle, neighbor_id)

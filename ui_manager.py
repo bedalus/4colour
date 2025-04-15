@@ -285,3 +285,32 @@ class UIManager:
     def clear_angle_visualizations(self):
         """Remove all angle visualization lines from the canvas."""
         self.app.canvas.delete("angle_viz")
+
+    def show_warning(self, message, duration=5000):
+        """Display a warning message on the canvas.
+        
+        Args:
+            message: Warning message text
+            duration: How long to display the warning in milliseconds
+        """
+        # Clear any existing warning
+        self.clear_warning()
+        
+        # Display new warning at the bottom of the canvas
+        self.app.warning_text_id = self.app.canvas.create_text(
+            self.app.canvas_width // 2,
+            self.app.canvas_height - 20,
+            text=message,
+            fill="red",
+            font=("Arial", 12, "bold"),
+            anchor=tk.S
+        )
+        
+        # Set a timer to remove the warning after specified duration
+        self.app.root.after(duration, self.clear_warning)
+
+    def clear_warning(self):
+        """Remove the warning message from the canvas."""
+        if hasattr(self.app, 'warning_text_id') and self.app.warning_text_id:
+            self.app.canvas.delete(self.app.warning_text_id)
+            self.app.warning_text_id = None
