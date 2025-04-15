@@ -46,14 +46,6 @@ class UIManager:
                 self.app.canvas.delete(self.app.debug_text)
                 self.app.debug_text = None
                 
-    def set_active_circle(self, circle_id):
-        """Set the ID of the circle to display debug info for.
-        
-        Args:
-            circle_id: ID of the circle to focus on
-        """
-        self.active_circle_id = circle_id
-
     def set_active_circles(self, *circle_ids):
         """Set the IDs of circles to display debug info for.
         

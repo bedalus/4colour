@@ -257,9 +257,6 @@ class CanvasApplication:
     def _drag_circle_motion(self, x, y, dx, dy):
         return self.interaction_handler.drag_circle_motion(x, y, dx, dy)
         
-    def _drag_midpoint_motion(self, x, y):
-        return self.interaction_handler.drag_midpoint_motion(x, y)
-        
     def _remove_circle_by_id(self, circle_id):
         return self.circle_manager.remove_circle_by_id(circle_id)
         
@@ -306,9 +303,6 @@ class CanvasApplication:
     def get_circle_at_coords(self, x, y):
         return self.circle_manager.get_circle_at_coords(x, y)
         
-    def get_connection_curve_offset(self, from_id, to_id):
-        return self.connection_manager.get_connection_curve_offset(from_id, to_id)
-        
     def update_connection_curve(self, from_id, to_id, curve_x, curve_y):
         return self.connection_manager.update_connection_curve(from_id, to_id, curve_x, curve_y)
 
@@ -326,14 +320,8 @@ class CanvasApplication:
         return self.color_manager.update_circle_color(circle_id, color_priority)
 
     # Connection-related methods delegated to ConnectionManager
-    def _calculate_midpoint(self, from_circle, to_circle):
-        return self.connection_manager.calculate_midpoint(from_circle, to_circle)
-        
     def _calculate_curve_points(self, from_id, to_id):
         return self.connection_manager.calculate_curve_points(from_id, to_id)
-        
-    def _draw_midpoint_handle(self, connection_key, x, y):
-        return self.connection_manager.draw_midpoint_handle(connection_key, x, y)
         
     def _show_midpoint_handles(self):
         return self.connection_manager.show_midpoint_handles()
@@ -341,19 +329,12 @@ class CanvasApplication:
     def _hide_midpoint_handles(self):
         return self.connection_manager.hide_midpoint_handles()
         
-    def _calculate_midpoint_handle_position(self, from_id, to_id):
-        return self.connection_manager.calculate_midpoint_handle_position(from_id, to_id)
-        
     def _update_connections(self, circle_id):
         return self.connection_manager.update_connections(circle_id)
 
     def _update_enclosure_status(self):
         """Delegates the enclosure status update to the boundary manager."""
         return self.boundary_manager.update_enclosure_status()
-
-    def _calculate_corrected_angle(self, circle, neighbor_id):
-        """Delegates angle calculation to the connection manager."""
-        return self.connection_manager.calculate_corrected_angle(circle, neighbor_id)
 
     def _initialize_fixed_nodes(self):
         """Create and connect the two fixed outer nodes that guarantee a starting point for outer face traversal."""
@@ -456,15 +437,6 @@ class CanvasApplication:
     def _fix_red_node(self):
         """Delegate to color manager's handle_fix_red_node_button method."""
         return self.color_manager.handle_fix_red_node_button()
-
-    # Replace the existing show_warning and clear_warning methods with delegates
-    def show_warning(self, message, duration=5000):
-        """Delegate to UI manager's show_warning method."""
-        return self.ui_manager.show_warning(message, duration)
-
-    def clear_warning(self):
-        """Delegate to UI manager's clear_warning method."""
-        return self.ui_manager.clear_warning()
 
 def main():
     """Application entry point."""

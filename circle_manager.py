@@ -79,14 +79,3 @@ class CircleManager:
             self.app.ui_manager.show_debug_info()
             
         return True
-    
-    def handle_last_circle_removed(self):
-        """Handle the special case when the last circle is removed."""
-        # Switch back to create mode if this was the last circle
-        self.app._set_application_mode(ApplicationMode.CREATE)  # Fixed: Using imported ApplicationMode
-        # Clear canvas to fully reset the scenario
-        self.app.canvas.delete("all")
-        self.app.drawn_items.clear()
-        self.app.connections.clear()
-        self.app.last_circle_id = None
-        self.app.next_id = 1
