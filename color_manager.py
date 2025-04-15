@@ -287,11 +287,6 @@ class ColorManager:
         """Handle the creation of a red node by showing the fix button and entering adjust mode."""
         print(f"DEBUG: handle_red_node_creation called for circle {circle_id}")
         
-        # Show the fix button
-        if hasattr(self.app, 'fix_red_button') and not self.app.fix_red_button.winfo_ismapped():
-            print("DEBUG: Showing fix red button")
-            self.app.fix_red_button.pack(side=tk.LEFT, padx=2)
-        
         # Store the circle ID for ADJUST mode
         self.app.last_circle_id = circle_id
         
@@ -315,7 +310,7 @@ class ColorManager:
             self.app._mode = ApplicationMode.ADJUST
             # Update button text
             if self.app.mode_button:
-                self.app.mode_button.config(text="Engage create mode")
+                self.app.mode_button.config(text="Fix Red")
             # Set up ADJUST mode UI
             self.app.ui_manager.show_edit_hint_text()
             self.app.canvas.config(bg="#FFEEEE")  # Pale pink
@@ -331,25 +326,28 @@ class ColorManager:
                 red_node["locked"] = False
                 print(f"DEBUG: Unlocked red node {circle_id} for movement")
             
-            # Disable the mode toggle button until the red node is fixed
-            if self.app.mode_button:
-                self.app.mode_button.config(state=tk.DISABLED)
-                print("DEBUG: Disabled mode toggle button until red node is fixed")
+            # Store the original mode button's command function
+            if hasattr(self.app, 'mode_button'):
+                # Store original command and replace with fix red command
+                original_command = self.app.mode_button['command']
+                self.app._stored_mode_button_command = original_command
+                self.app.mode_button.config(command=lambda: self.app._focus_after(self.handle_fix_red_node_button))
+                
+                print("DEBUG: Changed mode button to 'Fix Red'")
             
             # Add a small delay to ensure all UI updates are processed
             self.app.root.after(100, lambda: print("DEBUG: Mode transition complete"))
 
     def handle_red_node_fixed(self):
         """Handle operations after a red node has been fixed."""
-        # Hide the fix button
-        if hasattr(self.app, 'fix_red_button'):
-            self.app.fix_red_button.pack_forget()
-            print("DEBUG: Hiding fix red button")
+        print("DEBUG: Red node fixed")
         
-        # Re-enable the mode toggle button (always do this)
-        if hasattr(self.app, 'mode_button'):
-            self.app.mode_button.config(state=tk.NORMAL)
-            print("DEBUG: Re-enabled mode toggle button")
+        # Restore the mode toggle button's original functionality
+        if hasattr(self.app, 'mode_button') and hasattr(self.app, '_stored_mode_button_command'):
+            # Restore the original command
+            self.app.mode_button.config(command=self.app._stored_mode_button_command)
+            delattr(self.app, '_stored_mode_button_command')
+            print("DEBUG: Restored mode button's original command")
         
         # Check if we have a pending red node to fix
         if self.next_red_node_id is not None:
@@ -364,6 +362,7 @@ class ColorManager:
             # No pending red nodes, return to CREATE mode
             print("DEBUG: Auto transitioning back to CREATE mode")
             self.app._set_application_mode(ApplicationMode.CREATE)
+            # Button text will be updated by the mode transition
     
     def handle_fix_red_node_button(self):
         """Handler for the Fix Red button click."""

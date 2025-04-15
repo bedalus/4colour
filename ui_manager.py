@@ -179,26 +179,122 @@ class UIManager:
         )
     
     def clear_canvas(self):
-        """Clear all items from the canvas."""
-        # More efficient to just clear everything at once
-        self.app.canvas.delete("all")
-        self.app.drawn_items.clear()
-        self.app.circles.clear()
-        self.app.circle_lookup.clear()
-        self.app.connections.clear()
+        """Clear the canvas and reset application state."""
+        # Reset mode button if it's currently in "Fix Red" mode
+        if hasattr(self.app, '_stored_mode_button_command') and self.app.mode_button:
+            # Restore the original command
+            self.app.mode_button.config(command=self.app._stored_mode_button_command)
+            delattr(self.app, '_stored_mode_button_command')
+            print("DEBUG: Restored mode button's original command after canvas clear")
+        
+        # Reset any color manager state related to red nodes
+        if hasattr(self.app, 'color_manager'):
+            self.app.color_manager.red_node_id = None
+            self.app.color_manager.next_red_node_id = None
+        
+        # Clear the canvas - delete all items except fixed nodes/connections
+        for item in self.app.canvas.find_all():
+            tags = self.app.canvas.gettags(item)
+            if 'fixed_circle' not in tags and 'fixed_connection' not in tags:
+                self.app.canvas.delete(item)
+        
+        # Keep fixed nodes/connections, but clear everything else
+        self.app.circles = [c for c in self.app.circles if c.get('fixed')]
+        
+        # Important: Make sure the fixed nodes have clean connection lists
+        for circle in self.app.circles:
+            circle["connected_to"] = [c for c in circle["connected_to"] if any(fixed_circle["id"] == c for fixed_circle in self.app.circles)]
+            circle["ordered_connections"] = circle["connected_to"].copy()
+        
+        self.app.circle_lookup = {c['id']: c for c in self.app.circles}
+        
+        # Reset connections, keeping only fixed ones
+        fixed_connections = {}
+        for key, conn in self.app.connections.items():
+            if conn.get('fixed'):
+                fixed_connections[key] = conn
+        self.app.connections = fixed_connections
+        
+        # Clear midpoint handles
         self.app.midpoint_handles.clear()
-        self.app.last_circle_id = None
+        
+        # Reset ID counter but preserve fixed nodes
         self.app.next_id = 1
         
-        # Clear debug display
-        if self.app.debug_text:
-            self.app.debug_text = None
-            
-        # Return to create mode
+        # Reset other application state
+        self.app.last_circle_id = None
+        self.app.selected_circles = []
+        self.app.selection_indicators = {}
+        self.app.highlighted_circle_id = None
+        self.app.newly_placed_circle_id = None
+        
+        # Always reset to CREATE mode
         self.app._set_application_mode(ApplicationMode.CREATE)
         
-        # Reinitialize fixed nodes
-        self.app._initialize_fixed_nodes()
+        # Ensure the boundary state is properly reset and fixed nodes are connected
+        if self.app.circles and len(self.app.circles) >= 2:
+            # Make sure fixed nodes A and B are connected properly
+            if self.app.FIXED_NODE_A_ID in self.app.circle_lookup and self.app.FIXED_NODE_B_ID in self.app.circle_lookup:
+                fixed_node_a = self.app.circle_lookup[self.app.FIXED_NODE_A_ID]
+                fixed_node_b = self.app.circle_lookup[self.app.FIXED_NODE_B_ID]
+                
+                # Ensure they're connected to each other
+                if self.app.FIXED_NODE_B_ID not in fixed_node_a["connected_to"]:
+                    fixed_node_a["connected_to"].append(self.app.FIXED_NODE_B_ID)
+                if self.app.FIXED_NODE_A_ID not in fixed_node_b["connected_to"]:
+                    fixed_node_b["connected_to"].append(self.app.FIXED_NODE_A_ID)
+                    
+                # Update the ordered connections
+                self.app.connection_manager.update_ordered_connections(self.app.FIXED_NODE_A_ID)
+                self.app.connection_manager.update_ordered_connections(self.app.FIXED_NODE_B_ID)
+                
+                # Ensure the connection exists in the connections dictionary
+                connection_key = f"{self.app.FIXED_NODE_A_ID}_{self.app.FIXED_NODE_B_ID}"
+                if connection_key not in self.app.connections:
+                    # Recreate the connection
+                    points = self.app.connection_manager.calculate_curve_points(
+                        self.app.FIXED_NODE_A_ID, self.app.FIXED_NODE_B_ID)
+                    
+                    line_id = self.app.canvas.create_line(
+                        points,
+                        width=1,
+                        smooth=True,
+                        tags=("line", "fixed_connection")
+                    )
+                    
+                    self.app.canvas.lower("line")
+                    
+                    self.app.connections[connection_key] = {
+                        "line_id": line_id,
+                        "from_circle": self.app.FIXED_NODE_A_ID,
+                        "to_circle": self.app.FIXED_NODE_B_ID,
+                        "curve_X": 0,
+                        "curve_Y": 0,
+                        "fixed": True
+                    }
+        else:
+            # If we have no fixed nodes, recreate them
+            self.app._initialize_fixed_nodes()
+        
+        # Update enclosure status for boundary detection
+        self.app.boundary_manager.update_enclosure_status()
+        
+        # Update debug info if enabled
+        if self.app.debug_enabled:
+            self.show_debug_info()
+        
+        # Clear the hint text
+        if self.app.hint_text_id:
+            self.app.canvas.delete(self.app.hint_text_id)
+            self.app.hint_text_id = None
+            
+        # Clear the edit hint text
+        if self.app.edit_hint_text_id:
+            self.app.canvas.delete(self.app.edit_hint_text_id)
+            self.app.edit_hint_text_id = None
+        
+        # Reset any warnings
+        self.clear_warning()
 
     def draw_angle_visualization_line(self, circle_id, other_circle_id, angle, connection_key=None):
         """Draw a visualization line showing the angle a connection enters a circle.

@@ -166,10 +166,7 @@ class CanvasApplication:
                                      command=lambda: self._focus_after(self._toggle_mode))
         self.mode_button.pack(side=tk.LEFT, padx=2)
         
-        # Create the "Fix Red" button but don't pack it yet - it will be shown when needed
-        self.fix_red_button = ttk.Button(control_frame, text="Fix Red", 
-                                        command=lambda: self._focus_after(self._fix_red_node))
-        # Don't pack it initially
+        # Remove the "Fix Red" button creation - we'll reuse the mode button instead
         
         # Create canvas for drawing
         self.canvas = tk.Canvas(

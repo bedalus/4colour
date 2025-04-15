@@ -86,10 +86,12 @@ class InteractionHandler:
         
         # Update the button text based on current mode
         if self.app.mode_button:
-            if self.app._mode == ApplicationMode.ADJUST:  # Fixed: Using imported ApplicationMode
-                self.app.mode_button.config(text="Engage create mode")
-            else:
-                self.app.mode_button.config(text="Engage adjust mode")
+            # Only update text if we're not in "Fix Red" mode
+            if not hasattr(self.app, '_stored_mode_button_command'):
+                if new_mode == ApplicationMode.ADJUST:
+                    self.app.mode_button.config(text="Engage create mode")
+                else:
+                    self.app.mode_button.config(text="Engage adjust mode")
         
         # Bind events for the new mode
         self.bind_mode_events(new_mode)
@@ -134,14 +136,10 @@ class InteractionHandler:
         
         # If there's a red node, make sure it's unlocked
         red_node_id = self.app.color_manager.red_node_id
-        if red_node_id and red_node_id in self.app.circle_lookup:
+        if (red_node_id and red_node_id in self.app.circle_lookup):
             red_node = self.app.circle_lookup[red_node_id]
             red_node["locked"] = False
             print(f"DEBUG: Ensured red node {red_node_id} is unlocked in ADJUST mode")
-            
-            # Disable the mode toggle button until the red node is fixed
-            if self.app.mode_button:
-                self.app.mode_button.config(state=tk.DISABLED)
     
     def bind_mode_events(self, mode):
         """Bind the appropriate events for the given mode.
