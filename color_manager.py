@@ -154,8 +154,7 @@ class ColorManager:
             if adjacent_red_nodes:
                 warning_msg = f"WARNING: Red node {circle_id} is adjacent to other red nodes: {adjacent_red_nodes}"
                 print(warning_msg)
-                # Display warning to user via UI manager
-                self.app.ui_manager.show_warning(warning_msg)
+                # Warning is only shown in console, not in UI
         
         return new_priority
     
