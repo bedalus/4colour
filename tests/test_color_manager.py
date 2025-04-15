@@ -577,6 +577,64 @@ class TestColorManager(MockAppTestCase):
         priority2 = self.app.color_manager.reassign_color_network(5)
 
         # Verify the new priorities are valid and do not conflict
-        self.assertNotEqual(priority1, 1)
-        self.assertNotEqual(priority2, 1)
-        self.assertNotEqual(priority1, priority2)
+        self.assertNotEqual(priority1, 1)  # Should not be yellow (conflicting with node 1)
+        self.assertNotEqual(priority2, 1)  # Should not be yellow (conflicting with node 1)
+        self.assertNotEqual(priority1, priority2)  # The two new nodes should not conflict
+
+        # Verify nodes do not conflict with their connections
+        # Node 4 is connected to nodes 1 and 2
+        self.assertNotEqual(priority1, 1)  # Should not conflict with node 1
+        self.assertNotEqual(priority1, 2)  # Should not conflict with node 2
+        
+        # Node 5 is connected to node 3 
+        self.assertNotEqual(priority2, 3)  # Should not conflict with node 3
+        
+        # Verify the nodes now have the assigned priorities
+        self.assertEqual(new_circle1["color_priority"], priority1)
+        self.assertEqual(new_circle2["color_priority"], priority2)
+    
+    def test_color_swap_with_enclosed_node(self):
+        """Test that color priority 4 (red) is swapped with an enclosed node."""
+        # Create a network with an enclosed node
+        # Node 1 (center, enclosed) with priority 2 (green)
+        # Nodes 2,3,4 surrounding it with priorities 1,3,2
+        enclosed_node = self._create_test_circle(1, 100, 100, priority=2, connections=[2, 3, 4], enclosed=True)
+        outer_node1 = self._create_test_circle(2, 50, 50, priority=1, connections=[1, 3, 4])
+        outer_node2 = self._create_test_circle(3, 150, 50, priority=3, connections=[1, 2])
+        outer_node3 = self._create_test_circle(4, 100, 150, priority=2, connections=[1, 2])
+        
+        self.app.circles = [enclosed_node, outer_node1, outer_node2, outer_node3]
+        self.app.circle_lookup = {c["id"]: c for c in self.app.circles}
+        
+        # Set up connections
+        self.app.connections = {
+            "1_2": {"line_id": 1012, "from_circle": 1, "to_circle": 2},
+            "1_3": {"line_id": 1013, "from_circle": 1, "to_circle": 3},
+            "1_4": {"line_id": 1014, "from_circle": 1, "to_circle": 4},
+            "2_3": {"line_id": 1023, "from_circle": 2, "to_circle": 3},
+            "2_4": {"line_id": 1024, "from_circle": 2, "to_circle": 4}
+        }
+        
+        # Now add a new node that would need priority 4 (red)
+        new_node = self._create_test_circle(5, 200, 100, priority=1, connections=[2, 3, 4])
+        self.app.circles.append(new_node)
+        self.app.circle_lookup[5] = new_node
+        
+        # Add connections to the new node
+        self.app.connections.update({
+            "2_5": {"line_id": 1025, "from_circle": 2, "to_circle": 5},
+            "3_5": {"line_id": 1035, "from_circle": 3, "to_circle": 5},
+            "4_5": {"line_id": 1045, "from_circle": 4, "to_circle": 5}
+        })
+        
+        # The new node needs priority 4, but should swap with enclosed node
+        priority = self.app.color_manager.reassign_color_network(5)
+        
+        # Verify the swap happened
+        self.assertEqual(enclosed_node["color_priority"], 4)  # Enclosed node should now be red
+        self.assertEqual(new_node["color_priority"], 2)  # New node should have taken enclosed node's color
+        self.assertEqual(priority, 2)  # The returned priority should be 2
+        
+        # Verify the canvas was updated
+        self.app.canvas.itemconfig.assert_any_call(enclosed_node["canvas_id"], fill="red")
+        self.app.canvas.itemconfig.assert_any_call(new_node["canvas_id"], fill="green")

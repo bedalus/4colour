@@ -153,24 +153,28 @@ class UIManager:
         )
     
     def show_edit_hint_text(self):
-        """Display instructional hint text for adjust mode."""
-        # Clear any existing hint text
+        """Display hint text specific to ADJUST mode."""
+        # Clear any existing hint text first
         if self.app.hint_text_id:
             self.app.canvas.delete(self.app.hint_text_id)
             self.app.hint_text_id = None
-        
         if self.app.edit_hint_text_id:
-            self.app.canvas.delete(self.app.edit_hint_text_id)
-            
-        # Create new adjust hint text - positioned slightly to the right to avoid debug text
-        # Use current canvas width for horizontal centering
+            self.app.canvas.delete(self.app.edit_hint_text_id) # Clear previous edit hint
+
+        # Calculate position for the hint text
+        canvas_width = self.app.canvas_width
+        x_pos = (canvas_width // 2)
+        y_pos = 20
+
+        # Create the new hint text for ADJUST mode
+        hint = "You may adjust the last node and its connections"
         self.app.edit_hint_text_id = self.app.canvas.create_text(
-            (self.app.canvas_width // 2) + 20,  # Moved 20 pixels to the right
-            20,
-            text="Click-and-drag to move circles and handles",
-            anchor=tk.N,
-            fill="black",
-            font=("Arial", 12)
+            x_pos,
+            y_pos,
+            text=hint,
+            anchor=tk.N, # Anchor to the top center
+            fill="gray50",
+            font=("Arial", 10)
         )
     
     def clear_canvas(self):

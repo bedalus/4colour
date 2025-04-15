@@ -39,15 +39,12 @@ class CircleManager:
         
         return None
     
-    def remove_circle(self, event):
-        """Stub for backward compatibility."""
-        pass
-            
-    def remove_circle_by_id(self, circle_id):
+    def remove_circle_by_id(self, circle_id, bypass_lock=False):
         """Remove a circle by its ID and cleanup all associated connections.
         
         Args:
             circle_id: ID of the circle to remove
+            bypass_lock: Whether to bypass the lock check (for Escape during creation)
             
         Returns:
             bool: True if the circle was successfully removed, False otherwise
@@ -58,7 +55,8 @@ class CircleManager:
             return False
             
         # Check if this is a fixed node - prevent removal
-        if circle.get("fixed", False) or circle_id in (self.app.FIXED_NODE_A_ID, self.app.FIXED_NODE_B_ID):
+        # For locked nodes, only prevent removal if bypass_lock is False
+        if circle.get("fixed", False) or (not bypass_lock and circle.get("locked", False)) or circle_id in (self.app.FIXED_NODE_A_ID, self.app.FIXED_NODE_B_ID):
             return False
             
         # First, remove all connections to this circle

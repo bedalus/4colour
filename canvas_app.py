@@ -65,6 +65,7 @@ class CanvasApplication:
         
         # Edit mode properties
         self.edit_hint_text_id = None
+        self.highlighted_circle_id = None  # ID for the temporary highlight circle
         
         # Current application mode
         self._mode = ApplicationMode.CREATE
@@ -256,9 +257,6 @@ class CanvasApplication:
         
     def _drag_midpoint_motion(self, x, y):
         return self.interaction_handler.drag_midpoint_motion(x, y)
-        
-    def _remove_circle(self, event):
-        return self.circle_manager.remove_circle(event)
         
     def _remove_circle_by_id(self, circle_id):
         return self.circle_manager.remove_circle_by_id(circle_id)

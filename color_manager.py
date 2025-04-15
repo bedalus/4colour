@@ -125,55 +125,84 @@ class ColorManager:
     
     def reassign_color_network(self, circle_id):
         """
-        Reassigns colors in a network when all lower priority colors are used.
-        Currently just assigns the highest priority color (red).
-        
+        Reassigns colors when a circle is assigned priority 4 (red).
+        Attempts to swap priority 4 with an 'enclosed' neighbor.
+
         Parameters:
-            circle_id (int): The ID of the circle to reassign color for
-            
+            circle_id (int): The ID of the circle initially assigned priority 4.
+
         Returns:
-            int: The newly assigned color priority (4 for red)
+            int: The final color priority assigned to the circle_id.
         """
-        # For now, this function just assigns red (highest priority)
-        new_priority = 4
-        # Get color name for visual update
-        new_color_name = get_color_from_priority(new_priority)
-        
         circle_data = self.app.circle_lookup.get(circle_id)
-        if circle_data:
-            circle_data["color_priority"] = new_priority
-            # Also update visual appearance
-            self.app.canvas.itemconfig(circle_data["canvas_id"], fill=new_color_name)
-        return new_priority
-    
+        if not circle_data:
+            return 4 # Should not happen if called correctly
+
+        original_circle_priority = 4 # This circle was just assigned red
+
+        swap_target_id = None
+        swap_target_original_priority = None
+
+        # Find an enclosed neighbor to swap with
+        for connected_id in circle_data.get("connected_to", []):
+            connected_circle_data = self.app.circle_lookup.get(connected_id)
+            if connected_circle_data and connected_circle_data.get("enclosed") is True:
+                swap_target_id = connected_id
+                swap_target_original_priority = connected_circle_data["color_priority"]
+                break # Stop after finding the first enclosed neighbor
+
+        if swap_target_id is not None:
+            # Perform the swap
+            print(f"DEBUG: Swapping priority 4 from node {circle_id} with priority {swap_target_original_priority} from enclosed node {swap_target_id}")
+            self.update_circle_color(circle_id, swap_target_original_priority)
+            self.update_circle_color(swap_target_id, original_circle_priority) # Assign red (4) to the target
+
+            # Check for conflicts after the swap
+            final_priority_original = self.check_and_resolve_color_conflicts(circle_id)
+            final_priority_swapped = self.check_and_resolve_color_conflicts(swap_target_id)
+
+            # Issue warnings if conflicts arose *after* the swap
+            if final_priority_original != swap_target_original_priority:
+                print(f"WARNING: Conflict detected for original node {circle_id} after swap. Expected {swap_target_original_priority}, got {final_priority_original}.")
+            if final_priority_swapped != original_circle_priority:
+                print(f"WARNING: Conflict detected for swapped node {swap_target_id} after swap. Expected {original_circle_priority}, got {final_priority_swapped}.")
+
+            return final_priority_original # Return the final priority of the original circle
+        else:
+            # No enclosed neighbor found, keep priority 4 for the original circle
+            print(f"DEBUG: Node {circle_id} assigned priority 4, no enclosed neighbor found for swap.")
+            # Ensure the circle is visually red
+            self.update_circle_color(circle_id, original_circle_priority)
+            return original_circle_priority # Return 4
+
     def update_circle_color(self, circle_id, color_priority):
         """Update a circle's color priority both in data and visually.
-        
+
         Args:
             circle_id: ID of the circle to update
             color_priority: New color priority to assign
-            
+
         Returns:
             bool: True if update was successful, False otherwise
         """
         circle = self.app.circle_lookup.get(circle_id)
         if not circle:
             return False
-            
+
         # Update data - only priority
         circle["color_priority"] = color_priority
-        
+
         # Get color name from priority for visual update
         color_name = get_color_from_priority(color_priority)
-        
+
         # Update visual appearance
         self.app.canvas.itemconfig(
             circle["canvas_id"],
             fill=color_name
         )
-        
-        # Update debug display if enabled
-        if self.app.debug_enabled:
-            self.app.ui_manager.show_debug_info()
-            
+
+        # Update debug display if enabled and this circle is active
+        if self.app.debug_enabled and (self.app.ui_manager.active_circle_id == circle_id or circle_id in self.app.ui_manager.active_circle_ids):
+             self.app.ui_manager.show_debug_info()
+
         return True

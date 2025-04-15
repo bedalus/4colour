@@ -65,7 +65,8 @@ class ConnectionManager:
             "from_circle": from_id,
             "to_circle": to_id,
             "curve_X": 0,  # Default: no curve offset in X direction
-            "curve_Y": 0   # Default: no curve offset in Y direction
+            "curve_Y": 0,  # Default: no curve offset in Y direction
+            "locked": False  # New field for Phase 16: Lock elements outside ADJUST mode
         }
         
         # Update ordered connections for both circles

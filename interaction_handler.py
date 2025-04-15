@@ -33,7 +33,16 @@ class InteractionHandler:
             return
         
         # First clean up the current mode
-        if self.app._mode == ApplicationMode.SELECTION:  # Fixed: Using imported ApplicationMode
+        if self.app._mode == ApplicationMode.CREATE:
+             # Lock all non-fixed circles and connections when exiting CREATE mode
+            for circle in self.app.circles:
+                if not circle.get("fixed", False):
+                    circle["locked"] = True
+            for connection_key, connection in self.app.connections.items():
+                 if not connection.get("fixed", False):
+                    connection["locked"] = True
+
+        elif self.app._mode == ApplicationMode.SELECTION:  # Fixed: Using imported ApplicationMode
             # Clear selections
             for indicator_id in self.app.selection_indicators.values():
                 self.app.canvas.delete(indicator_id)
@@ -57,6 +66,11 @@ class InteractionHandler:
             # Reset canvas background color when exiting ADJUST mode
             self.app.canvas.config(bg="white")
 
+            # Clear highlight if it exists when exiting ADJUST mode
+            if self.app.highlighted_circle_id:
+                self.app.canvas.delete(self.app.highlighted_circle_id)
+                self.app.highlighted_circle_id = None
+
         # Unbind events for the current mode
         self.unbind_mode_events(self.app._mode)
 
@@ -75,13 +89,41 @@ class InteractionHandler:
         
         # Setup additional mode-specific UI elements
         if new_mode == ApplicationMode.ADJUST:  # Fixed: Using imported ApplicationMode
-            self.app.ui_manager.show_edit_hint_text()
+            self.app.ui_manager.show_edit_hint_text() # Hint text updated in UIManager
             # Set canvas background to pale pink in ADJUST mode
             self.app.canvas.config(bg="#FFEEEE")  # Pale pink
             # Show midpoint handles in ADJUST mode
             self.app.connection_manager.show_midpoint_handles()
             # Update enclosure status to show indicators
             self.app._update_enclosure_status()
+
+            # Unlock and highlight the last placed circle and its connections
+            if self.app.last_circle_id is not None and self.app.last_circle_id > 0: # Ensure it's not a fixed node
+                last_circle_data = self.app.circle_lookup.get(self.app.last_circle_id)
+                if last_circle_data and not last_circle_data.get("fixed", False):
+                    # Unlock the circle
+                    last_circle_data["locked"] = False
+
+                    # Draw highlight
+                    radius = self.app.circle_radius
+                    x, y = last_circle_data["x"], last_circle_data["y"]
+                    # Delete previous highlight if it exists
+                    if self.app.highlighted_circle_id:
+                        self.app.canvas.delete(self.app.highlighted_circle_id)
+                    self.app.highlighted_circle_id = self.app.canvas.create_oval(
+                        x - radius - 2, y - radius - 2,
+                        x + radius + 2, y + radius + 2,
+                        outline='purple', width=3, tags="temp_highlight"
+                    )
+
+                    # --- Verify this section is correctly applied ---
+                    # Unlock its connections
+                    for connected_id in last_circle_data.get("connected_to", []):
+                        connection_key = self.app.connection_manager.get_connection_key(self.app.last_circle_id, connected_id)
+                        connection = self.app.connections.get(connection_key)
+                        if connection and not connection.get("fixed", False):
+                            connection["locked"] = False # Ensure this line is present and correct
+                    # --- End verification section ---
     
     def bind_mode_events(self, mode):
         """Bind the appropriate events for the given mode.
@@ -209,7 +251,8 @@ class InteractionHandler:
             "color_priority": color_priority,
             "connected_to": [],
             "ordered_connections": [],  # New field for storing connections in clockwise order
-            "enclosed": False  # New field for Phase 14: Track outer border
+            "enclosed": False,  # New field for Phase 14: Track outer border
+            "locked": False # New field for Phase 16: Lock elements outside ADJUST mode
         }
         
         # Add circle to the list and lookup dictionary
@@ -325,7 +368,8 @@ class InteractionHandler:
 
         if self.app.newly_placed_circle_id:
             # Use the circle manager's remove method since it handles all cleanup
-            self.app.circle_manager.remove_circle_by_id(self.app.newly_placed_circle_id)
+            # Pass bypass_lock=True to ensure the circle can be removed even if locked
+            self.app.circle_manager.remove_circle_by_id(self.app.newly_placed_circle_id, bypass_lock=True)
             
             # Reset selection state
             self.app.newly_placed_circle_id = None
@@ -360,54 +404,101 @@ class InteractionHandler:
     
     def drag_start(self, event):
         """Start dragging an object (circle or midpoint).
-        
+
         Args:
             event: Mouse press event containing x and y coordinates
         """
+        # Remove highlight as soon as a drag starts
+        if self.app.highlighted_circle_id:
+            self.app.canvas.delete(self.app.highlighted_circle_id)
+            self.app.highlighted_circle_id = None
+
         if not self.app.in_edit_mode:
             return
-        
+
         # Reset any existing drag state first
         self.reset_drag_state()
-        
+
         # Save the starting coordinates
         self.app.drag_state["start_x"] = event.x
         self.app.drag_state["last_x"] = event.x
         self.app.drag_state["start_y"] = event.y
         self.app.drag_state["last_y"] = event.y
-            
+
+        # Track circles to display in debug info
+        debug_circle_ids = []
+
         # Check if we're clicking on a midpoint handle first
         clicked_item = self.app.canvas.find_closest(event.x, event.y)
         if clicked_item:
             tags = self.app.canvas.gettags(clicked_item[0])
             if "midpoint_handle" in tags:
-                # Find which connection this midpoint belongs to
                 for tag in tags:
                     if "_" in tag and tag in self.app.midpoint_handles:
-                        # Check if this is a fixed connection
-                        connection = self.app.connections.get(tag)
-                        if connection and connection.get("fixed", False):
-                            # Cannot drag fixed connection midpoints
-                            return
+                        connection_key = tag
+                        connection = self.app.connections.get(connection_key)
                         
+                        # Extract the circle IDs from the connection key for debug info
+                        try:
+                            parts = connection_key.split("_")
+                            if len(parts) == 2:
+                                circle1_id = int(parts[0])
+                                circle2_id = int(parts[1])
+                                debug_circle_ids = [circle1_id, circle2_id]
+                                
+                                # If either circle is the last circle, we should allow dragging the midpoint
+                                # regardless of lock status (connections of the last node should be interactive)
+                                if (self.app.last_circle_id == circle1_id or 
+                                    self.app.last_circle_id == circle2_id):
+                                    self.app.drag_state["active"] = True
+                                    self.app.drag_state["type"] = "midpoint"
+                                    self.app.drag_state["id"] = tag
+                                    
+                                    # Update debug display
+                                    if self.app.debug_enabled and debug_circle_ids:
+                                        self.app.ui_manager.set_active_circles(*debug_circle_ids)
+                                        self.app.ui_manager.show_debug_info()
+                                    return
+                        except (ValueError, AttributeError):
+                            pass
+                            
+                        # Fall back to normal lock checking if not connected to last circle
+                        if connection and (connection.get("fixed", False) or connection.get("locked", False)):
+                            return  # Stop if locked
+
                         self.app.drag_state["active"] = True
                         self.app.drag_state["type"] = "midpoint"
                         self.app.drag_state["id"] = tag
+                        
+                        # Update debug display
+                        if self.app.debug_enabled and debug_circle_ids:
+                            self.app.ui_manager.set_active_circles(*debug_circle_ids)
+                            self.app.ui_manager.show_debug_info()
                         return
-        
-        # If not a midpoint, check if it's a circle
+
+        # Check circles second
         circle_id = self.app.get_circle_at_coords(event.x, event.y)
         if circle_id is not None:
-            # Check if this is a fixed node
+            debug_circle_ids = [circle_id]
             circle = self.app.circle_lookup.get(circle_id)
-            if circle and circle.get("fixed", False):
-                # Cannot drag fixed nodes
-                return
-                
+            
+            # Check fixed and locked status from the circle data
+            if circle and (circle.get("fixed", False) or circle.get("locked", False)):
+                # Even if locked, update debug display
+                if self.app.debug_enabled:
+                    self.app.ui_manager.set_active_circles(*debug_circle_ids)
+                    self.app.ui_manager.show_debug_info()
+                return  # Stop if locked
+
             self.app.drag_state["active"] = True
             self.app.drag_state["type"] = "circle"
             self.app.drag_state["id"] = circle_id
-    
+            
+            # Update debug display
+            if self.app.debug_enabled:
+                self.app.ui_manager.set_active_circles(*debug_circle_ids)
+                self.app.ui_manager.show_debug_info()
+
     def drag_motion(self, event):
         """Handle any object's dragging motion.
         
@@ -419,24 +510,21 @@ class InteractionHandler:
             
         # Get current mouse position
         x, y = event.x, event.y  # Fixed: Properly get both coordinates
-        
+        # Update last position
         # Calculate the delta from the last position
         delta_x = x - self.app.drag_state["last_x"]
         delta_y = y - self.app.drag_state["last_y"]
         
-        # Update last position
-        self.app.drag_state["last_x"] = x
-        self.app.drag_state["last_y"] = y
-        
         # Handle object-specific drag logic
         if self.app.drag_state["type"] == "circle":
             # Pass the circle_id from drag state as first parameter
-            circle_id = self.app.drag_state["id"]
-            self.drag_circle_motion(circle_id, delta_x, delta_y)
+            self.drag_circle_motion(self.app.drag_state["id"], delta_x, delta_y)
         elif self.app.drag_state["type"] == "midpoint":
             self.drag_midpoint_motion(x, y)
-            
-        # Remove debug info update during motion - will be updated on drag_end only
+        
+        # Update last position
+        self.app.drag_state["last_x"] = x
+        self.app.drag_state["last_y"] = y
         
         # Stop event propagation
         return "break"
@@ -464,7 +552,6 @@ class InteractionHandler:
             # Get the dragged circle's ID
             circle_id = self.app.drag_state["id"]
             circle = self.app.circle_lookup.get(circle_id)
-            
             if circle:
                 debug_circle_ids.append(circle_id)  # Changed from single ID to list
                 # First update all connections for the circle visually
@@ -506,7 +593,6 @@ class InteractionHandler:
                         self.app.drag_state["curve_x"], 
                         self.app.drag_state["curve_y"]
                     )
-                    
                     # Draw angle visualizations for the updated curve
                     self.app.ui_manager.draw_connection_angle_visualizations(connection_key)
             
@@ -526,7 +612,7 @@ class InteractionHandler:
         
         # Reset the drag state BEFORE updating enclosure status
         self.reset_drag_state()
-
+        
         # Update enclosure status AFTER drag ends and ordered connections are updated
         if ordered_connections_updated:
              self.app._update_enclosure_status() # Phase 14 Trigger Point
@@ -542,15 +628,15 @@ class InteractionHandler:
         circle = self.app.circle_lookup.get(circle_id)
         if not circle:
             return
-
+        
         # Calculate the new position
         new_x = circle["x"] + dx
         new_y = circle["y"] + dy
-
+        
         # Prevent dragging into the protected zone
         if new_x < self.app.PROXIMITY_LIMIT and new_y < self.app.PROXIMITY_LIMIT:
             return
-
+        
         # Update circle position
         self.app.canvas.move(circle["canvas_id"], dx, dy)
         circle["x"] = new_x
@@ -562,7 +648,7 @@ class InteractionHandler:
         connection = self.app.connections.get(connection_key)
         if not connection:
             return
-
+        
         # Prevent dragging into the protected zone
         if x < self.app.PROXIMITY_LIMIT and y < self.app.PROXIMITY_LIMIT:
             return
@@ -596,7 +682,3 @@ class InteractionHandler:
         connection["curve_X"], connection["curve_Y"] = new_curve_x, new_curve_y
         self.app.ui_manager.draw_connection_angle_visualizations(connection_key)
         connection["curve_X"], connection["curve_Y"] = original_curve_x, original_curve_y
-
-    def remove_circle(self, event):
-        """Handler stub for backward compatibility."""
-        pass
