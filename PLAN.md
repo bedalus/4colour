@@ -8,20 +8,23 @@ The goal of this phase is to enhance the color management system for complex gra
 
 - [ ] **Constrain curved line overlap and midpoint proximity**
     * a. Investigate
-        - Review `calculate_midpoint` and `calculate_curve_points` in `connection_manager.py`.
-        - Identify where the midpoint is calculated and how it is used in drawing curves.
-    * b. Implement Minimum Distance Constraint
-        - Add logic to check the distance between the calculated midpoint and each node (`from_circle`, `to_circle`).
-        - If the midpoint is too close (define a threshold, e.g., 20 pixels), adjust the midpoint position or reject the curve.
+        - Review `draw_midpoint_handle`, midpoint drag event handlers, `calculate_midpoint`, and `calculate_curve_points` in `connection_manager.py`.
+        - Identify how the midpoint handle is created, how its position is updated during dragging, and how the curve is redrawn.
+    * b. Implement Minimum Distance Constraint (User Interaction)
+        - When the user starts dragging a midpoint handle, capture and store the original valid position.
+        - During drag and especially on release, check the distance between the new midpoint and each node (`from_circle`, `to_circle`).
+        - If the midpoint is too close (define a threshold, e.g., 20 pixels), revert the handle and curve to the original position and provide user feedback if possible.
+        - Only allow the curve to update if the constraint is satisfied.
     * c. Adapt Existing Functionality
-        - Prefer adapting the midpoint calculation rather than rewriting from scratch.
-        - Ensure changes are compatible with how `add_connection` and `update_connection_curve` use these methods.
+        - Prefer adapting the handle drag/release logic and curve update logic rather than rewriting from scratch.
+        - Ensure changes are compatible with how `update_connection_curve`, `draw_midpoint_handle`, and related UI logic work.
     * d. Test Incrementally
-        - After implementing, manually test adding connections with various node placements.
+        - After implementing, manually test dragging and releasing midpoint handles near nodes, including edge cases.
         - Run all unit tests to ensure no regressions.
     * e. Pitfalls & Warnings
-        - Be careful not to break existing connection rendering.
-        - Watch for edge cases where nodes are very close together or overlapping.
+        - Be careful not to break existing connection rendering or handle movement.
+        - Watch for edge cases where nodes are very close together or overlapping, and ensure the UI remains responsive.
+        - Avoid situations where the handle becomes "stuck" or the user cannot recover from an invalid drag.
     * f. Hard Stop
         - Pause for review before proceeding to the next constraint.
 
