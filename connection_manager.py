@@ -60,12 +60,18 @@ class ConnectionManager:
         
         # Store connection details with default curve values (0,0)
         connection_key = f"{from_id}_{to_id}"
+        # Preserve existing curve offsets if the connection already exists
+        prev_curve_x = 0
+        prev_curve_y = 0
+        if connection_key in self.app.connections:
+            prev_curve_x = self.app.connections[connection_key].get("curve_X", 0)
+            prev_curve_y = self.app.connections[connection_key].get("curve_Y", 0)
         self.app.connections[connection_key] = {
             "line_id": line_id,
             "from_circle": from_id,
             "to_circle": to_id,
-            "curve_X": 0,  # Default: no curve offset in X direction
-            "curve_Y": 0,  # Default: no curve offset in Y direction
+            "curve_X": prev_curve_x,
+            "curve_Y": prev_curve_y,
             "locked": False  # New field for Phase 16: Lock elements outside ADJUST mode
         }
         
@@ -442,6 +448,22 @@ class ConnectionManager:
         
         # Ensure angle is between 0 and 360
         return angle_deg % 360
+
+    def is_entry_angle_too_close(self, node_id, other_node_id, min_angle=2):
+        """
+        Check if the entry angle between the connection (node_id, other_node_id)
+        and any other connection at node_id is within min_angle degrees.
+        Returns True if a violation is found, otherwise False.
+        """
+        this_angle = self.calculate_connection_entry_angle(node_id, other_node_id)
+        for other_id in self.app.circle_lookup[node_id]["connected_to"]:
+            if other_id == other_node_id:
+                continue
+            angle = self.calculate_connection_entry_angle(node_id, other_id)
+            diff = abs((this_angle - angle + 180) % 360 - 180)
+            if diff < min_angle:
+                return True
+        return False
     
     def get_connection_key(self, circle1_id, circle2_id):
         """Get a consistent key for a connection between two circles.

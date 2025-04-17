@@ -479,11 +479,29 @@ class InteractionHandler:
                     to_dist_sq = dist_sq(new_mid_x, new_mid_y, to_circle["x"], to_circle["y"])
                     min_dist_sq = min_dist ** 2
                     if from_dist_sq < min_dist_sq or to_dist_sq < min_dist_sq:
-                        # Revert to original curve offset if constraint violated
                         self.app.drag_state["curve_x"] = self.app.drag_state.get("orig_curve_x", 0)
                         self.app.drag_state["curve_y"] = self.app.drag_state.get("orig_curve_y", 0)
-                        # Optionally, provide user feedback here (e.g., flash handle)
-        # ----------------------------------------------------------------------
+
+        # Show or clear warning hint for angle constraint after midpoint handle is released
+        if self.app.drag_state["type"] == "midpoint":
+            connection_key = self.app.drag_state["id"]
+            connection = self.app.connections.get(connection_key)
+            if connection:
+                # Apply the final curve offset before evaluating the constraint
+                connection["curve_X"] = self.app.drag_state.get("curve_x", connection.get("curve_X", 0))
+                connection["curve_Y"] = self.app.drag_state.get("curve_y", connection.get("curve_Y", 0))
+                from_id = connection["from_circle"]
+                to_id = connection["to_circle"]
+                angle_violation = (
+                    self.app.connection_manager.is_entry_angle_too_close(from_id, to_id, min_angle=2) or
+                    self.app.connection_manager.is_entry_angle_too_close(to_id, from_id, min_angle=2)
+                )
+                if angle_violation:
+                    self.app.ui_manager.show_edit_hint_text(
+                        "Warning: Connection angle too close to another. Adjust the midpoint until the warning clears."
+                    )
+                else:
+                    self.app.ui_manager.show_edit_hint_text()
         
         # Clear any angle visualization lines when dragging ends
         self.app.ui_manager.clear_angle_visualizations()
@@ -588,7 +606,7 @@ class InteractionHandler:
         circle["y"] = new_y
 
     def drag_midpoint_motion(self, x, y):
-        """Handle midpoint dragging motion, enforcing minimum distance constraint."""
+        """Handle midpoint dragging motion, enforcing minimum distance and angle constraints."""
         connection_key = self.app.drag_state["id"]
         connection = self.app.connections.get(connection_key)
         if not connection:
@@ -625,6 +643,16 @@ class InteractionHandler:
         if from_dist_sq < min_dist_sq or to_dist_sq < min_dist_sq:
             # Optionally, provide user feedback here (e.g., flash handle)
             return
+
+        # Check minimum angle constraint for both endpoints
+        from_id = connection["from_circle"]
+        to_id = connection["to_circle"]
+        angle_violation = (
+            self.app.connection_manager.is_entry_angle_too_close(from_id, to_id, min_angle=2) or
+            self.app.connection_manager.is_entry_angle_too_close(to_id, from_id, min_angle=2)
+        )
+
+        # Remove hint update logic from drag_midpoint_motion; handled in drag_end
 
         # Store curve offset and move handle visually
         self.app.drag_state["curve_x"] = new_curve_x

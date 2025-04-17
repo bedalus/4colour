@@ -145,8 +145,10 @@ class UIManager:
             font=("Arial", 12)
         )
     
-    def show_edit_hint_text(self):
-        """Display hint text specific to ADJUST mode."""
+    def show_edit_hint_text(self, hint=None):
+        """Display hint text specific to ADJUST mode, or a custom message if provided.
+        Custom warnings are shown in red and bold; default is gray and normal weight.
+        """
         # Clear any existing hint text first
         if self.app.hint_text_id:
             self.app.canvas.delete(self.app.hint_text_id)
@@ -159,15 +161,22 @@ class UIManager:
         x_pos = (canvas_width // 2)
         y_pos = 20
 
-        # Create the new hint text for ADJUST mode
-        hint = "You may adjust the last node and its connections"
+        # Style: warning in red and bold, default in gray and normal
+        if hint is None:
+            hint = "You may adjust the last node and its connections"
+            fill = "gray50"
+            font = ("Arial", 10)
+        else:
+            fill = "red"
+            font = ("Arial", 10, "bold")
+
         self.app.edit_hint_text_id = self.app.canvas.create_text(
             x_pos,
             y_pos,
             text=hint,
             anchor=tk.N, # Anchor to the top center
-            fill="gray50",
-            font=("Arial", 10)
+            fill=fill,
+            font=font
         )
     
     def clear_canvas(self):
