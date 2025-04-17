@@ -30,20 +30,27 @@ The goal of this phase is to enhance the color management system for complex gra
 
 - [ ] **Enforce minimum angle separation at nodes**
     * a. Investigate
-        - Review `calculate_connection_entry_angle` and `update_ordered_connections` in `connection_manager.py`.
-        - Understand how connection angles are determined and stored.
-    * b. Implement Angle Check
-        - For each node, check the angles between all pairs of connected lines.
-        - If any two are within 2 degrees, adjust the curve offset (possibly via `update_connection_curve`) to increase separation to at least 3 degrees.
+        - Review `calculate_connection_entry_angle`, `update_ordered_connections`, and midpoint handle adjustment/redraw logic in `connection_manager.py`.
+        - Understand how entry angles are determined for each connection at both endpoint nodes.
+    * b. Implement Angle Separation Constraint (Continuous Redraw After Handle Release)
+        - After the midpoint handle is released, check both endpoint nodes.
+        - For each node, compare the entry angle of the newly adjusted curve with all other connections at that node.
+        - If the entry angle between the new curve and any other connection is within 2 degrees, begin an adjustment loop:
+            - Move the midpoint handle position along the vector normal (perpendicular) to the line connecting the two endpoint nodes, in small increments.
+            - After each adjustment, immediately redraw the handle and curve so the user sees the handle's position updating in real time.
+            - Repeat this process rapidly until the constraint is satisfied for both nodes or a maximum number of iterations is reached.
+        - If the constraint cannot be satisfied after a reasonable number of attempts, revert to the previous valid position and provide user feedback if possible.
+        - The handle must remain visible and update continuously throughout this process.
     * c. Adapt Existing Functionality
-        - Integrate angle checks into connection creation and update flows.
-        - Avoid duplicating logic—reuse helper functions where possible.
+        - Integrate this logic into the midpoint handle release workflow, reusing or extending existing helper functions.
+        - Ensure changes are compatible with `update_connection_curve` and UI update logic.
     * d. Test Incrementally
-        - Test with nodes having multiple connections at similar angles.
+        - Test by releasing midpoint handles near other connections at both endpoints, especially with multiple connections at similar angles.
         - Run all unit tests.
     * e. Pitfalls & Warnings
-        - Avoid infinite adjustment loops.
-        - Ensure visual feedback remains smooth for the user.
+        - Avoid infinite or excessively long adjustment loops.
+        - Ensure the UI remains responsive and the handle does not "jump" erratically.
+        - Carefully handle edge cases where the constraint cannot be satisfied.
     * f. Hard Stop
         - Pause for review before proceeding.
 
