@@ -6,12 +6,85 @@ This document outlines the remaining tasks for the 4colour project, focusing on 
 
 The goal of this phase is to enhance the color management system for complex graph scenarios and improve usability.
 
-- [ ] **Prevent excessive curvature of connections:**
-    * Curved lines are allowed, but should be constrained to help prevent overlaps.
-    * Do not allow the midpoint too close to either of its attached nodes.
-    * If connections at either connected node are within 2 degrees, automatically adjust the midpoint to increase the angle of separation to at least 3 degrees.
-    * When the user creates a new node, assess the distance to the closest node that the user wants to connect too, and if it is too close, move the node further away from the average position of all the connected nodes.
-    * DO NOT ALLOW the user to place a node that is connected to any enclosed node. If so, delete the new node and its connections.
+- [ ] **Constrain curved line overlap and midpoint proximity**
+    * a. Investigate
+        - Review `calculate_midpoint` and `calculate_curve_points` in `connection_manager.py`.
+        - Identify where the midpoint is calculated and how it is used in drawing curves.
+    * b. Implement Minimum Distance Constraint
+        - Add logic to check the distance between the calculated midpoint and each node (`from_circle`, `to_circle`).
+        - If the midpoint is too close (define a threshold, e.g., 20 pixels), adjust the midpoint position or reject the curve.
+    * c. Adapt Existing Functionality
+        - Prefer adapting the midpoint calculation rather than rewriting from scratch.
+        - Ensure changes are compatible with how `add_connection` and `update_connection_curve` use these methods.
+    * d. Test Incrementally
+        - After implementing, manually test adding connections with various node placements.
+        - Run all unit tests to ensure no regressions.
+    * e. Pitfalls & Warnings
+        - Be careful not to break existing connection rendering.
+        - Watch for edge cases where nodes are very close together or overlapping.
+    * f. Hard Stop
+        - Pause for review before proceeding to the next constraint.
+
+- [ ] **Enforce minimum angle separation at nodes**
+    * a. Investigate
+        - Review `calculate_connection_entry_angle` and `update_ordered_connections` in `connection_manager.py`.
+        - Understand how connection angles are determined and stored.
+    * b. Implement Angle Check
+        - For each node, check the angles between all pairs of connected lines.
+        - If any two are within 2 degrees, adjust the curve offset (possibly via `update_connection_curve`) to increase separation to at least 3 degrees.
+    * c. Adapt Existing Functionality
+        - Integrate angle checks into connection creation and update flows.
+        - Avoid duplicating logic—reuse helper functions where possible.
+    * d. Test Incrementally
+        - Test with nodes having multiple connections at similar angles.
+        - Run all unit tests.
+    * e. Pitfalls & Warnings
+        - Avoid infinite adjustment loops.
+        - Ensure visual feedback remains smooth for the user.
+    * f. Hard Stop
+        - Pause for review before proceeding.
+
+- [ ] **Node placement distance constraint**
+    * a. Investigate
+        - Review node creation logic in `canvas_app.py` and `circle_manager.py`.
+        - Identify where new node coordinates are set and connections are proposed.
+    * b. Implement Distance Assessment
+        - When a new node is created, calculate its distance to the nearest node it will connect to.
+        - If too close (define threshold), move the node further away, ideally along the vector from the average position of all connected nodes.
+    * c. Adapt Existing Functionality
+        - Modify node placement logic, not connection logic, to enforce this constraint.
+    * d. Test Incrementally
+        - Test node creation near existing nodes.
+        - Run all unit tests.
+    * e. Pitfalls & Warnings
+        - Avoid moving nodes outside the visible canvas.
+        - Ensure the UI updates correctly after repositioning.
+    * f. Hard Stop
+        - Pause for review before proceeding.
+
+- [ ] **Prevent connections to enclosed nodes**
+    * a. Investigate
+        - Review how enclosed nodes are identified (likely in `boundary_manager.py` or related logic).
+        - Check where new connections are validated.
+    * b. Implement Check
+        - Before finalizing a new node and its connections, check if any target node is enclosed.
+        - If so, delete the new node and its connections immediately.
+    * c. Adapt Existing Functionality
+        - Integrate this check into the node creation workflow.
+    * d. Test Incrementally
+        - Test by attempting to connect to enclosed nodes.
+        - Run all unit tests.
+    * e. Pitfalls & Warnings
+        - Ensure deletion is clean (no orphaned references).
+        - Avoid false positives—only block truly enclosed nodes.
+    * f. Hard Stop
+        - Pause for review before proceeding.
+
+- **General Suggestions:**
+    - Commit after each successful step.
+    - Write or update unit tests for each constraint.
+    - Document any new helper functions or logic.
+    - Communicate with the team if you encounter unexpected complexity.
 
 - [ ] **Fix and Enhance Unit Tests:**
     * Update test expectations in `test_color_manager.py` to match the new algorithm behavior.
