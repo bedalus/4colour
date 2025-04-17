@@ -458,6 +458,32 @@ class InteractionHandler:
         """
         if not self.app.in_edit_mode or not self.app.drag_state["active"]:
             return
+
+        # --- ENFORCE MINIMUM DISTANCE CONSTRAINT ON MIDPOINT HANDLE RELEASE ---
+        if self.app.drag_state["type"] == "midpoint":
+            connection_key = self.app.drag_state["id"]
+            connection = self.app.connections.get(connection_key)
+            if connection:
+                from_circle = self.app.circle_lookup.get(connection["from_circle"])
+                to_circle = self.app.circle_lookup.get(connection["to_circle"])
+                if from_circle and to_circle:
+                    base_mid_x, base_mid_y = self.app.connection_manager.calculate_midpoint(from_circle, to_circle)
+                    new_curve_x = self.app.drag_state.get("curve_x", 0)
+                    new_curve_y = self.app.drag_state.get("curve_y", 0)
+                    min_dist = 20
+                    def dist_sq(x1, y1, x2, y2):
+                        return (x1 - x2) ** 2 + (y1 - y2) ** 2
+                    new_mid_x = base_mid_x + new_curve_x / 2
+                    new_mid_y = base_mid_y + new_curve_y / 2
+                    from_dist_sq = dist_sq(new_mid_x, new_mid_y, from_circle["x"], from_circle["y"])
+                    to_dist_sq = dist_sq(new_mid_x, new_mid_y, to_circle["x"], to_circle["y"])
+                    min_dist_sq = min_dist ** 2
+                    if from_dist_sq < min_dist_sq or to_dist_sq < min_dist_sq:
+                        # Revert to original curve offset if constraint violated
+                        self.app.drag_state["curve_x"] = self.app.drag_state.get("orig_curve_x", 0)
+                        self.app.drag_state["curve_y"] = self.app.drag_state.get("orig_curve_y", 0)
+                        # Optionally, provide user feedback here (e.g., flash handle)
+        # ----------------------------------------------------------------------
         
         # Clear any angle visualization lines when dragging ends
         self.app.ui_manager.clear_angle_visualizations()
@@ -562,7 +588,7 @@ class InteractionHandler:
         circle["y"] = new_y
 
     def drag_midpoint_motion(self, x, y):
-        """Handle midpoint dragging motion."""
+        """Handle midpoint dragging motion, enforcing minimum distance constraint."""
         connection_key = self.app.drag_state["id"]
         connection = self.app.connections.get(connection_key)
         if not connection:
@@ -581,6 +607,24 @@ class InteractionHandler:
         base_mid_x, base_mid_y = self.app.connection_manager.calculate_midpoint(from_circle, to_circle)
         new_curve_x = (x - base_mid_x) * 2
         new_curve_y = (y - base_mid_y) * 2
+
+        # Enforce minimum distance constraint
+        min_dist = 20  # pixels; must match PLAN.md and connection_manager.py
+        def dist_sq(x1, y1, x2, y2):
+            return (x1 - x2) ** 2 + (y1 - y2) ** 2
+
+        # Calculate the new midpoint position
+        new_mid_x = base_mid_x + new_curve_x / 2
+        new_mid_y = base_mid_y + new_curve_y / 2
+
+        from_dist_sq = dist_sq(new_mid_x, new_mid_y, from_circle["x"], from_circle["y"])
+        to_dist_sq = dist_sq(new_mid_x, new_mid_y, to_circle["x"], to_circle["y"])
+        min_dist_sq = min_dist ** 2
+
+        # If midpoint is too close to either node, do not update the curve offset
+        if from_dist_sq < min_dist_sq or to_dist_sq < min_dist_sq:
+            # Optionally, provide user feedback here (e.g., flash handle)
+            return
 
         # Store curve offset and move handle visually
         self.app.drag_state["curve_x"] = new_curve_x

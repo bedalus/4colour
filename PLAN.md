@@ -6,7 +6,7 @@ This document outlines the remaining tasks for the 4colour project, focusing on 
 
 The goal of this phase is to enhance the color management system for complex graph scenarios and improve usability.
 
-- [ ] **Constrain curved line overlap and midpoint proximity**
+- [x] **Constrain curved line overlap and midpoint proximity**
     * a. Investigate
         - Review `draw_midpoint_handle`, midpoint drag event handlers, `calculate_midpoint`, and `calculate_curve_points` in `connection_manager.py`.
         - Identify how the midpoint handle is created, how its position is updated during dragging, and how the curve is redrawn.
