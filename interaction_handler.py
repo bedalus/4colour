@@ -706,6 +706,9 @@ class InteractionHandler:
         # Update visuals for all connected lines
         connections_to_update = list(circle.get("connected_to", [])) # Create a copy for safe iteration if needed
         
+        # Track if any connection violates the angle constraint
+        angle_violation_found = False
+        
         for connected_id in connections_to_update:
             connection_key = self.app.connection_manager.get_connection_key(circle_id, connected_id)
             
@@ -715,9 +718,26 @@ class InteractionHandler:
 
             # If the key exists, proceed with the update
             self._update_connection_visuals(connection_key) 
+            
+            # Check if this connection has an angle violation
+            connection = self.app.connections.get(connection_key)
+            if connection:
+                from_id = connection["from_circle"]
+                to_id = connection["to_circle"]
+                if (self.app.connection_manager.is_entry_angle_too_close(from_id, to_id, min_angle=2) or
+                    self.app.connection_manager.is_entry_angle_too_close(to_id, from_id, min_angle=2)):
+                    angle_violation_found = True
+
+        # Show warning hint if there's an angle violation, otherwise clear it
+        if angle_violation_found:
+            self.app.ui_manager.show_edit_hint_text(
+                "Warning: Connection angle too close to another. Adjust the position until the warning clears."
+            )
+        else:
+            self.app.ui_manager.show_edit_hint_text()
 
         # Update the button state based on overall violations
-        self._check_violations_and_update_button() 
+        self._check_violations_and_update_button()
 
     def drag_midpoint_motion(self, x, y):
         """Handle midpoint dragging motion, enforcing minimum distance and angle constraints."""
