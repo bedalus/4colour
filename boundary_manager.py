@@ -25,40 +25,36 @@ class BoundaryManager:
                 circle['enclosed'] = False
             return # No boundary to traverse
 
-        # --- Get the fixed start node (Node A) ---
-        start_node = self.app.circle_lookup.get(self.app.FIXED_NODE_A_ID)
-        if not start_node:
-            # If we can't find the fixed node, something is wrong
-            # Mark all circles as not enclosed
-            for circle in self.app.circle_lookup.values():
-                circle['enclosed'] = False
-            return
-            
         # Initialize boundary tracking
         boundary_nodes = set()
+
+        # --- Get the fixed start node (Node A) ---
+        start_node = self.app.circle_lookup.get(self.app.FIXED_NODE_A_ID)
+
+        # This will be the ID of the first node to visit *after* start_node
+        next_id = self.app.circle_lookup.get(self.app.FIXED_NODE_B_ID)
+
+        # Define the edge connecting fixed nodes (A-B)
+        ab_edge = tuple(sorted([self.app.FIXED_NODE_A_ID, self.app.FIXED_NODE_B_ID]))
+
+        # Define boundary start point
         boundary_nodes.add(start_node['id'])
 
         # --- Start of Traversal Logic ---
         current_id = start_node['id']
         current_node = start_node
 
-        # Find the initial outgoing edge from the start_node.
-        # This is the edge with the smallest angle when measured clockwise from North (0 degrees).
-        min_angle = float('inf')
-        next_id = None # This will be the ID of the first node to visit *after* start_node
+        # Remember the very first edge we walk out on
+        return_count = 0
+        previous_id = start_node['id']  # We start by conceptually moving from start_node to next_id
 
-        for neighbor_id in current_node['ordered_connections']:
-            # Calculate angle of the connection vector leaving current_node towards neighbor_id
-            angle = self._calculate_corrected_angle(current_node, neighbor_id)
-            if angle < min_angle:
-                min_angle = angle
-                next_id = neighbor_id # The neighbor connected by the edge with the minimum angle
-
-        # Traverse the outer boundary clockwise.
-        # Start from the 'next_id' found above, keeping track of the node we came from ('previous_id').
-        previous_id = start_node['id'] # We start by conceptually moving from start_node to next_id
-
-        while next_id and next_id != start_node['id']:
+        while next_id:
+            # if we're back at A, only stop if it's not the AB‑edge first return
+            if next_id == start_node['id']:
+                if (tuple(sorted(next_id, current_id)) == ab_edge) and return_count == 0:
+                    return_count = 1
+                else:
+                    break
             # Safety break to prevent infinite loops in case of graph inconsistency
             if len(boundary_nodes) > len(self.app.circles) + 1: # Allow one extra for safety margin
                  print(f"Warning: Boundary traversal exceeded expected length ({len(boundary_nodes)} > {len(self.app.circles)}). Breaking loop.")
