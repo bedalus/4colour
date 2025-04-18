@@ -35,18 +35,18 @@ The goal of this phase is to enhance the color management system for complex gra
     * b. Implement Angle Separation Constraint (User-Guided)
         - Create a helper function that, given a node and a connection, checks if the entry angle between the adjusted curve and any other connection at that node is within 2 degrees.
         - Use this helper for both endpoints of the connection being adjusted when the user drags the midpoint handle.
-        - If the constraint is violated for either endpoint, display a warning hint to the user (e.g., "Warning: Connection angle too close to another. Adjust the midpoint until the warning clears.").
+        - If the constraint is violated for either endpoint, change the curve red. Change it back to black when the angle is greater than 3 degrees
         - Do not attempt to fix the midpoint automatically; rely on the user to move the handle until the warning disappears.
     * c. Adapt Existing Functionality
         - Integrate this logic into the midpoint handle drag/release workflow, reusing or extending existing helper functions.
         - Ensure changes are compatible with `update_connection_curve` and UI update logic.
-    * d. Test Incrementally
+    * d. User will Test Incrementally
         - Test by dragging and releasing midpoint handles near other connections at both endpoints, especially with multiple connections at similar angles.
-        - Run all unit tests.
     * e. Pitfalls & Warnings
-        - Ensure the warning hint is clear and disappears as soon as the constraint is satisfied.
-        - Avoid UI flicker or excessive warning messages.
         - Carefully handle edge cases where the constraint cannot be satisfied due to geometry.
+        - Make use of the connection order to work out which other entry angles need to be calculated. It may be possible to discount some if there are many connections on the circle, as only the one before are valid candidates for the closest angle.
+        - Remember this check needs to happen at both endpoints if a midpoint is being dragged.
+        - Alternate between red and black continuously as required.
     * f. Hard Stop
         - Pause for review before proceeding.
 
