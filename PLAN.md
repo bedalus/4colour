@@ -28,7 +28,7 @@ The goal of this phase is to enhance the color management system for complex gra
     * f. Hard Stop
         - Pause for review before proceeding to the next constraint.
 
-- [ ] **Enforce minimum angle separation at nodes**
+- [x] **Enforce minimum angle separation at nodes**
     * a. Investigate
         - Review `calculate_connection_entry_angle` and connection update logic in `connection_manager.py`.
         - Understand how entry angles are determined for each connection at both endpoint nodes.
@@ -69,22 +69,37 @@ The goal of this phase is to enhance the color management system for complex gra
         - Pause for review before proceeding.
 
 - [ ] **Prevent connections to enclosed nodes**
-    * a. Investigate
-        - Review how enclosed nodes are identified (likely in `boundary_manager.py` or related logic).
-        - Check where new connections are validated.
-    * b. Implement Check
-        - Before finalizing a new node and its connections, check if any target node is enclosed.
-        - If so, delete the new node and its connections immediately.
-    * c. Adapt Existing Functionality
-        - Integrate this check into the node creation workflow.
-    * d. Test Incrementally
-        - Test by attempting to connect to enclosed nodes.
-        - Run all unit tests.
-    * e. Pitfalls & Warnings
-        - Ensure deletion is clean (no orphaned references).
-        - Avoid false positives—only block truly enclosed nodes.
-    * f. Hard Stop
-        - Pause for review before proceeding.
+    * a. Investigation Results:
+        - Enclosed nodes are identified in `boundary_manager.py` using the `update_enclosure_status()` method, which sets `circle['enclosed'] = True/False`
+        - The connection validation happens primarily in `interaction_handler.py` during the `confirm_selection()` method when the user presses 'y'
+        - The `_update_enclosure_status()` method in `CanvasApplication` is called as a trigger point after modifying connections
+        - Before new nodes are finalized (in `confirm_selection`), we need to add validation for enclosed status
+        
+    * b. Implement Check with Specific Logic:
+        - Add a new helper method `has_enclosed_nodes(circle_ids)` in `CanvasApplication` that checks if any node in the list is enclosed
+        - In `confirm_selection()` just before adding connections, check if any selected circle is enclosed:
+          ```python
+          if self.app.has_enclosed_nodes(self.app.selected_circles):
+              # Show warning message to user:
+              # Use either show_hint_text() or show_edit_hint_text() if possible, copy from existing implementations elsewhere in the app.
+              # Cancel the current placement (similar to pressing Escape)
+              self.cancel_selection(None)
+              return
+          ```
+      
+    * c. Technical Considerations:
+        - Use the existing enclosed status tracking rather than recalculating
+        - For consistent user experience, avoid allowing selection of enclosed nodes from the start
+        - The enclosure status is updated after each connection change, so timing of checks is critical
+        
+    * f. Implementation Approach:
+        1. First implement the basic validation and cancellation logic
+        2. Then add the feedback message
+        3. Finally implement the selection restriction logic
+        4. Test each component independently before integration
+    
+    * g. Expected User Experience:
+        - User tries to connect a new circle to an enclosed node → Warning appears and placement is canceled
 
 - **General Suggestions:**
     - Commit after each successful step.
