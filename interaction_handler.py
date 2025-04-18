@@ -167,6 +167,26 @@ class InteractionHandler:
         color_priority = self.app._assign_color_based_on_connections()  # Only get priority
         color_name = get_color_from_priority(color_priority)  # Get color name for drawing
         
+        # Detect if the new point is too close to an existing circle
+        r = self.app.circle_radius
+        min_distance = float('inf')
+        closest_circle = None
+        for c in self.app.circles:
+            dx = x - c["x"]
+            dy = y - c["y"]
+            dist = (dx**2 + dy**2) ** 0.5
+            if dist < min_distance:
+                closest_circle = c
+                min_distance = dist
+
+        if closest_circle and min_distance < 3 * r:
+            dx = x - closest_circle["x"]
+            dy = y - closest_circle["y"]
+            dist = (dx**2 + dy**2) ** 0.5
+            
+            x = closest_circle["x"] + dx * 4 * r / dist
+            y = closest_circle["y"] + dy * 4 * r / dist
+
         # Create the circle on canvas
         circle_id = self.app.canvas.create_oval(
             x - self.app.circle_radius,

@@ -50,7 +50,7 @@ The goal of this phase is to enhance the color management system for complex gra
     * f. Hard Stop
         - Pause for review before proceeding.
 
-- [ ] **Node placement distance constraint**
+- [x] **Node placement distance constraint**
     * a. Investigate
         - Review node creation logic in `canvas_app.py` and `circle_manager.py`.
         - Identify where new node coordinates are set and connections are proposed.
