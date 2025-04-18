@@ -580,8 +580,6 @@ class InteractionHandler:
                         self.app.drag_state["curve_x"], 
                         self.app.drag_state["curve_y"]
                     )
-                    # Draw angle visualizations for the updated curve
-                    self.app.ui_manager.draw_connection_angle_visualizations(connection_key)
             
             # Extract circle IDs from the connection key (format: "smaller_id_larger_id")
             try:
