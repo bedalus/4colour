@@ -51,27 +51,11 @@ class ConnectionManager:
              return 
 
         # Create the line on canvas
-        line_id = self.app.canvas.create_line(
-            points,
-            width=1,
-            smooth=True,
-            tags="line",
-            fill="black"
-        )
-        self.app.canvas.lower(line_id) # Ensure line is below circles
+        line_id = self._create_connection_line(points, connection_key)
 
         # Store connection data
-        connection_data = {
-            "line_id": line_id,
-            "from_circle": from_circle_id,
-            "to_circle": to_circle_id,
-            "curve_X": 0,  # Initialize curve offsets
-            "curve_Y": 0,
-            "locked": False # Phase 16: Lock elements outside ADJUST mode
-        }
+        connection_data = self._update_connection_data(connection_key, from_circle_id, to_circle_id, line_id)
         
-        # Add to the main connections dictionary
-        self.app.connections[connection_key] = connection_data
         # Verify immediately after adding
         if connection_key in self.app.connections:
              pass
@@ -239,14 +223,7 @@ class ConnectionManager:
         
         # Delete and redraw the connection line
         self.app.canvas.delete(connection["line_id"])
-        new_line_id = self.app.canvas.create_line(
-            points,  # All points for the curved line
-            width=1,
-            smooth=True,  # Enable line smoothing for curves
-            tags="line"  # Add tag for line
-        )
-        # Ensure new line stays below circles
-        self.app.canvas.lower("line")
+        new_line_id = self._create_connection_line(points, connection_key)
         
         connection["line_id"] = new_line_id
         
@@ -618,3 +595,49 @@ class ConnectionManager:
             
         # Update enclosure status as connections changing might affect it
         self.app._update_enclosure_status() # Phase 14 Trigger Point
+
+    def _create_connection_line(self, points, connection_key=None):
+        """Create a line on canvas for a connection.
+        
+        Args:
+            points: List of coordinates for the line
+            connection_key: Optional connection key for debugging
+            
+        Returns:
+            int: Canvas ID of the created line
+        """
+        line_id = self.app.canvas.create_line(
+            points,
+            width=1,
+            smooth=True,
+            tags="line",
+            fill="black"
+        )
+        self.app.canvas.lower(line_id)  # Ensure line is below circles
+        return line_id
+
+    def _update_connection_data(self, connection_key, from_id, to_id, line_id, curve_x=0, curve_y=0):
+        """Update or create connection data in the connections dictionary.
+        
+        Args:
+            connection_key: The unique key for this connection
+            from_id: ID of the first circle
+            to_id: ID of the second circle
+            line_id: Canvas ID for the connection line
+            curve_x: X offset for curve control point
+            curve_y: Y offset for curve control point
+            
+        Returns:
+            dict: The connection data that was stored
+        """
+        connection_data = {
+            "line_id": line_id,
+            "from_circle": from_id,
+            "to_circle": to_id,
+            "curve_X": curve_x,
+            "curve_Y": curve_y,
+            "locked": False  # Phase 16: Lock elements outside ADJUST mode
+        }
+        
+        self.app.connections[connection_key] = connection_data
+        return connection_data
