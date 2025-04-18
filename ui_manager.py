@@ -129,54 +129,56 @@ class UIManager:
         # Join lines into a single string
         return "\n".join(justified_lines)
     
-    def show_hint_text(self):
-        """Display instructional hint text when in selection mode."""
-        # Clear any existing hint text
-        if self.app.hint_text_id:
-            self.app.canvas.delete(self.app.hint_text_id)
-            
-        # Create new hint text - use current canvas width for horizontal centering
-        self.app.hint_text_id = self.app.canvas.create_text(
-            self.app.canvas_width // 2,
-            20,
-            text="Please select which circles to connect to then press 'y', or press Escape to cancel",
-            anchor=tk.N,
-            fill="black",
-            font=("Arial", 12)
-        )
-    
-    def show_edit_hint_text(self, hint=None):
-        """Display hint text specific to ADJUST mode, or a custom message if provided.
-        Custom warnings are shown in red and bold; default is gray and normal weight.
+    def show_hint_text(self, text=None):
+        """Display a hint text for selection mode in the bottom left of the canvas.
+        
+        Args:
+            text: Custom hint text (optional). If None, shows the default selection hint.
         """
         # Clear any existing hint text first
         if self.app.hint_text_id:
             self.app.canvas.delete(self.app.hint_text_id)
             self.app.hint_text_id = None
+        
+        # If no text provided, use the default selection hint
+        if text is None:
+            text = "Please select which circles to connect to then press 'y', or press Esc to cancel"
+        
+        # Create the text at the bottom left corner, matching other hint text style
+        x = 10  # Left margin
+        y = self.app.canvas_height - 10  # Bottom margin
+        self.app.hint_text_id = self.app.canvas.create_text(
+            x, y, 
+            anchor="sw",  # Anchor at southwest (bottom left)
+            text=text,
+            fill="black",
+            font=("Arial", 10)  # Match font style of other hints
+        )
+
+    def show_edit_hint_text(self, text=None):
+        """Display a hint text for edit mode in the bottom left of the canvas.
+        
+        Args:
+            text: Custom hint text (optional). If None, shows the default edit hint.
+        """
+        # Clear any existing hint text first
         if self.app.edit_hint_text_id:
-            self.app.canvas.delete(self.app.edit_hint_text_id) # Clear previous edit hint
-
-        # Calculate position for the hint text
-        canvas_width = self.app.canvas_width
-        x_pos = (canvas_width // 2)
-        y_pos = 20
-
-        # Style: warning in red and bold, default in gray and normal
-        if hint is None:
-            hint = "You may adjust the last node and its connections"
-            fill = "gray50"
-            font = ("Arial", 10)
-        else:
-            fill = "red"
-            font = ("Arial", 10, "bold")
-
+            self.app.canvas.delete(self.app.edit_hint_text_id)
+            self.app.edit_hint_text_id = None
+            
+        # If no text provided or explicitly set to show default
+        if text is None:
+            text = "Drag circles and midpoint handles to adjust positions. Press 'c' to return to create mode."
+        
+        # Create the text at the bottom left corner
+        x = 10  # Left margin
+        y = self.app.canvas_height - 10  # Bottom margin
         self.app.edit_hint_text_id = self.app.canvas.create_text(
-            x_pos,
-            y_pos,
-            text=hint,
-            anchor=tk.N, # Anchor to the top center
-            fill=fill,
-            font=font
+            x, y, 
+            anchor="sw",  # Anchor at southwest (bottom left)
+            text=text,
+            fill="black",
+            font=("Arial", 10)  # Match font size and family
         )
     
     def clear_canvas(self):
