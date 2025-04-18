@@ -595,6 +595,20 @@ class InteractionHandler:
             except (ValueError, AttributeError):
                 pass  # Skip if connection key cannot be parsed
         
+        # Check final angles and set line color
+        if self.app.drag_state["type"] == "midpoint":
+            connection_key = self.app.drag_state["id"]
+            connection = self.app.connections.get(connection_key)
+            if connection:
+                from_id = connection["from_circle"]
+                to_id = connection["to_circle"]
+                angle_violation = (
+                    self.app.connection_manager.is_entry_angle_too_close(from_id, to_id, min_angle=2) or
+                    self.app.connection_manager.is_entry_angle_too_close(to_id, from_id, min_angle=2)
+                )
+                self.app.canvas.itemconfig(connection["line_id"], 
+                    fill="red" if angle_violation else "black")
+
         # Reset the drag state BEFORE updating enclosure status
         self.reset_drag_state()
         
@@ -677,6 +691,25 @@ class InteractionHandler:
         # Store curve offset and move handle visually
         self.app.drag_state["curve_x"] = new_curve_x
         self.app.drag_state["curve_y"] = new_curve_y
+
+        # Temporarily update the connection to show the curve
+        connection["curve_X"] = new_curve_x
+        connection["curve_Y"] = new_curve_y
+
+        # Calculate and update the curve points
+        points = self.app.connection_manager.calculate_curve_points(from_id, to_id)
+        self.app.canvas.coords(connection["line_id"], *points)
+
+        # Check for angle violations at both endpoints
+        angle_violation = (
+            self.app.connection_manager.is_entry_angle_too_close(from_id, to_id, min_angle=2) or
+            self.app.connection_manager.is_entry_angle_too_close(to_id, from_id, min_angle=2)
+        )
+
+        # Update line color based on violation
+        self.app.canvas.itemconfig(connection["line_id"], fill="red" if angle_violation else "black")
+
+        # Move the handle
         handle_id = self.app.midpoint_handles.get(connection_key)
         if handle_id:
             self.app.canvas.coords(

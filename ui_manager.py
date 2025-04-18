@@ -389,3 +389,15 @@ class UIManager:
         if self.warning_text_id:
             self.app.canvas.delete(self.warning_text_id)
             self.warning_text_id = None
+
+    def show_edit_hint_text(self, text=None):
+        """Show or update hint text in edit mode."""
+        if self.app.edit_hint_text_id:
+            self.app.canvas.delete(self.app.edit_hint_text_id)
+        
+        message = text or "Drag nodes or midpoints to adjust positions"
+        self.app.edit_hint_text_id = self.app.canvas.create_text(
+            10, self.app.canvas.winfo_height() - 10,
+            text=message,
+            anchor="sw"
+        )
