@@ -53,7 +53,7 @@ class BoundaryManager:
                 boundary_nodes.add(current_id)
             # Safety break to prevent infinite loops in case of graph inconsistency
             if len(boundary_nodes) >= len(self.app.circles):
-                print(f"Warning: Boundary nodes {sorted(list(boundary_nodes))} matched total circle count ({len(self.app.circles)}). Breaking loop.")
+                print(f"Warning: Boundary nodes {len(boundary_nodes)} matched total circle count ({len(self.app.circles)}). Breaking loop.")
                 # Mark all as not enclosed as boundary is likely incorrect
                 for circle in self.app.circle_lookup.values():
                     circle['enclosed'] = False
