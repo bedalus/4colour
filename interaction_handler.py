@@ -686,7 +686,12 @@ class InteractionHandler:
             self.app.connection_manager.is_entry_angle_too_close(to_id, from_id, min_angle=2)
         )
 
-        # Remove hint update logic from drag_midpoint_motion; handled in drag_end
+        # Update button state immediately during drag
+        if self.app.mode_button:
+            self.app.mode_button.config(state='disabled' if angle_violation else 'normal')
+
+        # Change line color based on violation
+        self.app.canvas.itemconfig(connection["line_id"], fill="red" if angle_violation else "black")
 
         # Store curve offset and move handle visually
         self.app.drag_state["curve_x"] = new_curve_x
@@ -787,12 +792,13 @@ class InteractionHandler:
         return x < self.app.PROXIMITY_LIMIT and y < self.app.PROXIMITY_LIMIT
     
     def _prepare_mode_transition(self, new_mode, for_red_node=False):
-        """Handle common mode transition tasks.
-        
-        Args:
-            new_mode: Mode to transition to
-            for_red_node: Whether this transition is for fixing a red node
-        """
+        """Handle common mode transition tasks."""
+        # Check for angle violations when leaving adjust mode
+        if self.app._mode == ApplicationMode.ADJUST and new_mode != ApplicationMode.ADJUST:
+            if self.app.connection_manager.has_angle_violations():
+                print("DEBUG: Cannot leave adjust mode while connections have angle violations")
+                return False
+                
         old_mode = self.app._mode
         
         # Skip if already in the target mode

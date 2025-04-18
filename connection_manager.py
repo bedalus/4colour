@@ -549,3 +549,13 @@ class ConnectionManager:
         
         # Normalize to 0-360 range, maintaining clockwise orientation
         return (angle_deg) % 360
+
+    def has_angle_violations(self):
+        """Check if any connections currently have angle violations."""
+        for connection_key, connection in self.app.connections.items():
+            from_id = connection["from_circle"]
+            to_id = connection["to_circle"]
+            if (self.is_entry_angle_too_close(from_id, to_id, min_angle=2) or
+                self.is_entry_angle_too_close(to_id, from_id, min_angle=2)):
+                return True
+        return False
