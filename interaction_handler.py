@@ -267,50 +267,54 @@ class InteractionHandler:
             self.app.selection_indicators[circle_id] = indicator_id
 
     def confirm_selection(self, event):
-        """Handle y key press to confirm circle selections.
-        
-        Args:
-            event: Key press event
-        """
+        """Handle 'y' key press to confirm circle connections."""
         if not self.app.in_selection_mode:
             return
             
-        # Prevent confirming with no selections
-        if not self.app.selected_circles:
-            return
-            
-        # Connect the newly placed circle to all selected circles
-        for circle_id in self.app.selected_circles:
-            self.app.connection_manager.add_connection(self.app.newly_placed_circle_id, circle_id)
+        # Store IDs before state gets cleared
+        new_circle_id = self.app.newly_placed_circle_id
         
+        # First check - prevent connecting to enclosed nodes
+        has_enclosed_nodes = False
+        for circle_id in (self.app.selected_circles):
+            circle = self.app.circle_lookup.get(circle_id)
+            if circle and circle.get('enclosed', False):
+                has_enclosed_nodes = True
+        
+        if has_enclosed_nodes:
+            self.app.ui_manager.show_hint_text("Cannot connect to enclosed nodes")
+            self.cancel_selection(None)
+            return
+
+        # Add all connections
+        for circle_id in self.app.selected_circles:
+            self.app.connection_manager.add_connection(new_circle_id, circle_id)
+
         # After all connections are made, check for color conflicts and resolve them once
         if self.app.newly_placed_circle_id and self.app.selected_circles:
             # Check and resolve color conflicts for the newly placed circle
             priority = self.app.color_manager.check_and_resolve_color_conflicts(self.app.newly_placed_circle_id)
-            
-            # Note: We don't need to check if priority is 4 here, as the color_manager
-            # will handle showing the fix button and entering adjust mode if needed
         
-        # Exit selection mode
+        # Clear selection state
+        self.app.selected_circles.clear()
         self.app.in_selection_mode = False
-        self.app.last_circle_id = self.app.newly_placed_circle_id
-        self.app.newly_placed_circle_id = None
         
-        # Clear selections
-        self.app.selected_circles = []
+        # Update enclosure status 
+        self.app._update_enclosure_status()
         
-        # Clear selection indicators
-        for indicator_id in self.app.selection_indicators.values():
-            self.app.canvas.delete(indicator_id)
-        self.app.selection_indicators = {}
-        
-        # Clear hint text
-        if self.app.hint_text_id:
-            self.app.canvas.delete(self.app.hint_text_id)
-            self.app.hint_text_id = None
-            
-        # Update enclosure status after connections are confirmed
-        self.app._update_enclosure_status() # Phase 14 Trigger Point
+        # Check if the newly placed circle became enclosed
+        if self.app.circle_lookup[new_circle_id]['enclosed']:
+            self.app.ui_manager.show_hint_text("Node removed: Invalid placement! New nodes must be added to the exterior")
+            self.app.circle_manager.remove_circle_by_id(new_circle_id, bypass_lock=True)
+            self.app.newly_placed_circle_id = None
+            self.app.in_selection_mode = False
+            return
+        else:
+            # Only update last_circle_id if node wasn't removed
+            self.app.last_circle_id = new_circle_id
+            self.app.newly_placed_circle_id = None
+            # Update enclosure status after connections are confirmed
+            self.app._update_enclosure_status()
             
         # Update debug info if enabled
         if self.app.debug_enabled:
