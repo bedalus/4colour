@@ -304,6 +304,7 @@ class InteractionHandler:
         
         # Check if the newly placed circle became enclosed
         if self.app.circle_lookup[new_circle_id]['enclosed']:
+            self.app.ui_manager.show_hint_text()
             self.app.ui_manager.show_hint_text("Node removed: Invalid placement! New nodes must be added to the exterior")
             self.app.circle_manager.remove_circle_by_id(new_circle_id, bypass_lock=True)
             self.app.newly_placed_circle_id = None
@@ -529,11 +530,11 @@ class InteractionHandler:
                     self.app.connection_manager.is_entry_angle_too_close(to_id, from_id, min_angle=2)
                 )
                 if angle_violation:
-                    self.app.ui_manager.show_edit_hint_text(
+                    self.app.ui_manager.show_hint_text(
                         "Warning: Connection angle too close to another. Adjust the midpoint until the warning clears."
                     )
                 else:
-                    self.app.ui_manager.show_edit_hint_text()
+                    self.app.ui_manager.show_hint_text()
         
         # Clear any angle visualization lines when dragging ends
         self.app.ui_manager.clear_angle_visualizations()
@@ -635,6 +636,7 @@ class InteractionHandler:
                 circle.get("enclosed", False)):
                 
                 # Show warning message
+                self.app.ui_manager.show_hint_text()
                 self.app.ui_manager.show_hint_text("Invalid move! Boundary nodes must remain on the exterior")
                 
                 # Restore the original position
@@ -774,11 +776,11 @@ class InteractionHandler:
 
         # Show warning hint if there's an angle violation, otherwise clear it
         if angle_violation_found:
-            self.app.ui_manager.show_edit_hint_text(
+            self.app.ui_manager.show_hint_text(
                 "Warning: Connection angle too close to another. Adjust the position until the warning clears."
             )
         else:
-            self.app.ui_manager.show_edit_hint_text()
+            self.app.ui_manager.show_hint_text()
 
         # Update the button state based on overall violations
         self._check_violations_and_update_button()
@@ -955,7 +957,7 @@ class InteractionHandler:
         # Setup for new mode
         if new_mode == ApplicationMode.ADJUST:
             # Set up ADJUST mode UI
-            self.app.ui_manager.show_edit_hint_text()
+            self.app.ui_manager.show_hint_text()
             self.app.canvas.config(bg="#FFDDDD" if for_red_node else "#FFEEEE")
             self.app.connection_manager.show_midpoint_handles()
             self.app._update_enclosure_status()

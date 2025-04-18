@@ -81,7 +81,7 @@ The goal of this phase is to enhance the color management system for complex gra
           ```python
           if self.app.has_enclosed_nodes(self.app.selected_circles):
               # Show warning message to user:
-              # Use either show_hint_text() or show_edit_hint_text() if possible, copy from existing implementations elsewhere in the app.
+              # Use either show_hint_text() or show_hint_text() if possible, copy from existing implementations elsewhere in the app.
               # Cancel the current placement (similar to pressing Escape)
               self.cancel_selection(None)
               return

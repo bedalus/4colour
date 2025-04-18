@@ -142,9 +142,6 @@ class CanvasApplication:
             # Update any other UI elements that depend on canvas dimensions
             if self.hint_text_id:
                 self.ui_manager.show_hint_text()
-            
-            if self.edit_hint_text_id:
-                self.ui_manager.show_edit_hint_text()
 
     def _setup_ui(self):
         """Create and configure all UI elements."""
@@ -238,10 +235,7 @@ class CanvasApplication:
         
     def _toggle_mode(self):
         return self.interaction_handler.toggle_mode()
-        
-    def _show_edit_hint_text(self):
-        return self.ui_manager.show_edit_hint_text()
-        
+
     def _reset_drag_state(self):
         return self.interaction_handler.reset_drag_state()
         

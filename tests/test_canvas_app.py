@@ -122,7 +122,7 @@ class TestCanvasApplication(MockAppTestCase):
 
         with patch.object(self.app.ui_manager, 'show_debug_info') as mock_debug, \
              patch.object(self.app.ui_manager, 'show_hint_text') as mock_hint, \
-             patch.object(self.app.ui_manager, 'show_edit_hint_text') as mock_edit_hint:
+             patch.object(self.app.ui_manager, 'show_hint_text') as mock_edit_hint:
             self.app._update_canvas_dimensions()
 
             self.assertEqual(self.app.canvas_width, 900)

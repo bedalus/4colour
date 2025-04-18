@@ -155,32 +155,6 @@ class UIManager:
             font=("Arial", 10)  # Match font style of other hints
         )
 
-    def show_edit_hint_text(self, text=None):
-        """Display a hint text for edit mode in the bottom left of the canvas.
-        
-        Args:
-            text: Custom hint text (optional). If None, shows the default edit hint.
-        """
-        # Clear any existing hint text first
-        if self.app.edit_hint_text_id:
-            self.app.canvas.delete(self.app.edit_hint_text_id)
-            self.app.edit_hint_text_id = None
-            
-        # If no text provided or explicitly set to show default
-        if text is None:
-            text = "Drag circles and midpoint handles to adjust positions. Press 'c' to return to create mode."
-        
-        # Create the text at the bottom left corner
-        x = 10  # Left margin
-        y = self.app.canvas_height - 10  # Bottom margin
-        self.app.edit_hint_text_id = self.app.canvas.create_text(
-            x, y, 
-            anchor="sw",  # Anchor at southwest (bottom left)
-            text=text,
-            fill="black",
-            font=("Arial", 10)  # Match font size and family
-        )
-    
     def clear_canvas(self):
         """Clear the canvas and reset application state."""
         # Reset mode button if it's currently in "Fix Red" mode
@@ -391,15 +365,3 @@ class UIManager:
         if self.warning_text_id:
             self.app.canvas.delete(self.warning_text_id)
             self.warning_text_id = None
-
-    def show_edit_hint_text(self, text=None):
-        """Show or update hint text in edit mode."""
-        if self.app.edit_hint_text_id:
-            self.app.canvas.delete(self.app.edit_hint_text_id)
-        
-        message = text or "Drag nodes or midpoints to adjust positions"
-        self.app.edit_hint_text_id = self.app.canvas.create_text(
-            10, self.app.canvas.winfo_height() - 10,
-            text=message,
-            anchor="sw"
-        )

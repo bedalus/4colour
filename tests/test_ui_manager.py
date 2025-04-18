@@ -218,7 +218,7 @@ class TestUIManager(MockAppTestCase):
         # Verify hint_text_id was set
         self.assertEqual(self.app.hint_text_id, 300)
     
-    def test_show_edit_hint_text(self):
+    def test_show_hint_text(self):
         """Test displaying edit mode hint text."""
         # Setup initial state
         self.app.hint_text_id = 100
@@ -228,8 +228,8 @@ class TestUIManager(MockAppTestCase):
         # Create canvas.create_text mock return value
         self.app.canvas.create_text.return_value = 200
         
-        # Call show_edit_hint_text
-        self.app.ui_manager.show_edit_hint_text()
+        # Call show_hint_text
+        self.app.ui_manager.show_hint_text()
         
         # Verify hint_text_id was cleared
         self.app.canvas.delete.assert_called_once_with(100)
@@ -358,7 +358,7 @@ class TestUIManager(MockAppTestCase):
         self.app._mode = ApplicationMode.CREATE
         
         # Mock required methods
-        with patch.object(self.app.ui_manager, 'show_edit_hint_text') as mock_edit_hint:
+        with patch.object(self.app.ui_manager, 'show_hint_text') as mock_edit_hint:
             with patch.object(self.app.connection_manager, 'show_midpoint_handles') as mock_handles:
                 # Transition to ADJUST mode
                 self.app._set_application_mode(ApplicationMode.ADJUST)

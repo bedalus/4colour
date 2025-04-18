@@ -225,7 +225,7 @@ class TestInteractionHandler(MockAppTestCase):
         # Fix: Patch methods on the appropriate manager objects, not directly on app
         with patch.object(self.app.interaction_handler, 'unbind_mode_events') as mock_unbind:
             with patch.object(self.app.interaction_handler, 'bind_mode_events') as mock_bind:
-                with patch.object(self.app.ui_manager, 'show_edit_hint_text') as mock_hint:
+                with patch.object(self.app.ui_manager, 'show_hint_text') as mock_hint:
                     with patch.object(self.app.connection_manager, 'show_midpoint_handles') as mock_handles:
                         
                         self.app._set_application_mode(ApplicationMode.ADJUST)
