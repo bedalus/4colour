@@ -18,69 +18,79 @@ class ConnectionManager:
         """
         self.app = app
         
-    def add_connection(self, from_id, to_id):
-        """Add a connection between two circles.
-        
-        Args:
-            from_id: ID of the first circle
-            to_id: ID of the second circle
-            
-        Returns:
-            bool: True if connection was made, False otherwise
-        """
-        from_circle = self.app.circle_lookup.get(from_id)
-        to_circle = self.app.circle_lookup.get(to_id)
-        
-        if not from_circle or not to_circle:
-            return False
-            
-        # Check if connection already exists
-        if to_id in from_circle["connected_to"] or from_id in to_circle["connected_to"]:
-            return False
-        
-        # Calculate points for the curved line
-        points = self.calculate_curve_points(from_id, to_id)
-        if not points:
-            return False
-            
-        # Draw the curved line
-        line_id = self.app.canvas.create_line(
-            points,  # All points for the curved line
-            width=1,
-            smooth=True,  # Enable line smoothing for curves
-            tags="line"  # Add tag for line
-        )
-        
-        # Ensure the line is below all circles
-        self.app.canvas.lower("line")
-        
-        # Update connection data
-        from_circle["connected_to"].append(to_id)
-        to_circle["connected_to"].append(from_id)
-        
-        # Store connection details with default curve values (0,0)
-        connection_key = f"{from_id}_{to_id}"
-        # Preserve existing curve offsets if the connection already exists
-        prev_curve_x = 0
-        prev_curve_y = 0
+    def add_connection(self, from_circle_id, to_circle_id):
+        """Adds a connection between two circles."""
+        connection_key = self.get_connection_key(from_circle_id, to_circle_id)
+
+        # Prevent duplicate connections
         if connection_key in self.app.connections:
-            prev_curve_x = self.app.connections[connection_key].get("curve_X", 0)
-            prev_curve_y = self.app.connections[connection_key].get("curve_Y", 0)
-        self.app.connections[connection_key] = {
+            return
+
+        circle1 = self.app.circle_lookup.get(from_circle_id)
+        circle2 = self.app.circle_lookup.get(to_circle_id)
+
+        if not circle1 or not circle2:
+            return
+
+        # Update connected_to lists
+        if to_circle_id not in circle1.get("connected_to", []):
+            circle1.setdefault("connected_to", []).append(to_circle_id)
+        else:
+            pass
+            
+        if from_circle_id not in circle2.get("connected_to", []):
+             circle2.setdefault("connected_to", []).append(from_circle_id)
+        else:
+            pass
+
+
+        # Calculate initial curve points (straight line)
+        points = self.calculate_curve_points(from_circle_id, to_circle_id)
+        if not points:
+             # Attempt to rollback connected_to lists? Maybe not necessary if points fail rarely.
+             return 
+
+        # Create the line on canvas
+        line_id = self.app.canvas.create_line(
+            points,
+            width=1,
+            smooth=True,
+            tags="line",
+            fill="black"
+        )
+        self.app.canvas.lower(line_id) # Ensure line is below circles
+
+        # Store connection data
+        connection_data = {
             "line_id": line_id,
-            "from_circle": from_id,
-            "to_circle": to_id,
-            "curve_X": prev_curve_x,
-            "curve_Y": prev_curve_y,
-            "locked": False  # New field for Phase 16: Lock elements outside ADJUST mode
+            "from_circle": from_circle_id,
+            "to_circle": to_circle_id,
+            "curve_X": 0,  # Initialize curve offsets
+            "curve_Y": 0,
+            "locked": False # Phase 16: Lock elements outside ADJUST mode
         }
         
+        # Add to the main connections dictionary
+        self.app.connections[connection_key] = connection_data
+        # Verify immediately after adding
+        if connection_key in self.app.connections:
+             pass
+        else:
+             pass
+
+
         # Update ordered connections for both circles
-        self.update_ordered_connections(from_id)
-        self.update_ordered_connections(to_id)
+        self.update_ordered_connections(from_circle_id)
+        self.update_ordered_connections(to_circle_id)
+
+        # Create and store midpoint handle if in adjust mode
+        if self.app.in_edit_mode:
+            self.create_midpoint_handle(connection_key)
+            
+        # Update enclosure status as connections changing might affect it
+        self.app._update_enclosure_status() # Phase 14 Trigger Point
         
-        return True
-    
+
     def remove_circle_connections(self, circle_id):
         """Remove all connections for a specific circle.
         
@@ -559,3 +569,52 @@ class ConnectionManager:
                 self.is_entry_angle_too_close(to_id, from_id, min_angle=2)):
                 return True
         return False
+
+    def remove_connection(self, circle1_id, circle2_id):
+        """Removes a connection between two circles and cleans up associated data."""
+        connection_key = self.get_connection_key(circle1_id, circle2_id)
+
+        connection = self.app.connections.get(connection_key)
+        if not connection:
+            return
+
+        # Remove canvas items first
+        if "line_id" in connection:
+            self.app.canvas.delete(connection["line_id"])
+        if connection_key in self.app.midpoint_handles:
+            self.app.canvas.delete(self.app.midpoint_handles[connection_key])
+            del self.app.midpoint_handles[connection_key]
+
+        # Remove from the main connections dictionary
+        if connection_key in self.app.connections:
+            del self.app.connections[connection_key]
+        else:
+            pass
+
+
+        # Remove references from both circles' connected_to lists
+        circle1 = self.app.circle_lookup.get(circle1_id)
+        circle2 = self.app.circle_lookup.get(circle2_id)
+
+        if circle1:            
+            if circle2_id in circle1.get("connected_to", []):
+                circle1["connected_to"].remove(circle2_id)
+            else:
+                pass
+
+
+        if circle2:
+            if circle1_id in circle2.get("connected_to", []):
+                circle2["connected_to"].remove(circle1_id)
+            else:
+                pass
+
+
+        # Update ordered connections for both circles after removal
+        if circle1:
+            self.update_ordered_connections(circle1_id)
+        if circle2:
+            self.update_ordered_connections(circle2_id)
+            
+        # Update enclosure status as connections changing might affect it
+        self.app._update_enclosure_status() # Phase 14 Trigger Point

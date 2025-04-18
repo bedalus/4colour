@@ -40,42 +40,46 @@ class CircleManager:
         return None
     
     def remove_circle_by_id(self, circle_id, bypass_lock=False):
-        """Remove a circle by its ID and cleanup all associated connections.
-        
-        Args:
-            circle_id: ID of the circle to remove
-            bypass_lock: Whether to bypass the lock check (for Escape during creation)
-            
-        Returns:
-            bool: True if the circle was successfully removed, False otherwise
-        """
-        # Get the circle to remove
-        circle = self.app.circle_lookup.get(circle_id)
-        if not circle:
+        """Removes a circle and all its connections by its ID."""
+        circle_data = self.app.circle_lookup.get(circle_id)
+
+        if not circle_data:
+            return False
+
+        # Check lock status unless bypassed
+        if not bypass_lock and circle_data.get("locked", False):
             return False
             
-        # Check if this is a fixed node - prevent removal
-        # For locked nodes, only prevent removal if bypass_lock is False
-        if circle.get("fixed", False) or (not bypass_lock and circle.get("locked", False)) or circle_id in (self.app.FIXED_NODE_A_ID, self.app.FIXED_NODE_B_ID):
+        # Check fixed status (fixed nodes should generally not be removed this way)
+        if circle_data.get("fixed", False):
             return False
-            
-        # First, remove all connections to this circle
-        self.app._remove_circle_connections(circle_id)
-        
-        # Remove the circle's visual representation
-        self.app.canvas.delete(circle["canvas_id"])
-        
-        # Remove the circle from data structures
+
+        # Remove all connections associated with this circle FIRST
+        # Iterate over a copy of the list as remove_connection will modify it
+        connections_to_remove = list(circle_data.get("connected_to", []))
+        for connected_id in connections_to_remove:
+            self.app.connection_manager.remove_connection(circle_id, connected_id)
+
+        # Remove the circle from the canvas
+        self.app.canvas.delete(circle_data["canvas_id"])
+
+        # Remove from the main list (find by id)
+        original_length = len(self.app.circles)
         self.app.circles = [c for c in self.app.circles if c["id"] != circle_id]
-        del self.app.circle_lookup[circle_id]
-        
-        # Check if this was the last circle and handle special case
-        if not self.app.circles:
-            self.handle_last_circle_removed()
-            return True
-        
-        # Update debug info if enabled
-        if self.app.debug_enabled:
-            self.app.ui_manager.show_debug_info()
+
+        # Remove from the lookup dictionary
+        if circle_id in self.app.circle_lookup:
+            del self.app.circle_lookup[circle_id]
+
+        # If this was the last circle placed, reset the reference
+        if self.app.last_circle_id == circle_id:
+            self.app.last_circle_id = None
             
+        # If this was the newly placed circle being cancelled, reset that too
+        if self.app.newly_placed_circle_id == circle_id:
+             self.app.newly_placed_circle_id = None
+
+        # Update enclosure status as removing a circle might affect it
+        self.app._update_enclosure_status() # Phase 14 Trigger Point
+        
         return True

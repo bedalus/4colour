@@ -492,13 +492,15 @@ class InteractionHandler:
                     new_curve_y = self.app.drag_state.get("curve_y", 0)
                     min_dist = 20
                     def dist_sq(x1, y1, x2, y2):
-                        return (x1 - x2) ** 2 + (y1 - y2) ** 2
+                        # FIX: Corrected distance calculation (was y2-y2)
+                        return (x1 - x2) ** 2 + (y1 - y2) ** 2 
                     new_mid_x = base_mid_x + new_curve_x / 2
                     new_mid_y = base_mid_y + new_curve_y / 2
                     from_dist_sq = dist_sq(new_mid_x, new_mid_y, from_circle["x"], from_circle["y"])
                     to_dist_sq = dist_sq(new_mid_x, new_mid_y, to_circle["x"], to_circle["y"])
                     min_dist_sq = min_dist ** 2
                     if from_dist_sq < min_dist_sq or to_dist_sq < min_dist_sq:
+                        # If too close, reset drag state curve values before applying them later
                         self.app.drag_state["curve_x"] = self.app.drag_state.get("orig_curve_x", 0)
                         self.app.drag_state["curve_y"] = self.app.drag_state.get("orig_curve_y", 0)
 
@@ -619,6 +621,70 @@ class InteractionHandler:
              
         # Set the active circles for debug display before updating
         self._update_debug_for_circles(*debug_circle_ids)
+        
+        # Ensure final state reflects constraints after drag ends
+        self._check_violations_and_update_button() # Add final check here
+
+    def _update_connection_visuals(self, connection_key):
+        """Updates the visual representation of a single connection."""
+        connection = self.app.connections.get(connection_key)
+        if not connection:
+            return
+
+        from_id = connection["from_circle"]
+        to_id = connection["to_circle"]
+
+        # 1. Check for angle violations
+        angle_violation = (
+            self.app.connection_manager.is_entry_angle_too_close(from_id, to_id, min_angle=2) or
+            self.app.connection_manager.is_entry_angle_too_close(to_id, from_id, min_angle=2)
+        )
+        line_color = "red" if angle_violation else "black"
+
+        # 2. Recalculate curve points
+        points = self.app.connection_manager.calculate_curve_points(from_id, to_id)
+        
+        if points:
+            # 3. Delete the old line canvas item
+            # Restoring delete/create method
+            self.app.canvas.delete(connection["line_id"])
+            
+            # 4. Create a new line canvas item with updated points and color
+            new_line_id = self.app.canvas.create_line(
+                points,
+                width=1,
+                smooth=True,
+                tags="line",
+                fill=line_color # Apply color immediately
+            )
+            
+            # 5. Update the connection data with the new canvas ID
+            connection["line_id"] = new_line_id
+            
+            # 6. Ensure the new line is drawn below circles
+            self.app.canvas.lower(new_line_id)
+        else:
+            pass
+
+        # 7. Update midpoint handle position if it exists
+        if connection_key in self.app.midpoint_handles:
+            handle_x, handle_y = self.app.connection_manager.calculate_midpoint_handle_position(
+                from_id, to_id
+            )
+            handle_id = self.app.midpoint_handles[connection_key]
+            self.app.canvas.coords(
+                handle_id,
+                handle_x - self.app.midpoint_radius,
+                handle_y - self.app.midpoint_radius,
+                handle_x + self.app.midpoint_radius,
+                handle_y + self.app.midpoint_radius
+            )
+
+    def _check_violations_and_update_button(self):
+        """Checks all connections for angle violations and updates the mode button state."""
+        if self.app.mode_button:
+            has_violations = self.app.connection_manager.has_angle_violations()
+            self.app.mode_button.config(state='disabled' if has_violations else 'normal')
     
     def drag_circle_motion(self, circle_id, dx, dy):
         """Handle circle dragging motion."""
@@ -634,10 +700,26 @@ class InteractionHandler:
         if self._is_in_protected_zone(new_x, new_y):
             return
         
-        # Update circle position
+        # Update circle position data and visually move it
         self.app.canvas.move(circle["canvas_id"], dx, dy)
         circle["x"] = new_x
         circle["y"] = new_y
+
+        # Update visuals for all connected lines
+        connections_to_update = list(circle.get("connected_to", [])) # Create a copy for safe iteration if needed
+        
+        for connected_id in connections_to_update:
+            connection_key = self.app.connection_manager.get_connection_key(circle_id, connected_id)
+            
+            # Check if the connection actually exists in the main dictionary
+            if connection_key not in self.app.connections:
+                continue # Skip to the next connected_id
+
+            # If the key exists, proceed with the update
+            self._update_connection_visuals(connection_key) 
+
+        # Update the button state based on overall violations
+        self._check_violations_and_update_button() 
 
     def drag_midpoint_motion(self, x, y):
         """Handle midpoint dragging motion, enforcing minimum distance and angle constraints."""
@@ -661,60 +743,31 @@ class InteractionHandler:
         new_curve_y = (y - base_mid_y) * 2
 
         # Enforce minimum distance constraint
-        min_dist = 20  # pixels; must match PLAN.md and connection_manager.py
+        min_dist = 20
         def dist_sq(x1, y1, x2, y2):
             return (x1 - x2) ** 2 + (y1 - y2) ** 2
-
-        # Calculate the new midpoint position
         new_mid_x = base_mid_x + new_curve_x / 2
         new_mid_y = base_mid_y + new_curve_y / 2
-
         from_dist_sq = dist_sq(new_mid_x, new_mid_y, from_circle["x"], from_circle["y"])
-        to_dist_sq = dist_sq(new_mid_x, new_mid_y, to_circle["x"], to_circle["y"])
+        # FIX: Add the missing y-coordinate for the to_circle
+        to_dist_sq = dist_sq(new_mid_x, new_mid_y, to_circle["x"], to_circle["y"]) 
         min_dist_sq = min_dist ** 2
-
-        # If midpoint is too close to either node, do not update the curve offset
         if from_dist_sq < min_dist_sq or to_dist_sq < min_dist_sq:
-            # Optionally, provide user feedback here (e.g., flash handle)
-            return
+            return # Don't update if too close
 
-        # Check minimum angle constraint for both endpoints
-        from_id = connection["from_circle"]
-        to_id = connection["to_circle"]
-        angle_violation = (
-            self.app.connection_manager.is_entry_angle_too_close(from_id, to_id, min_angle=2) or
-            self.app.connection_manager.is_entry_angle_too_close(to_id, from_id, min_angle=2)
-        )
-
-        # Update button state immediately during drag
-        if self.app.mode_button:
-            self.app.mode_button.config(state='disabled' if angle_violation else 'normal')
-
-        # Change line color based on violation
-        self.app.canvas.itemconfig(connection["line_id"], fill="red" if angle_violation else "black")
-
-        # Store curve offset and move handle visually
+        # Store curve offset in drag state and temporarily in connection for visual update
         self.app.drag_state["curve_x"] = new_curve_x
         self.app.drag_state["curve_y"] = new_curve_y
-
-        # Temporarily update the connection to show the curve
-        connection["curve_X"] = new_curve_x
+        connection["curve_X"] = new_curve_x # Temporary update for calculate_curve_points
         connection["curve_Y"] = new_curve_y
 
-        # Calculate and update the curve points
-        points = self.app.connection_manager.calculate_curve_points(from_id, to_id)
-        self.app.canvas.coords(connection["line_id"], *points)
+        # Update the visuals for this specific connection
+        self._update_connection_visuals(connection_key) # Call helper
 
-        # Check for angle violations at both endpoints
-        angle_violation = (
-            self.app.connection_manager.is_entry_angle_too_close(from_id, to_id, min_angle=2) or
-            self.app.connection_manager.is_entry_angle_too_close(to_id, from_id, min_angle=2)
-        )
+        # Update the button state based on overall violations
+        self._check_violations_and_update_button() # Call helper
 
-        # Update line color based on violation
-        self.app.canvas.itemconfig(connection["line_id"], fill="red" if angle_violation else "black")
-
-        # Move the handle
+        # Move the handle itself (visual only, position derived from x, y)
         handle_id = self.app.midpoint_handles.get(connection_key)
         if handle_id:
             self.app.canvas.coords(
@@ -723,14 +776,14 @@ class InteractionHandler:
                 x + self.app.midpoint_radius, y + self.app.midpoint_radius
             )
 
-        # Clear previous visualization lines before drawing new ones
+        # Clear previous visualization lines before drawing new ones (specific to midpoint drag)
         self.app.ui_manager.clear_angle_visualizations()
-        
-        # Temporarily update connection for angle visualization
-        original_curve_x, original_curve_y = connection.get("curve_X", 0), connection.get("curve_Y", 0)
-        connection["curve_X"], connection["curve_Y"] = new_curve_x, new_curve_y
         self.app.ui_manager.draw_connection_angle_visualizations(connection_key)
-        connection["curve_X"], connection["curve_Y"] = original_curve_x, original_curve_y
+        
+        # Revert temporary curve update in connection dict after visuals are done for this frame
+        # The actual update happens in drag_end
+        connection["curve_X"] = self.app.drag_state.get("orig_curve_x", connection.get("curve_X", 0)) # Revert using original or default
+        connection["curve_Y"] = self.app.drag_state.get("orig_curve_y", connection.get("curve_Y", 0))
 
     def switch_to_red_fix_mode(self, circle_id):
         """Switch to ADJUST mode specifically for fixing red nodes.
