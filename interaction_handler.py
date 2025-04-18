@@ -433,6 +433,12 @@ class InteractionHandler:
             debug_circle_ids = [circle_id]
             circle = self.app.circle_lookup.get(circle_id)
             
+            # Store the original enclosed status and position
+            if circle:
+                self.app.drag_state["orig_enclosed"] = circle.get("enclosed", False)
+                self.app.drag_state["orig_x"] = circle.get("x", 0)
+                self.app.drag_state["orig_y"] = circle.get("y", 0)
+            
             # Check fixed and locked status from the circle data
             # FIX: Update debug display even if locked
             self._update_debug_for_circles(*debug_circle_ids)
@@ -613,7 +619,41 @@ class InteractionHandler:
                 self.app.canvas.itemconfig(connection["line_id"], 
                     fill="red" if angle_violation else "black")
 
-        # Reset the drag state BEFORE updating enclosure status
+        # Check if a boundary circle became enclosed (before resetting drag state)
+        if self.app.drag_state["type"] == "circle":
+            circle_id = self.app.drag_state["id"]
+            
+            # Update enclosure status before checking
+            self.app._update_enclosure_status()
+            
+            # Get the circle after enclosure update
+            circle = self.app.circle_lookup.get(circle_id)
+            
+            # If it was originally not enclosed (on boundary) but now is enclosed
+            if (circle and 
+                not self.app.drag_state.get("orig_enclosed", True) and 
+                circle.get("enclosed", False)):
+                
+                # Show warning message
+                self.app.ui_manager.show_hint_text("Invalid move! Boundary nodes must remain on the exterior")
+                
+                # Restore the original position
+                orig_x = self.app.drag_state.get("orig_x", circle["x"])
+                orig_y = self.app.drag_state.get("orig_y", circle["y"])
+                
+                # Calculate delta to move back
+                delta_x = orig_x - circle["x"]
+                delta_y = orig_y - circle["y"]
+                
+                # Update circle position data and visually move it back
+                self.app.canvas.move(circle["canvas_id"], delta_x, delta_y)
+                circle["x"] = orig_x
+                circle["y"] = orig_y
+                
+                # Update all connected lines
+                self.app.connection_manager.update_connections(circle_id)
+        
+        # Reset the drag state
         self.reset_drag_state()
         
         # Update enclosure status AFTER drag ends and ordered connections are updated
