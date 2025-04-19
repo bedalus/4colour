@@ -4,7 +4,6 @@ Color Manager for the 4colour project.
 This module handles color assignment and color conflict resolution.
 """
 
-import tkinter as tk
 from color_utils import get_color_from_priority, find_lowest_available_priority, determine_color_priority_for_connections
 from app_enums import ApplicationMode
 
@@ -54,16 +53,6 @@ class ColorManager:
         
         # Use the color utility function to determine the appropriate priority
         priority = determine_color_priority_for_connections(used_priorities)
-        
-        # If priority 4 (red) is assigned, track it but don't swap automatically
-        if priority == 4:
-            self.red_node_id = circle_id
-            print(f"DEBUG: Red node {circle_id} created in assign_color_based_on_connections")
-            try:
-                # Try to call the method - if it fails, we'll know
-                self.app.handle_red_node_creation(circle_id)
-            except Exception as e:
-                print(f"ERROR: Failed to handle red node creation: {e}")
         
         return priority
     
@@ -119,42 +108,14 @@ class ColorManager:
         else:
             # If all lower priorities are used, tag this node for manual fixing
             new_priority = 4
-            circle_data["color_priority"] = new_priority
-            new_color_name = get_color_from_priority(new_priority)
-            self.app.canvas.itemconfig(circle_data["canvas_id"], fill=new_color_name)
-            
+            self.update_circle_color(circle_id, new_priority)
             self.red_node_id = circle_id
             print(f"DEBUG: Red node {circle_id} created in check_and_resolve_color_conflicts")
-            try:
-                # Try to call the method - if it fails, we'll know
-                self.app.handle_red_node_creation(circle_id)
-            except Exception as e:
-                print(f"ERROR: Failed to handle red node creation: {e}")
-            
+            self.app.handle_red_node_creation(circle_id)
             return new_priority
         
-        # Update the circle with the new priority
-        circle_data["color_priority"] = new_priority
-        
-        # Get color name for visual update
-        new_color_name = get_color_from_priority(new_priority)
-        
-        # Update the visual appearance of the circle
-        self.app.canvas.itemconfig(circle_data["canvas_id"], fill=new_color_name)
-        
-        # Check for adjacent red nodes after conflict resolution
-        if new_priority == 4:  # If this node is now red
-            # Check all neighbors for red
-            adjacent_red_nodes = []
-            for connected_id in connected_circles:
-                connected_circle = self.app.circle_lookup.get(connected_id)
-                if connected_circle and connected_circle["color_priority"] == 4:
-                    adjacent_red_nodes.append(connected_id)
-                    
-            if adjacent_red_nodes:
-                warning_msg = f"WARNING: Red node {circle_id} is adjacent to other red nodes: {adjacent_red_nodes}"
-                print(warning_msg)
-                # Warning is only shown in console, not in UI
+        # Update the circle with the new priority and visual appearance
+        self.update_circle_color(circle_id, new_priority)
         
         return new_priority
     
@@ -296,7 +257,7 @@ class ColorManager:
         self.app.last_circle_id = circle_id
         
         # Delegate mode switching to interaction handler
-        self.app.interaction_handler.switch_to_red_fix_mode(circle_id)
+        self.app.interaction_handler.switch_to_red_fix_mode()
         
         # Add a small delay to ensure all UI updates are processed
         self.app.root.after(100, lambda: print("DEBUG: Mode transition complete"))
