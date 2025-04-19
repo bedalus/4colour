@@ -36,7 +36,7 @@ class InteractionHandler:
         # Don't allow transition to ADJUST mode from SELECTION mode
         # EXCEPTION: Allow if it's for a red node
         if self.app._mode == ApplicationMode.SELECTION and new_mode == ApplicationMode.ADJUST:
-            if not self.app.color_manager.red_node_id:
+            if not self.app.color_manager.red_node_manager.has_red_nodes():
                 print("DEBUG: Blocking SELECTION to ADJUST transition (not for red node)")
                 return
             else:
@@ -820,7 +820,6 @@ class InteractionHandler:
         new_mid_x = base_mid_x + new_curve_x / 2
         new_mid_y = base_mid_y + new_curve_y / 2
         from_dist_sq = dist_sq(new_mid_x, new_mid_y, from_circle["x"], from_circle["y"])
-        # FIX: Add the missing y-coordinate for the to_circle
         to_dist_sq = dist_sq(new_mid_x, new_mid_y, to_circle["x"], to_circle["y"]) 
         min_dist_sq = min_dist ** 2
         if from_dist_sq < min_dist_sq or to_dist_sq < min_dist_sq:
@@ -927,7 +926,7 @@ class InteractionHandler:
             self._cleanup_adjust_mode_ui() # Renamed from _cleanup_adjust_mode
 
     def _setup_mode_ui(self, mode, for_red_node=False):
-        """Set up UI elements specific to the given mode."""
+        """Set up UI elements specific to the given mode.""" 
         if mode == ApplicationMode.ADJUST:
             self._setup_adjust_mode_ui(for_red_node)
 
@@ -984,7 +983,7 @@ class InteractionHandler:
                         connection["locked"] = False
 
     def _prepare_mode_transition(self, new_mode, for_red_node=False):
-        """Handle common mode transition tasks."""
+        """Handle common mode transition tasks.""" 
         old_mode = self.app._mode
 
         # Skip if already in the target mode or blocked

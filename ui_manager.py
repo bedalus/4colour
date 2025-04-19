@@ -164,10 +164,10 @@ class UIManager:
             delattr(self.app, '_stored_mode_button_command')
             print("DEBUG: Restored mode button's original command after canvas clear")
         
-        # Reset any color manager state related to red nodes
+        # Reset the color manager's red node state
         if hasattr(self.app, 'color_manager'):
-            self.app.color_manager.red_node_id = None
-            self.app.color_manager.next_red_node_id = None
+            # Updated to use RedNodeManager's clear method
+            self.app.color_manager.red_node_manager.clear()
         
         # Clear the canvas - delete all items except fixed nodes/connections
         for item in self.app.canvas.find_all():

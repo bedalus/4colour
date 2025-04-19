@@ -7,33 +7,83 @@ This module handles color assignment and color conflict resolution.
 from color_utils import get_color_from_priority, find_lowest_available_priority, determine_color_priority_for_connections
 from app_enums import ApplicationMode
 
+class RedNodeManager:
+    """Manages red nodes that need attention in the graph."""
+    
+    def __init__(self):
+        """Initialize the red node manager."""
+        self.red_node_queue = []  # Queue of node IDs needing attention
+        self.red_node_reasons = {}  # Maps node_id to reason string
+        self.current_red_node_id = None  # Currently focused red node
+    
+    def add_red_node(self, node_id, reason="Color conflict"):
+        """Add a node to the red node queue."""
+        if node_id in self.red_node_queue:
+            print(f"DEBUG: Red node {node_id} already in queue")
+            return False
+            
+        self.red_node_queue.append(node_id)
+        self.red_node_reasons[node_id] = reason
+        
+        # Set as current if none is set
+        if self.current_red_node_id is None:
+            self.current_red_node_id = node_id
+            
+        print(f"DEBUG: Added red node {node_id} to queue with reason: {reason}")
+        return True
+    
+    def get_current_red_node(self):
+        """Get the current red node that needs attention."""
+        return self.current_red_node_id
+    
+    def advance_to_next_red_node(self):
+        """Move to the next red node in the queue."""
+        # Remove current from queue
+        if self.current_red_node_id in self.red_node_queue:
+            self.red_node_queue.remove(self.current_red_node_id)
+        
+        # Clean up
+        self.red_node_reasons.pop(self.current_red_node_id, None)
+        
+        # Set next node as current
+        if self.red_node_queue:
+            self.current_red_node_id = self.red_node_queue[0]
+            print(f"DEBUG: Advanced to next red node: {self.current_red_node_id}")
+        else:
+            self.current_red_node_id = None
+            print("DEBUG: No more red nodes in queue")
+            
+        return self.current_red_node_id
+    
+    def has_red_nodes(self):
+        """Check if there are any red nodes that need attention."""
+        return len(self.red_node_queue) > 0
+    
+    def get_red_node_reason(self, node_id=None):
+        """Get the reason a node was marked as red."""
+        if node_id is None:
+            node_id = self.current_red_node_id
+        
+        return self.red_node_reasons.get(node_id, "Unknown reason")
+    
+    def clear(self):
+        """Clear all red nodes and reset the manager."""
+        self.red_node_queue = []
+        self.red_node_reasons = {}
+        self.current_red_node_id = None
+        print("DEBUG: Red node queue cleared")
+
+
 class ColorManager:
     """Manages color assignment and conflict resolution."""
     
     def __init__(self, app):
-        """Initialize with a reference to the main application.
-        
-        Args:
-            app: The main CanvasApplication instance
-        """
+        """Initialize with a reference to the main application."""
         self.app = app
-        self.red_node_id = None  # Track the ID of a node that needs color fixing
-        self.next_red_node_id = None  # Track a red node that will need fixing after current operation
+        self.red_node_manager = RedNodeManager()
     
     def assign_color_based_on_connections(self, circle_id=None):
-        """Assign a color priority to a circle based on its connections.
-        
-        This function implements the deterministic color assignment logic.
-        It ensures that no two connected circles have the same color by
-        selecting the lowest priority color that doesn't cause conflicts.
-        
-        Args:
-            circle_id: Optional ID of an existing circle to reassign color.
-                      If None, this is assumed to be for a new circle.
-        
-        Returns:
-            int: The assigned color priority
-        """
+        """Assign a color priority to a circle based on its connections."""
         # For new circles or initial assignment, use priority 1 (yellow)
         if circle_id is None:
             return 1
@@ -57,16 +107,7 @@ class ColorManager:
         return priority
     
     def check_and_resolve_color_conflicts(self, circle_id):
-        """
-        Checks for color conflicts after connections are made and resolves them.
-        A conflict exists when two connected circles have the same color priority.
-        
-        Args:
-            circle_id: ID of the circle to check for conflicts
-            
-        Returns:
-            int: The color priority after resolving conflicts
-        """
+        """Checks for color conflicts after connections are made and resolves them."""
         # Get the current circle's data
         circle_data = self.app.circle_lookup.get(circle_id)
         if not circle_data:
@@ -109,7 +150,8 @@ class ColorManager:
             # If all lower priorities are used, tag this node for manual fixing
             new_priority = 4
             self.update_circle_color(circle_id, new_priority)
-            self.red_node_id = circle_id
+            # Updated to use RedNodeManager
+            self.red_node_manager.add_red_node(circle_id, "Color conflict")
             print(f"DEBUG: Red node {circle_id} created in check_and_resolve_color_conflicts")
             self.app.handle_red_node_creation(circle_id)
             return new_priority
@@ -120,16 +162,7 @@ class ColorManager:
         return new_priority
     
     def reassign_color_network(self, circle_id):
-        """
-        Reassigns colors when a circle is assigned priority 4 (red).
-        Attempts to swap priority 4 with an 'enclosed' neighbor.
-
-        Parameters:
-            circle_id (int): The ID of the circle initially assigned priority 4.
-
-        Returns:
-            int: The final color priority assigned to the circle_id.
-        """
+        """Reassigns colors when a circle is assigned priority 4 (red)."""
         circle_data = self.app.circle_lookup.get(circle_id)
         if not circle_data:
             return 4 # Should not happen if called correctly
@@ -174,12 +207,13 @@ class ColorManager:
 
     def fix_red_node(self):
         """Manually triggered function to fix a red node by swapping with an enclosed neighbor."""
-        if self.red_node_id is None:
+        # Updated to use RedNodeManager
+        circle_id = self.red_node_manager.get_current_red_node()
+        if circle_id is None:
             return False
             
-        # Store the ID and clear the tracking variable
-        circle_id = self.red_node_id
-        self.red_node_id = None
+        # Store the ID and advance in the queue
+        self.red_node_manager.advance_to_next_red_node()
         
         # Now perform the actual swap using reassign_color_network
         new_priority = self.reassign_color_network(circle_id)
@@ -190,15 +224,7 @@ class ColorManager:
         return new_priority != 4  # Return True if we successfully changed from red
 
     def update_circle_color(self, circle_id, color_priority):
-        """Update a circle's color priority both in data and visually.
-
-        Args:
-            circle_id: ID of the circle to update
-            color_priority: New color priority to assign
-
-        Returns:
-            bool: True if update was successful, False otherwise
-        """
+        """Update a circle's color priority both in data and visually."""
         circle = self.app.circle_lookup.get(circle_id)
         if not circle:
             return False
@@ -222,14 +248,7 @@ class ColorManager:
         return True
         
     def check_internal_red_conflict(self, circle_id):
-        """Check if a circle has any adjacent red nodes and log a warning if found.
-        
-        Args:
-            circle_id: ID of the circle to check
-            
-        Returns:
-            int: The current color priority of the circle
-        """
+        """Check if a circle has any adjacent red nodes and log a warning if found."""
         circle = self.app.circle_lookup.get(circle_id)
         if not circle:
             return None
@@ -246,6 +265,9 @@ class ColorManager:
         if adjacent_red_nodes:
             warning_msg = f"UNHANDLED INTERNAL RED CONFLICT: Red node {circle_id} is adjacent to other red nodes: {adjacent_red_nodes}"
             print(warning_msg)
+            # Add these nodes to the red node queue too
+            for node_id in adjacent_red_nodes:
+                self.red_node_manager.add_red_node(node_id, "Adjacent to another red node")
         
         return current_priority
 
@@ -274,14 +296,12 @@ class ColorManager:
             print("DEBUG: Restored mode button's original command")
         
         # Check if we have a pending red node to fix
-        if self.next_red_node_id is not None:
+        if self.red_node_manager.has_red_nodes():
             # We have another red node that needs fixing
-            print(f"DEBUG: Found pending red node {self.next_red_node_id} to fix")
-            # Set it as the current red node
-            self.red_node_id = self.next_red_node_id
-            self.next_red_node_id = None
+            next_red_node = self.red_node_manager.get_current_red_node()
+            print(f"DEBUG: Found pending red node {next_red_node} to fix")
             # Handle the new red node (stays in ADJUST mode)
-            self.handle_red_node_creation(self.red_node_id)
+            self.handle_red_node_creation(next_red_node)
         else:
             # No pending red nodes, return to CREATE mode
             print("DEBUG: Auto transitioning back to CREATE mode")
