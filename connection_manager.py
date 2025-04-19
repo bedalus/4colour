@@ -26,8 +26,7 @@ class ConnectionManager:
         if connection_key in self.app.connections:
             return
 
-        circle1 = self.app.circle_lookup.get(from_circle_id)
-        circle2 = self.app.circle_lookup.get(to_circle_id)
+        circle1, circle2 = self.get_circle_pair(from_circle_id, to_circle_id)
 
         if not circle1 or not circle2:
             return
@@ -35,33 +34,21 @@ class ConnectionManager:
         # Update connected_to lists
         if to_circle_id not in circle1.get("connected_to", []):
             circle1.setdefault("connected_to", []).append(to_circle_id)
-        else:
-            pass
-            
-        if from_circle_id not in circle2.get("connected_to", []):
-             circle2.setdefault("connected_to", []).append(from_circle_id)
-        else:
-            pass
 
+        if from_circle_id not in circle2.get("connected_to", []):
+            circle2.setdefault("connected_to", []).append(from_circle_id)
 
         # Calculate initial curve points (straight line)
         points = self.calculate_curve_points(from_circle_id, to_circle_id)
         if not points:
-             # Attempt to rollback connected_to lists? Maybe not necessary if points fail rarely.
-             return 
+            # Attempt to rollback connected_to lists? Maybe not necessary if points fail rarely.
+            return
 
         # Create the line on canvas
         line_id = self._create_connection_line(points, connection_key)
 
-        # Store connection data
-        connection_data = self._update_connection_data(connection_key, from_circle_id, to_circle_id, line_id)
-        
-        # Verify immediately after adding
-        if connection_key in self.app.connections:
-             pass
-        else:
-             pass
-
+        # Store connection
+        self._update_connection_data(connection_key, from_circle_id, to_circle_id, line_id)
 
         # Update ordered connections for both circles
         self.update_ordered_connections(from_circle_id)
@@ -73,7 +60,46 @@ class ConnectionManager:
             
         # Update enclosure status as connections changing might affect it
         self.app._update_enclosure_status() # Phase 14 Trigger Point
+
+    def get_connection(self, circle1_id, circle2_id):
+        """Get connection data between two circles regardless of order.
         
+        Args:
+            circle1_id: ID of the first circle
+            circle2_id: ID of the second circle
+            
+        Returns:
+            tuple: (connection_data, connection_key) or (None, None) if not found
+        """
+        key1 = self.get_connection_key(circle1_id, circle2_id)
+        connection = self.app.connections.get(key1)
+        if connection:
+            return connection, key1
+            
+        key2 = f"{circle2_id}_{circle1_id}"
+        connection = self.app.connections.get(key2)
+        if connection:
+            return connection, key2
+            
+        return None, None
+
+    def get_circle_pair(self, circle1_id, circle2_id):
+        """Get two circles by ID if they both exist.
+        
+        Args:
+            circle1_id: ID of the first circle
+            circle2_id: ID of the second circle
+            
+        Returns:
+            tuple: (circle1, circle2) or (None, None) if either doesn't exist
+        """
+        circle1 = self.app.circle_lookup.get(circle1_id)
+        circle2 = self.app.circle_lookup.get(circle2_id)
+        
+        if not circle1 or not circle2:
+            return None, None
+        
+        return circle1, circle2
 
     def remove_circle_connections(self, circle_id):
         """Remove all connections for a specific circle.
@@ -136,17 +162,8 @@ class ConnectionManager:
         return (mid_x, mid_y)
 
     def calculate_curve_points(self, from_id, to_id):
-        """Calculate the points needed to draw a curved line between two circles.
-        
-        Args:
-            from_id: ID of the first circle
-            to_id: ID of the second circle
-            
-        Returns:
-            list: [x1, y1, midx, midy, x2, y2] coordinates for the curved line
-        """
-        from_circle = self.app.circle_lookup.get(from_id)
-        to_circle = self.app.circle_lookup.get(to_id)
+        """Calculate the points needed to draw a curved line between two circles."""
+        from_circle, to_circle = self.get_circle_pair(from_id, to_id)
         
         if not from_circle or not to_circle:
             return []
@@ -176,11 +193,7 @@ class ConnectionManager:
         Returns:
             tuple: (curve_X, curve_Y) offset values or (0, 0) if not found
         """
-        # Check both possible connection key orientations
-        key1 = f"{from_id}_{to_id}"
-        key2 = f"{to_id}_{from_id}"
-        
-        connection = self.app.connections.get(key1) or self.app.connections.get(key2)
+        connection, _ = self.get_connection(from_id, to_id)
         if not connection:
             return (0, 0)
             
@@ -201,32 +214,19 @@ class ConnectionManager:
         Returns:
             bool: True if the update was successful, False otherwise
         """
-        # Check both possible connection key orientations
-        key1 = f"{from_id}_{to_id}"
-        key2 = f"{to_id}_{from_id}"
-        
-        connection = self.app.connections.get(key1) or self.app.connections.get(key2)
+        # Use get_connection to retrieve connection and key
+        connection, connection_key = self.get_connection(from_id, to_id)
         if not connection:
             return False
-            
-        # Update the curve offsets
-        connection["curve_X"] = curve_x
-        connection["curve_Y"] = curve_y
-        
-        # Get the actual connection key used
-        connection_key = key1 if key1 in self.app.connections else key2
         
         # Calculate points for the curved line - we need them for the line
         points = self.calculate_curve_points(from_id, to_id)
         if not points or len(points) < 6:
             return False
         
-        # Delete and redraw the connection line
-        self.app.canvas.delete(connection["line_id"])
-        new_line_id = self._create_connection_line(points, connection_key)
-        
-        connection["line_id"] = new_line_id
-        
+        # Update the existing line's coordinates
+        self.app.canvas.coords(connection["line_id"], *points)
+
         # If in adjust mode, update the midpoint handle position
         if self.app._mode == ApplicationMode.ADJUST and connection_key in self.app.midpoint_handles:  # Fixed: Using imported ApplicationMode
             # Delete old handle
@@ -292,17 +292,8 @@ class ConnectionManager:
             self.app.midpoint_handles[connection_key] = handle_id
 
     def calculate_midpoint_handle_position(self, from_id, to_id):
-        """Calculate the position for the midpoint handle between two circles.
-        
-        Args:
-            from_id: ID of the first circle
-            to_id: ID of the second circle
-            
-        Returns:
-            tuple: (x, y) coordinates for the midpoint handle
-        """
-        from_circle = self.app.circle_lookup.get(from_id)
-        to_circle = self.app.circle_lookup.get(to_id)
+        """Calculate the position for the midpoint handle between two circles."""
+        from_circle, to_circle = self.get_circle_pair(from_id, to_id)
         
         if not from_circle or not to_circle:
             return (0, 0)
@@ -327,11 +318,7 @@ class ConnectionManager:
         self.app.midpoint_handles.clear()
 
     def update_connections(self, circle_id):
-        """Update all lines connected to a circle.
-        
-        Args:
-            circle_id: ID of the circle whose connections should be updated
-        """
+        """Update all lines connected to a circle."""
         circle = self.app.circle_lookup.get(circle_id)
         if not circle:
             return
@@ -342,15 +329,8 @@ class ConnectionManager:
             if not connected_circle:
                 continue
                 
-            # Find connection key (could be in either order)
-            key1 = f"{circle_id}_{connected_id}"
-            key2 = f"{connected_id}_{circle_id}"
-            
-            connection = self.app.connections.get(key1) or self.app.connections.get(key2)
+            connection, _ = self.get_connection(circle_id, connected_id)
             if connection:
-                # Get the actual connection key used
-                connection_key = key1 if key1 in self.app.connections else key2
-                
                 # Preserve existing curve values
                 curve_x = connection.get("curve_X", 0)
                 curve_y = connection.get("curve_Y", 0)
@@ -359,32 +339,14 @@ class ConnectionManager:
                 self.update_connection_curve(connection["from_circle"], connection["to_circle"], curve_x, curve_y)
     
     def calculate_tangent_vector(self, circle_id, other_circle_id):
-        """Calculate the tangent vector of the curve where it meets the specified circle.
-        
-        Using quadratic Bezier curve math, where:
-        P(t) = (1-t)²P₀ + 2(1-t)tP₁ + t²P₂
-        
-        The derivative (tangent) at endpoints is:
-        At P₀ (t=0): P'(0) = 2(P₁ - P₀)
-        At P₂ (t=1): P'(1) = 2(P₂ - P₁)
-        
-        Args:
-            circle_id: ID of the circle to calculate tangent at
-            other_circle_id: ID of the other circle in the connection
-            
-        Returns:
-            tuple: (dx, dy) normalized tangent vector or (0, 0) if calculation fails
-        """
-        # Get both circles
-        circle = self.app.circle_lookup.get(circle_id)
-        other_circle = self.app.circle_lookup.get(other_circle_id)
+        """Calculate the tangent vector of the curve where it meets the specified circle."""
+        circle, other_circle = self.get_circle_pair(circle_id, other_circle_id)
         
         if not circle or not other_circle:
             return (0, 0)
         
-        # Get circle centers
+        # Get circle center
         cx, cy = circle["x"], circle["y"]
-        ox, oy = other_circle["x"], other_circle["y"]
         
         # Calculate the midpoint with curve offset
         curve_x, curve_y = self.get_connection_curve_offset(circle_id, other_circle_id)
@@ -469,34 +431,19 @@ class ConnectionManager:
             return f"{circle2_id}_{circle1_id}"
 
     def update_ordered_connections(self, circle_id):
-        """Update the ordered list of connections for a circle based on entry angles.
-        
-        This orders connections clockwise around the circle starting from North (0 degrees)
-        and ensures the ordering remains consistent even when connections are modified.
-        
-        Args:
-            circle_id: ID of the circle to update ordering for
-        """
+        """Update the ordered list of connections for a circle based on entry angles."""
         circle = self.app.circle_lookup.get(circle_id)
-        if not circle:
+        if not circle or not circle["connected_to"]:
+            # No circle or no connections, clear the ordered list if needed
+            if circle:
+                circle["ordered_connections"] = []
             return
         
-        if not circle["connected_to"]:
-            # No connections, clear the ordered list
-            circle["ordered_connections"] = []
-            return
-        
-        # Create list of tuples with (connected_id, angle) for sorting
-        connection_angles = []
-        for connected_id in circle["connected_to"]:
-            angle = self.calculate_connection_entry_angle(circle_id, connected_id)
-            connection_angles.append((connected_id, angle))
-        
-        # Sort by angle (ascending, 0-360 degrees clockwise from North)
-        connection_angles.sort(key=lambda x: x[1])
-        
-        # Extract just the connection IDs in the sorted order
-        ordered_connections = [conn_id for conn_id, _ in connection_angles]
+        # Create and sort angles in one step
+        ordered_connections = sorted(
+            circle["connected_to"],
+            key=lambda connected_id: self.calculate_connection_entry_angle(circle_id, connected_id)
+        )
         
         # Update the circle's ordered_connections list
         circle["ordered_connections"] = ordered_connections
@@ -565,9 +512,6 @@ class ConnectionManager:
         # Remove from the main connections dictionary
         if connection_key in self.app.connections:
             del self.app.connections[connection_key]
-        else:
-            pass
-
 
         # Remove references from both circles' connected_to lists
         circle1 = self.app.circle_lookup.get(circle1_id)
@@ -576,16 +520,10 @@ class ConnectionManager:
         if circle1:            
             if circle2_id in circle1.get("connected_to", []):
                 circle1["connected_to"].remove(circle2_id)
-            else:
-                pass
-
 
         if circle2:
             if circle1_id in circle2.get("connected_to", []):
                 circle2["connected_to"].remove(circle1_id)
-            else:
-                pass
-
 
         # Update ordered connections for both circles after removal
         if circle1:
