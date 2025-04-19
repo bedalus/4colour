@@ -32,7 +32,10 @@ The goal of this phase is to enhance the color management system for complex gra
         * Modify the clear_canvas method to reset the red node queue
         * Update debug information display to show red node queue status
         * Create visualization helpers for red nodes and their connected components
-    *   Add comprehensive logging to track red node state transitions
+    *   Keep the existing print statement messages. Do not import logging.
+    *   Keep the existing hint text messages.
+    *   Keep the existing button labels.
+    *   Keep code comments as brief as possible.
 
 ## Future Phases (Placeholder)
 
