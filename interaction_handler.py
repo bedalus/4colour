@@ -4,9 +4,13 @@ Interaction Handler for the 4colour project.
 This module handles user interactions and event bindings.
 """
 
-import tkinter as tk  # Add this import for tk.DISABLED
 from color_utils import get_color_from_priority
 from app_enums import ApplicationMode  # Import from app_enums instead
+
+ADJUST_MODE_BG = "#FFEEEE"
+RED_FIX_MODE_BG = "#FFDDDD"
+HIGHLIGHT_COLOR = 'purple'
+HIGHLIGHT_TAG = "temp_highlight"
 
 class InteractionHandler:
     """Handles user interactions and mode switching."""
@@ -21,6 +25,9 @@ class InteractionHandler:
         
     def set_application_mode(self, new_mode):
         """Set the application mode and handle all related state transitions."""
+        # Clear any hint text
+        self.app.ui_manager.show_hint_text("")
+
         # Validate the mode transition
         if new_mode == self.app._mode:
             print(f"DEBUG: Already in {new_mode} mode, ignoring transition")
@@ -534,7 +541,7 @@ class InteractionHandler:
                         "Warning: Connection angle too close to another. Adjust the midpoint until the warning clears."
                     )
                 else:
-                    self.app.ui_manager.show_hint_text()
+                    self.app.ui_manager.show_hint_text("")
         
         # Clear any angle visualization lines when dragging ends
         self.app.ui_manager.clear_angle_visualizations()
@@ -780,7 +787,7 @@ class InteractionHandler:
                 "Warning: Connection angle too close to another. Adjust the position until the warning clears."
             )
         else:
-            self.app.ui_manager.show_hint_text()
+            self.app.ui_manager.show_hint_text("")
 
         # Update the button state based on overall violations
         self._check_violations_and_update_button()
@@ -849,12 +856,8 @@ class InteractionHandler:
         connection["curve_X"] = self.app.drag_state.get("orig_curve_x", connection.get("curve_X", 0)) # Revert using original or default
         connection["curve_Y"] = self.app.drag_state.get("orig_curve_y", connection.get("curve_Y", 0))
 
-    def switch_to_red_fix_mode(self, circle_id):
-        """Switch to ADJUST mode specifically for fixing red nodes.
-        
-        Args:
-            circle_id: ID of the red node that needs fixing
-        """
+    def switch_to_red_fix_mode(self):
+        """Switch to ADJUST mode specifically for fixing red nodes."""
         # Handle mode transition with specialized flag
         is_transition = self._prepare_mode_transition(ApplicationMode.ADJUST, for_red_node=True)
         
@@ -887,110 +890,125 @@ class InteractionHandler:
             self.app.hint_text_id = None
     
     def _update_debug_for_circles(self, *circle_ids):
-        """Update debug display for specified circles if debug is enabled.
-        
-        Args:
-            *circle_ids: Variable number of circle IDs to show in debug
-        """
+        """Update debug display for specified circles if debug is enabled."""
         if self.app.debug_enabled and circle_ids:
             self.app.ui_manager.set_active_circles(*circle_ids)
             self.app.ui_manager.show_debug_info()
     
     def _is_in_protected_zone(self, x, y):
-        """Check if coordinates are in the protected zone.
-        
-        Args:
-            x: X coordinate to check
-            y: Y coordinate to check
-            
-        Returns:
-            bool: True if coordinates are in protected zone
-        """
         return x < self.app.PROXIMITY_LIMIT and y < self.app.PROXIMITY_LIMIT
-    
+
+    def _cleanup_adjust_mode(self):
+        """Cleans up UI elements and state specific to ADJUST mode."""
+        # Hide midpoint handles
+        self.app.connection_manager.hide_midpoint_handles()
+        
+        # Clear angle visualizations
+        self.app.ui_manager.clear_angle_visualizations()
+        
+        # Clear adjust mode hint text
+        if self.app.edit_hint_text_id:
+            self.app.canvas.delete(self.app.edit_hint_text_id)
+            self.app.edit_hint_text_id = None
+            
+        # Reset canvas background
+        self.app.canvas.config(bg="white")
+        
+        # Clear highlight
+        if self.app.highlighted_circle_id:
+            self.app.canvas.delete(self.app.highlighted_circle_id)
+            self.app.highlighted_circle_id = None
+
+    def _cleanup_mode_ui(self, mode):
+        """Clean up UI elements specific to the given mode."""
+        if mode == ApplicationMode.SELECTION:
+            self._clear_selection_state()
+        elif mode == ApplicationMode.ADJUST:
+            self._cleanup_adjust_mode_ui() # Renamed from _cleanup_adjust_mode
+
+    def _setup_mode_ui(self, mode, for_red_node=False):
+        """Set up UI elements specific to the given mode."""
+        if mode == ApplicationMode.ADJUST:
+            self._setup_adjust_mode_ui(for_red_node)
+
+    def _cleanup_adjust_mode_ui(self):
+        """Cleans up UI elements and state specific to ADJUST mode."""
+        self.app.connection_manager.hide_midpoint_handles()
+        self.app.ui_manager.clear_angle_visualizations()
+        if self.app.edit_hint_text_id:
+            self.app.canvas.delete(self.app.edit_hint_text_id)
+            self.app.edit_hint_text_id = None
+        self.app.canvas.config(bg="white")
+        if self.app.highlighted_circle_id:
+            self.app.canvas.delete(self.app.highlighted_circle_id)
+            self.app.highlighted_circle_id = None
+
+    def _setup_adjust_mode_ui(self, for_red_node=False):
+        """Sets up UI elements for ADJUST mode."""
+        # Display specific hint based on whether it's red fix mode or normal adjust mode
+        if for_red_node:
+            self.app.ui_manager.show_hint_text("Adjust the red node position and connectors, then click 'Fix Red'")
+        else:
+            self.app.ui_manager.show_hint_text("The last node placed and its connections can be adjusted")
+            
+        self.app.canvas.config(bg=RED_FIX_MODE_BG if for_red_node else ADJUST_MODE_BG)
+        self.app.connection_manager.show_midpoint_handles()
+        self.app._update_enclosure_status()
+        self._unlock_and_highlight_last_node()
+
+    def _unlock_and_highlight_last_node(self):
+        """Unlocks the last placed node and its connections, and highlights it."""
+        if self.app.last_circle_id is not None and self.app.last_circle_id > 0:
+            last_circle_data = self.app.circle_lookup.get(self.app.last_circle_id)
+            if last_circle_data and not last_circle_data.get("fixed", False):
+                # Unlock the circle
+                last_circle_data["locked"] = False
+                print(f"DEBUG: Unlocked last node {self.app.last_circle_id} for ADJUST mode")
+
+                # Draw highlight
+                radius = self.app.circle_radius
+                x, y = last_circle_data["x"], last_circle_data["y"]
+                if self.app.highlighted_circle_id:
+                    self.app.canvas.delete(self.app.highlighted_circle_id)
+                self.app.highlighted_circle_id = self.app.canvas.create_oval(
+                    x - radius - 3, y - radius - 3,
+                    x + radius + 3, y + radius + 3,
+                    outline=HIGHLIGHT_COLOR, width=3, tags=HIGHLIGHT_TAG
+                )
+
+                # Unlock its connections
+                for connected_id in last_circle_data.get("connected_to", []):
+                    connection_key = self.app.connection_manager.get_connection_key(self.app.last_circle_id, connected_id)
+                    connection = self.app.connections.get(connection_key)
+                    if connection and not connection.get("fixed", False):
+                        connection["locked"] = False
+
     def _prepare_mode_transition(self, new_mode, for_red_node=False):
         """Handle common mode transition tasks."""
-        # Check for angle violations when leaving adjust mode
-        if self.app._mode == ApplicationMode.ADJUST and new_mode != ApplicationMode.ADJUST:
+        old_mode = self.app._mode
+
+        # Skip if already in the target mode or blocked
+        if old_mode == new_mode:
+            return False
+        if old_mode == ApplicationMode.ADJUST and new_mode != ApplicationMode.ADJUST:
             if self.app.connection_manager.has_angle_violations():
                 print("DEBUG: Cannot leave adjust mode while connections have angle violations")
                 return False
-                
-        old_mode = self.app._mode
-        
-        # Skip if already in the target mode
-        if old_mode == new_mode:
-            return
-            
-        # Clean up previous mode
-        if old_mode == ApplicationMode.SELECTION:
-            self._clear_selection_state()
-        elif old_mode == ApplicationMode.ADJUST:
-            # Hide midpoint handles
-            self.app.connection_manager.hide_midpoint_handles()
-            
-            # Clear angle visualizations
-            self.app.ui_manager.clear_angle_visualizations()
-            
-            # Clear adjust mode state
-            if self.app.edit_hint_text_id:
-                self.app.canvas.delete(self.app.edit_hint_text_id)
-                self.app.edit_hint_text_id = None
-                
-            # Reset canvas background
-            self.app.canvas.config(bg="white")
-            
-            # Clear highlight
-            if self.app.highlighted_circle_id:
-                self.app.canvas.delete(self.app.highlighted_circle_id)
-                self.app.highlighted_circle_id = None
-        
-        # Unbind events for previous mode
+
+        # Clean up previous mode UI and unbind events
+        self._cleanup_mode_ui(old_mode)
         self.unbind_mode_events(old_mode)
-        
+
         # Set new mode
         self.app._mode = new_mode
-        
-        # Bind events for new mode
+
+        # Bind events and set up new mode UI
         self.bind_mode_events(new_mode)
-        
-        # Setup for new mode
+        self._setup_mode_ui(new_mode, for_red_node) # Pass red node flag
+
+        # Special handling for ADJUST mode setup (unlocking last node is now in _setup_adjust_mode_ui)
         if new_mode == ApplicationMode.ADJUST:
-            # Set up ADJUST mode UI
-            self.app.ui_manager.show_hint_text()
-            self.app.canvas.config(bg="#FFDDDD" if for_red_node else "#FFEEEE")
-            self.app.connection_manager.show_midpoint_handles()
-            self.app._update_enclosure_status()
-            
-            # Always unlock the last placed circle and its connections
-            if self.app.last_circle_id is not None and self.app.last_circle_id > 0:  # Ensure it's not a fixed node
-                last_circle_data = self.app.circle_lookup.get(self.app.last_circle_id)
-                if last_circle_data and not last_circle_data.get("fixed", False):
-                    # Unlock the circle
-                    last_circle_data["locked"] = False
-                    print(f"DEBUG: Unlocked last node {self.app.last_circle_id} for ADJUST mode")
+            # Return True only if the transition was specifically for a red node fix
+            return for_red_node
 
-                    # Draw highlight
-                    radius = self.app.circle_radius
-                    x, y = last_circle_data["x"], last_circle_data["y"]
-                    # Delete previous highlight if it exists
-                    if self.app.highlighted_circle_id:
-                        self.app.canvas.delete(self.app.highlighted_circle_id)
-                    self.app.highlighted_circle_id = self.app.canvas.create_oval(
-                        x - radius - 3, y - radius - 3,
-                        x + radius + 3, y + radius + 3,
-                        outline='purple', width=3, tags="temp_highlight"
-                    )
-
-                    # Unlock its connections
-                    for connected_id in last_circle_data.get("connected_to", []):
-                        connection_key = self.app.connection_manager.get_connection_key(self.app.last_circle_id, connected_id)
-                        connection = self.app.connections.get(connection_key)
-                        if connection and not connection.get("fixed", False):
-                            connection["locked"] = False  # Unlock connections
-            
-            if for_red_node:
-                # Special handling for red node fix
-                return True
-                
-        return False
+        return True # Return True indicating a successful transition occurred
