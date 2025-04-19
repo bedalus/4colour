@@ -579,3 +579,25 @@ class ConnectionManager:
         
         self.app.connections[connection_key] = connection_data
         return connection_data
+
+    def draw_connection_angle_visualizations(self, connection_key):
+        """Draw warning visual for connection angle constraint.
+        
+        Args:
+            connection_key: Key identifying the connection (e.g. "1_2")
+        """
+        connection = self.app.connections.get(connection_key)
+        if not connection:
+            return
+        
+        from_id = connection["from_circle"]
+        to_id = connection["to_circle"]
+        
+        # Check angles at both endpoints
+        has_violation = (
+            self.is_entry_angle_too_close(from_id, to_id) or
+            self.is_entry_angle_too_close(to_id, from_id)
+        )
+        
+        # Update connection color
+        self.app.canvas.itemconfig(connection["line_id"], fill="red" if has_violation else "black")

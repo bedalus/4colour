@@ -311,7 +311,6 @@ class InteractionHandler:
         
         # Check if the newly placed circle became enclosed
         if self.app.circle_lookup[new_circle_id]['enclosed']:
-            self.app.ui_manager.show_hint_text()
             self.app.ui_manager.show_hint_text("Node removed: Invalid placement! New nodes must be added to the exterior")
             self.app.circle_manager.remove_circle_by_id(new_circle_id, bypass_lock=True)
             self.app.newly_placed_circle_id = None
@@ -329,11 +328,7 @@ class InteractionHandler:
             self.app.ui_manager.show_debug_info()
 
     def cancel_selection(self, event):
-        """Handle escape key press to cancel circle placement.
-        
-        Args:
-            event: Key press event
-        """
+        """Handle escape key press to cancel circle placement."""
         if not self.app.in_selection_mode:
             return
 

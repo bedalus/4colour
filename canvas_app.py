@@ -114,18 +114,102 @@ class CanvasApplication:
         # Bind to window resize event
         self.root.bind("<Configure>", self._on_window_resize)
 
-    def _on_window_resize(self, event):
-        """Update canvas dimensions when window is resized.
+    def _initialize_fixed_nodes(self):
+        """Create and connect the two fixed outer nodes that guarantee a starting point for outer face traversal."""
+        # Create fixed node A - Yellow (color_priority 1)
+        x_a, y_a = self.FIXED_NODE_A_POS
+        node_a_canvas_id = self.canvas.create_oval(
+            x_a - self.circle_radius,
+            y_a - self.circle_radius,
+            x_a + self.circle_radius,
+            y_a + self.circle_radius,
+            fill="yellow",  # Color priority 1 = yellow
+            outline="black",
+            tags="fixed_circle"  # Special tag to identify fixed nodes
+        )
         
-        Args:
-            event: Window resize event
-        """
+        # Create fixed node B - Green (color_priority 2)
+        x_b, y_b = self.FIXED_NODE_B_POS
+        node_b_canvas_id = self.canvas.create_oval(
+            x_b - self.circle_radius,
+            y_b - self.circle_radius,
+            x_b + self.circle_radius,
+            y_b + self.circle_radius,
+            fill="green",  # Color priority 2 = green
+            outline="black",
+            tags="fixed_circle"
+        )
+        
+        # Add fixed node A to circles data structures
+        node_a_data = {
+            "id": self.FIXED_NODE_A_ID,
+            "canvas_id": node_a_canvas_id,
+            "x": x_a,
+            "y": y_a,
+            "color_priority": 1,  # Yellow by default
+            "connected_to": [self.FIXED_NODE_B_ID],  # Will connect to node B
+            "ordered_connections": [self.FIXED_NODE_B_ID],
+            "enclosed": False,
+            "fixed": True  # Mark as a fixed node
+        }
+        
+        # Add fixed node B to circles data structures
+        node_b_data = {
+            "id": self.FIXED_NODE_B_ID,
+            "canvas_id": node_b_canvas_id,
+            "x": x_b,
+            "y": y_b,
+            "color_priority": 2,  # Green by default
+            "connected_to": [self.FIXED_NODE_A_ID],  # Will connect to node A
+            "ordered_connections": [self.FIXED_NODE_A_ID],
+            "enclosed": False,
+            "fixed": True  # Mark as a fixed node
+        }
+        
+        # Add to circles list and lookup dictionary
+        self.circles.append(node_a_data)
+        self.circles.append(node_b_data)
+        self.circle_lookup[self.FIXED_NODE_A_ID] = node_a_data
+        self.circle_lookup[self.FIXED_NODE_B_ID] = node_b_data
+        
+        # Create connection between the fixed nodes
+        connection_key = f"{self.FIXED_NODE_A_ID}_{self.FIXED_NODE_B_ID}"
+        points = self._calculate_curve_points(self.FIXED_NODE_A_ID, self.FIXED_NODE_B_ID)
+        
+        # Draw the connection line
+        line_id = self.canvas.create_line(
+            points,
+            width=1,
+            smooth=True,
+            tags=("line", "fixed_connection")  # Special tag for fixed connection
+        )
+        
+        # Ensure the line is below all circles
+        self.canvas.lower("line")
+        
+        # Store connection details
+        self.connections[connection_key] = {
+            "line_id": line_id,
+            "from_circle": self.FIXED_NODE_A_ID,
+            "to_circle": self.FIXED_NODE_B_ID,
+            "curve_X": 0,
+            "curve_Y": 0,
+            "fixed": True  # Mark as a fixed connection
+        }
+        
+        # Update ordered connections for both nodes
+        self.connection_manager.update_ordered_connections(self.FIXED_NODE_A_ID)
+        self.connection_manager.update_ordered_connections(self.FIXED_NODE_B_ID)
+        
+        # Update enclosure status after creating fixed nodes
+        self._update_enclosure_status()
+
+    def _on_window_resize(self, event):
         if event.widget == self.root:
             # Small delay to allow canvas to finish resizing
             self.root.after(100, self._update_canvas_dimensions)
     
     def _update_canvas_dimensions(self):
-        """Update stored canvas dimensions to match actual canvas size."""
         # Get the actual canvas dimensions
         new_width = self.canvas.winfo_width()
         new_height = self.canvas.winfo_height()
@@ -144,7 +228,6 @@ class CanvasApplication:
                 self.ui_manager.show_hint_text()
 
     def _setup_ui(self):
-        """Create and configure all UI elements."""
         # Create control frame for buttons
         control_frame = ttk.Frame(self.root)
         control_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
@@ -183,12 +266,10 @@ class CanvasApplication:
     # Properties for backward compatibility
     @property
     def in_edit_mode(self):
-        """Whether the application is in adjust mode (legacy name for compatibility)."""
         return self._mode == ApplicationMode.ADJUST
     
     @in_edit_mode.setter
     def in_edit_mode(self, value):
-        """Set adjust mode state (legacy name for compatibility)."""
         if value:
             self._set_application_mode(ApplicationMode.ADJUST)
         else:
@@ -196,12 +277,10 @@ class CanvasApplication:
             
     @property
     def in_selection_mode(self):
-        """Whether the application is in selection mode."""
         return self._mode == ApplicationMode.SELECTION
         
     @in_selection_mode.setter
     def in_selection_mode(self, value):
-        """Set selection mode state."""
         if value:
             self._set_application_mode(ApplicationMode.SELECTION)
         else:
@@ -327,128 +406,19 @@ class CanvasApplication:
         return self.connection_manager.update_connections(circle_id)
 
     def _update_enclosure_status(self):
-        """Delegates the enclosure status update to the boundary manager."""
         return self.boundary_manager.update_enclosure_status()
 
-    def _initialize_fixed_nodes(self):
-        """Create and connect the two fixed outer nodes that guarantee a starting point for outer face traversal."""
-        # Create fixed node A - Yellow (color_priority 1)
-        x_a, y_a = self.FIXED_NODE_A_POS
-        node_a_canvas_id = self.canvas.create_oval(
-            x_a - self.circle_radius,
-            y_a - self.circle_radius,
-            x_a + self.circle_radius,
-            y_a + self.circle_radius,
-            fill="yellow",  # Color priority 1 = yellow
-            outline="black",
-            tags="fixed_circle"  # Special tag to identify fixed nodes
-        )
-        
-        # Create fixed node B - Green (color_priority 2)
-        x_b, y_b = self.FIXED_NODE_B_POS
-        node_b_canvas_id = self.canvas.create_oval(
-            x_b - self.circle_radius,
-            y_b - self.circle_radius,
-            x_b + self.circle_radius,
-            y_b + self.circle_radius,
-            fill="green",  # Color priority 2 = green
-            outline="black",
-            tags="fixed_circle"
-        )
-        
-        # Add fixed node A to circles data structures
-        node_a_data = {
-            "id": self.FIXED_NODE_A_ID,
-            "canvas_id": node_a_canvas_id,
-            "x": x_a,
-            "y": y_a,
-            "color_priority": 1,  # Yellow by default
-            "connected_to": [self.FIXED_NODE_B_ID],  # Will connect to node B
-            "ordered_connections": [self.FIXED_NODE_B_ID],
-            "enclosed": False,
-            "fixed": True  # Mark as a fixed node
-        }
-        
-        # Add fixed node B to circles data structures
-        node_b_data = {
-            "id": self.FIXED_NODE_B_ID,
-            "canvas_id": node_b_canvas_id,
-            "x": x_b,
-            "y": y_b,
-            "color_priority": 2,  # Green by default
-            "connected_to": [self.FIXED_NODE_A_ID],  # Will connect to node A
-            "ordered_connections": [self.FIXED_NODE_A_ID],
-            "enclosed": False,
-            "fixed": True  # Mark as a fixed node
-        }
-        
-        # Add to circles list and lookup dictionary
-        self.circles.append(node_a_data)
-        self.circles.append(node_b_data)
-        self.circle_lookup[self.FIXED_NODE_A_ID] = node_a_data
-        self.circle_lookup[self.FIXED_NODE_B_ID] = node_b_data
-        
-        # Create connection between the fixed nodes
-        connection_key = f"{self.FIXED_NODE_A_ID}_{self.FIXED_NODE_B_ID}"
-        points = self._calculate_curve_points(self.FIXED_NODE_A_ID, self.FIXED_NODE_B_ID)
-        
-        # Draw the connection line
-        line_id = self.canvas.create_line(
-            points,
-            width=1,
-            smooth=True,
-            tags=("line", "fixed_connection")  # Special tag for fixed connection
-        )
-        
-        # Ensure the line is below all circles
-        self.canvas.lower("line")
-        
-        # Store connection details
-        self.connections[connection_key] = {
-            "line_id": line_id,
-            "from_circle": self.FIXED_NODE_A_ID,
-            "to_circle": self.FIXED_NODE_B_ID,
-            "curve_X": 0,
-            "curve_Y": 0,
-            "fixed": True  # Mark as a fixed connection
-        }
-        
-        # Update ordered connections for both nodes
-        self.connection_manager.update_ordered_connections(self.FIXED_NODE_A_ID)
-        self.connection_manager.update_ordered_connections(self.FIXED_NODE_B_ID)
-        
-        # Update enclosure status after creating fixed nodes
-        self._update_enclosure_status()
-
     def handle_red_node_creation(self, circle_id):
-        """Delegate to color manager's handle_red_node_creation method."""
         return self.color_manager.handle_red_node_creation(circle_id)
 
     def handle_red_node_fixed(self):
-        """Delegate to color manager's handle_red_node_fixed method."""
         return self.color_manager.handle_red_node_fixed()
 
     def _fix_red_node(self):
-        """Delegate to color manager's handle_fix_red_node_button method."""
         return self.color_manager.handle_fix_red_node_button()
-
+    
     def draw_connection_angle_visualizations(self, connection_key):
-        """Draw warning visual for connection angle constraint."""
-        connection = self.connections.get(connection_key)
-        if not connection:
-            return
-        
-        from_id = connection["from_circle"]
-        to_id = connection["to_circle"]
-        
-        # Check angles at both endpoints
-        has_violation = (
-            self.connection_manager.is_entry_angle_too_close(from_id, to_id) or
-            self.connection_manager.is_entry_angle_too_close(to_id, from_id)
-        )
-        
-        # Update connection color
-        self.canvas.itemconfig(connection["line_id"], fill="red" if has_violation else "black")
+        return self.connection_manager.draw_connection_angle_visualizations(connection_key)
 
 def main():
     """Application entry point."""
