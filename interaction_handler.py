@@ -36,7 +36,7 @@ class InteractionHandler:
         # Don't allow transition to ADJUST mode from SELECTION mode
         # EXCEPTION: Allow if it's for a red node
         if self.app._mode == ApplicationMode.SELECTION and new_mode == ApplicationMode.ADJUST:
-            if not self.app.color_manager.red_node_manager.has_red_nodes():
+            if not self.app.has_red_nodes():
                 print("DEBUG: Blocking SELECTION to ADJUST transition (not for red node)")
                 return
             else:
@@ -300,7 +300,7 @@ class InteractionHandler:
         # After all connections are made, check for color conflicts and resolve them once
         if self.app.newly_placed_circle_id and self.app.selected_circles:
             # Check and resolve color conflicts for the newly placed circle
-            priority = self.app.color_manager.check_and_resolve_color_conflicts(self.app.newly_placed_circle_id)
+            priority = self.app.check_and_resolve_color_conflicts(self.app.newly_placed_circle_id)
         
         # Clear selection state
         self.app.selected_circles.clear()
@@ -865,7 +865,7 @@ class InteractionHandler:
             self.app._stored_mode_button_command = original_command
             self.app.mode_button.config(
                 command=lambda: self.app._focus_after(
-                    self.app.color_manager.handle_fix_red_node_button
+                    self.app.handle_fix_red_node_button
                 )
             )
             print("DEBUG: Changed mode button to 'Fix Red'")
@@ -927,6 +927,7 @@ class InteractionHandler:
 
     def _cleanup_adjust_mode_ui(self):
         """Cleans up UI elements and state specific to ADJUST mode."""
+        self.app.ui_manager.show_hint_text("")
         self.app.connection_manager.hide_midpoint_handles()
         self.app.ui_manager.clear_angle_visualizations()
         if self.app.edit_hint_text_id:

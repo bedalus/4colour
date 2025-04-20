@@ -6,7 +6,6 @@ This module implements a simple drawing canvas using tkinter.
 
 import tkinter as tk
 from tkinter import ttk
-import math  # Add math import for infinity
 
 # Import the enum from the new location
 from app_enums import ApplicationMode
@@ -18,6 +17,7 @@ from connection_manager import ConnectionManager
 from interaction_handler import InteractionHandler
 from color_manager import ColorManager
 from boundary_manager import BoundaryManager
+from fix_red import FixRedManager
 
 class CanvasApplication:
     """Main application class for the drawing canvas."""
@@ -100,8 +100,9 @@ class CanvasApplication:
         self.connection_manager = ConnectionManager(self)
         self.interaction_handler = InteractionHandler(self)
         self.color_manager = ColorManager(self)
+        self.fix_red = FixRedManager(self)
         self.boundary_manager = BoundaryManager(self)
-
+        
         # Initialize drag state
         self.interaction_handler.reset_drag_state()  # Moved reset call here
         
@@ -383,12 +384,6 @@ class CanvasApplication:
     def _assign_color_based_on_connections(self, circle_id=None):
         return self.color_manager.assign_color_based_on_connections(circle_id)
         
-    def _check_and_resolve_color_conflicts(self, circle_id):
-        return self.color_manager.check_and_resolve_color_conflicts(circle_id)
-        
-    def _reassign_color_network(self, circle_id):
-        return self.color_manager.reassign_color_network(circle_id)
-        
     def _update_circle_color(self, circle_id, color_priority):
         return self.color_manager.update_circle_color(circle_id, color_priority)
 
@@ -408,17 +403,44 @@ class CanvasApplication:
     def _update_enclosure_status(self):
         return self.boundary_manager.update_enclosure_status()
 
-    def handle_red_node_creation(self, circle_id):
-        return self.color_manager.handle_red_node_creation(circle_id)
-
-    def handle_red_node_fixed(self):
-        return self.color_manager.handle_red_node_fixed()
-
-    def _fix_red_node(self):
-        return self.color_manager.handle_fix_red_node_button()
-    
     def draw_connection_angle_visualizations(self, connection_key):
         return self.connection_manager.draw_connection_angle_visualizations(connection_key)
+
+    def check_and_resolve_color_conflicts(self, circle_id):
+        return self.fix_red.check_and_resolve_color_conflicts(circle_id)
+
+    def reassign_color_network(self, circle_id):
+        return self.fix_red.reassign_color_network(circle_id)
+
+    def fix_red_node(self):
+        return self.fix_red.fix_red_node()
+
+    def handle_red_node_creation(self, circle_id):
+        return self.fix_red.handle_red_node_creation(circle_id)
+
+    def handle_red_node_fixed(self):
+        return self.fix_red.handle_red_node_fixed()
+
+    def has_red_nodes(self):
+        return self.fix_red.red_node_manager.has_red_nodes()
+
+    def get_current_red_node(self):
+        return self.fix_red.red_node_manager.get_current_red_node()
+
+    def add_red_node(self, node_id, reason="Color conflict"):
+        return self.fix_red.red_node_manager.add_red_node(node_id, reason)
+
+    def advance_to_next_red_node(self):
+        return self.fix_red.red_node_manager.advance_to_next_red_node()
+
+    def get_red_node_reason(self, node_id=None):
+        return self.fix_red.red_node_manager.get_red_node_reason(node_id)
+
+    def clear_red_nodes(self):
+        return self.fix_red.red_node_manager.clear()
+
+    def handle_fix_red_node_button(self):
+        return self.fix_red.fix_red_node()
 
 def main():
     """Application entry point."""
