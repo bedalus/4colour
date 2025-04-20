@@ -97,7 +97,7 @@ def display_most_called_functions(call_counts, id_to_name, top_n=20):
     if call_counts:
         top_funcs = call_counts.most_common(top_n)
         func_ids, counts = zip(*top_funcs)
-        func_names = [id_to_name.get(fid, f"ID:{fid}")[:30] for fid in func_ids]  # Truncate long names
+        func_names = [id_to_name.get(fid, f"ID:{fid}")[-30:] for fid in func_ids]
         
         plt.figure(figsize=(12, 8))
         plt.barh(range(len(func_names)), counts, align='center')

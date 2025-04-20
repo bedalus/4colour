@@ -277,19 +277,32 @@ class ConnectionManager:
         # Clear any existing handles
         self.hide_midpoint_handles()
         
-        # Create handles for all connections
-        for connection_key, connection in self.app.connections.items():
-            from_id = connection["from_circle"]
-            to_id = connection["to_circle"]
+        # Check if we have a last circle ID
+        if self.app.last_circle_id is None:
+            return
+        
+        # Get the last circle
+        last_circle = self.app.circle_lookup.get(self.app.last_circle_id)
+        if not last_circle:
+            return
+        
+        # Get all connections involving the last circle
+        for connected_id in last_circle.get("connected_to", []):
+            connection_key = self.get_connection_key(self.app.last_circle_id, connected_id)
+            connection = self.app.connections.get(connection_key)
             
-            # Calculate the position for this handle using the new helper method
-            handle_x, handle_y = self.calculate_midpoint_handle_position(from_id, to_id)
-            
-            # Create the handle
-            handle_id = self.draw_midpoint_handle(connection_key, handle_x, handle_y)
-            
-            # Store reference to the handle
-            self.app.midpoint_handles[connection_key] = handle_id
+            if connection:
+                from_id = connection["from_circle"]
+                to_id = connection["to_circle"]
+                
+                # Calculate the position for this handle
+                handle_x, handle_y = self.calculate_midpoint_handle_position(from_id, to_id)
+                
+                # Create the handle
+                handle_id = self.draw_midpoint_handle(connection_key, handle_x, handle_y)
+                
+                # Store reference to the handle
+                self.app.midpoint_handles[connection_key] = handle_id
 
     def calculate_midpoint_handle_position(self, from_id, to_id):
         """Calculate the position for the midpoint handle between two circles."""
@@ -338,34 +351,6 @@ class ConnectionManager:
                 # Update connection using these values - this will redraw everything
                 self.update_connection_curve(connection["from_circle"], connection["to_circle"], curve_x, curve_y)
     
-    def calculate_tangent_vector(self, circle_id, other_circle_id):
-        """Calculate the tangent vector of the curve where it meets the specified circle."""
-        circle, other_circle = self.get_circle_pair(circle_id, other_circle_id)
-        
-        if not circle or not other_circle:
-            return (0, 0)
-        
-        # Get circle center
-        cx, cy = circle["x"], circle["y"]
-        
-        # Calculate the midpoint with curve offset
-        curve_x, curve_y = self.get_connection_curve_offset(circle_id, other_circle_id)
-        base_mid_x, base_mid_y = self.calculate_midpoint(circle, other_circle)
-        mid_x = base_mid_x + curve_x
-        mid_y = base_mid_y + curve_y
-        
-        # Simple model: vector from circle center toward midpoint
-        dx = mid_x - cx
-        dy = mid_y - cy
-        
-        # Normalize the vector
-        magnitude = math.sqrt(dx*dx + dy*dy)
-        if magnitude > 0:
-            dx /= magnitude
-            dy /= magnitude
-        
-        return (dx, dy)
-    
     def calculate_connection_entry_angle(self, circle_id, other_circle_id):
         """Calculate the angle at which a connection enters a circle.
         
@@ -380,17 +365,34 @@ class ConnectionManager:
             float: Angle in degrees (0-360) or 0 if calculation fails
         """
         # Get the tangent vector (pointing outward from circle)
-        dx, dy = self.calculate_tangent_vector(circle_id, other_circle_id)
+        circle, other_circle = self.get_circle_pair(circle_id, other_circle_id)
+        
+        if not circle or not other_circle:
+            return (0, 0)
+        
+        # Get circle center
+        cx, cy = circle["x"], circle["y"]
+        
+        # Calculate the midpoint with curve offset
+        curve_x, curve_y = self.get_connection_curve_offset(circle_id, other_circle_id)
+        base_mid_x, base_mid_y = self.calculate_midpoint(circle, other_circle)
+        mid_x = base_mid_x + curve_x
+        mid_y = base_mid_y + curve_y
+        
+        # Vector from midpoint toward circle center
+        dx = cx - mid_x
+        dy = cy - mid_y
+        
+        # Normalize the vector
+        magnitude = math.sqrt(dx*dx + dy*dy)
+        if magnitude > 0:
+            dx /= magnitude
+            dy /= magnitude
         
         if dx == 0 and dy == 0:
             return 0
         
-        # For entry angle, we need the opposite direction (inward)
-        dx = -dx
-        dy = -dy
-        
         # In Tkinter, positive y is downward, so we need to flip the y-component
-        # to convert to standard angle measurement
         # atan2(dx, -dy) gives angle clockwise from North (0,0) is top-left
         angle_rad = math.atan2(dx, -dy)
         angle_deg = angle_rad * (180 / math.pi)
@@ -487,12 +489,26 @@ class ConnectionManager:
     def has_angle_violations(self):
         """Check if any connections currently have angle violations."""
         for connection_key, connection in self.app.connections.items():
-            from_id = connection["from_circle"]
-            to_id = connection["to_circle"]
-            if (self.is_entry_angle_too_close(from_id, to_id, min_angle=2) or
-                self.is_entry_angle_too_close(to_id, from_id, min_angle=2)):
+            if self.has_connection_angle_violation(connection):
+                self.app.canvas.itemconfig(connection["line_id"], fill="red")
                 return True
+            else:
+                self.app.canvas.itemconfig(connection["line_id"], fill="black")
         return False
+
+    def has_connection_angle_violation(self, connection):
+        """Check if a specific connection has angle violations.
+        
+        Args:
+            connection: A connection object with from_circle and to_circle IDs
+            
+        Returns:
+            bool: True if angle violation exists, False otherwise
+        """
+        from_id = connection["from_circle"]
+        to_id = connection["to_circle"]
+        return (self.is_entry_angle_too_close(from_id, to_id, min_angle=2) or
+                self.is_entry_angle_too_close(to_id, from_id, min_angle=2))
 
     def remove_connection(self, circle1_id, circle2_id):
         """Removes a connection between two circles and cleans up associated data."""
@@ -590,14 +606,8 @@ class ConnectionManager:
         if not connection:
             return
         
-        from_id = connection["from_circle"]
-        to_id = connection["to_circle"]
-        
         # Check angles at both endpoints
-        has_violation = (
-            self.is_entry_angle_too_close(from_id, to_id) or
-            self.is_entry_angle_too_close(to_id, from_id)
-        )
+        has_violation = self.has_connection_angle_violation(connection)
         
         # Update connection color
         self.app.canvas.itemconfig(connection["line_id"], fill="red" if has_violation else "black")

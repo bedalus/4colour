@@ -66,7 +66,7 @@ class InteractionHandler:
             else:
                 self.app.mode_button.config(text="Engage adjust mode")
         
-        # The unlocking of the last node is now handled in _prepare_mode_transition
+        self._check_violations_and_update_button()
     
     def bind_mode_events(self, mode):
         """Bind the appropriate events for the given mode.
@@ -505,7 +505,6 @@ class InteractionHandler:
                     new_curve_y = self.app.drag_state.get("curve_y", 0)
                     min_dist = 20
                     def dist_sq(x1, y1, x2, y2):
-                        # FIX: Corrected distance calculation (was y2-y2)
                         return (x1 - x2) ** 2 + (y1 - y2) ** 2 
                     new_mid_x = base_mid_x + new_curve_x / 2
                     new_mid_y = base_mid_y + new_curve_y / 2
@@ -517,27 +516,9 @@ class InteractionHandler:
                         self.app.drag_state["curve_x"] = self.app.drag_state.get("orig_curve_x", 0)
                         self.app.drag_state["curve_y"] = self.app.drag_state.get("orig_curve_y", 0)
 
-        # Show or clear warning hint for angle constraint after midpoint handle is released
-        if self.app.drag_state["type"] == "midpoint":
-            connection_key = self.app.drag_state["id"]
-            connection = self.app.connections.get(connection_key)
-            if connection:
-                # Apply the final curve offset before evaluating the constraint
-                connection["curve_X"] = self.app.drag_state.get("curve_x", connection.get("curve_X", 0))
-                connection["curve_Y"] = self.app.drag_state.get("curve_y", connection.get("curve_Y", 0))
-                from_id = connection["from_circle"]
-                to_id = connection["to_circle"]
-                angle_violation = (
-                    self.app.connection_manager.is_entry_angle_too_close(from_id, to_id, min_angle=2) or
-                    self.app.connection_manager.is_entry_angle_too_close(to_id, from_id, min_angle=2)
-                )
-                if angle_violation:
-                    self.app.ui_manager.show_hint_text(
-                        "Warning: Connection angle too close to another. Adjust the midpoint until the warning clears."
-                    )
-                else:
-                    self.app.ui_manager.show_hint_text("")
-        
+        # Update the button state based on overall violations
+        self._check_violations_and_update_button()
+
         # Clear any angle visualization lines when dragging ends
         self.app.ui_manager.clear_angle_visualizations()
         
@@ -607,20 +588,6 @@ class InteractionHandler:
                     ordered_connections_updated = True
             except (ValueError, AttributeError):
                 pass  # Skip if connection key cannot be parsed
-        
-        # Check final angles and set line color
-        if self.app.drag_state["type"] == "midpoint":
-            connection_key = self.app.drag_state["id"]
-            connection = self.app.connections.get(connection_key)
-            if connection:
-                from_id = connection["from_circle"]
-                to_id = connection["to_circle"]
-                angle_violation = (
-                    self.app.connection_manager.is_entry_angle_too_close(from_id, to_id, min_angle=2) or
-                    self.app.connection_manager.is_entry_angle_too_close(to_id, from_id, min_angle=2)
-                )
-                self.app.canvas.itemconfig(connection["line_id"], 
-                    fill="red" if angle_violation else "black")
 
         # Check if a boundary circle became enclosed (before resetting drag state)
         if self.app.drag_state["type"] == "circle":
@@ -680,39 +647,14 @@ class InteractionHandler:
         from_id = connection["from_circle"]
         to_id = connection["to_circle"]
 
-        # 1. Check for angle violations
-        angle_violation = (
-            self.app.connection_manager.is_entry_angle_too_close(from_id, to_id, min_angle=2) or
-            self.app.connection_manager.is_entry_angle_too_close(to_id, from_id, min_angle=2)
-        )
-        line_color = "red" if angle_violation else "black"
-
-        # 2. Recalculate curve points
+        # Recalculate curve points
         points = self.app.connection_manager.calculate_curve_points(from_id, to_id)
         
         if points:
-            # 3. Delete the old line canvas item
-            # Restoring delete/create method
-            self.app.canvas.delete(connection["line_id"])
-            
-            # 4. Create a new line canvas item with updated points and color
-            new_line_id = self.app.canvas.create_line(
-                points,
-                width=1,
-                smooth=True,
-                tags="line",
-                fill=line_color # Apply color immediately
-            )
-            
-            # 5. Update the connection data with the new canvas ID
-            connection["line_id"] = new_line_id
-            
-            # 6. Ensure the new line is drawn below circles
-            self.app.canvas.lower(new_line_id)
-        else:
-            pass
+            # Update the existing line's coordinates instead of deleting and recreating it
+            self.app.canvas.coords(connection["line_id"], *points)
 
-        # 7. Update midpoint handle position if it exists
+        # Update midpoint handle position if it exists
         if connection_key in self.app.midpoint_handles:
             handle_x, handle_y = self.app.connection_manager.calculate_midpoint_handle_position(
                 from_id, to_id
@@ -730,8 +672,15 @@ class InteractionHandler:
         """Checks all connections for angle violations and updates the mode button state."""
         if self.app.mode_button:
             has_violations = self.app.connection_manager.has_angle_violations()
-            self.app.mode_button.config(state='disabled' if has_violations else 'normal')
-    
+            if has_violations:
+                self.app.mode_button.config(state='disabled')
+                self.app.ui_manager.show_hint_text("Warning: Connection angle too close to another. Adjust the midpoint until the warning clears.")
+                return True
+            else:
+                self.app.mode_button.config(state='normal')
+                self.app.ui_manager.show_hint_text("")
+                return False
+
     def drag_circle_motion(self, circle_id, dx, dy):
         """Handle circle dragging motion."""
         circle = self.app.circle_lookup.get(circle_id)
@@ -754,9 +703,6 @@ class InteractionHandler:
         # Update visuals for all connected lines
         connections_to_update = list(circle.get("connected_to", [])) # Create a copy for safe iteration if needed
         
-        # Track if any connection violates the angle constraint
-        angle_violation_found = False
-        
         for connected_id in connections_to_update:
             connection_key = self.app.connection_manager.get_connection_key(circle_id, connected_id)
             
@@ -765,27 +711,7 @@ class InteractionHandler:
                 continue # Skip to the next connected_id
 
             # If the key exists, proceed with the update
-            self._update_connection_visuals(connection_key) 
-            
-            # Check if this connection has an angle violation
-            connection = self.app.connections.get(connection_key)
-            if connection:
-                from_id = connection["from_circle"]
-                to_id = connection["to_circle"]
-                if (self.app.connection_manager.is_entry_angle_too_close(from_id, to_id, min_angle=2) or
-                    self.app.connection_manager.is_entry_angle_too_close(to_id, from_id, min_angle=2)):
-                    angle_violation_found = True
-
-        # Show warning hint if there's an angle violation, otherwise clear it
-        if angle_violation_found:
-            self.app.ui_manager.show_hint_text(
-                "Warning: Connection angle too close to another. Adjust the position until the warning clears."
-            )
-        else:
-            self.app.ui_manager.show_hint_text("")
-
-        # Update the button state based on overall violations
-        self._check_violations_and_update_button()
+            self._update_connection_visuals(connection_key)
 
     def drag_midpoint_motion(self, x, y):
         """Handle midpoint dragging motion, enforcing minimum distance and angle constraints."""
@@ -828,9 +754,6 @@ class InteractionHandler:
 
         # Update the visuals for this specific connection
         self._update_connection_visuals(connection_key) # Call helper
-
-        # Update the button state based on overall violations
-        self._check_violations_and_update_button() # Call helper
 
         # Move the handle itself (visual only, position derived from x, y)
         handle_id = self.app.midpoint_handles.get(connection_key)
@@ -943,10 +866,11 @@ class InteractionHandler:
         # Display specific hint based on whether it's red fix mode or normal adjust mode
         if for_red_node:
             self.app.ui_manager.show_hint_text("Adjust the red node position and connectors, then click 'Fix Red'")
+            self.app.canvas.config(bg=RED_FIX_MODE_BG)
         else:
             self.app.ui_manager.show_hint_text("The last node placed and its connections can be adjusted")
+            self.app.canvas.config(bg=ADJUST_MODE_BG)
             
-        self.app.canvas.config(bg=RED_FIX_MODE_BG if for_red_node else ADJUST_MODE_BG)
         self.app.connection_manager.show_midpoint_handles()
         self.app._update_enclosure_status()
         self._unlock_and_highlight_last_node()
@@ -985,10 +909,6 @@ class InteractionHandler:
         # Skip if already in the target mode or blocked
         if old_mode == new_mode:
             return False
-        if old_mode == ApplicationMode.ADJUST and new_mode != ApplicationMode.ADJUST:
-            if self.app.connection_manager.has_angle_violations():
-                print("DEBUG: Cannot leave adjust mode while connections have angle violations")
-                return False
 
         # Clean up previous mode UI and unbind events
         self._cleanup_mode_ui(old_mode)
