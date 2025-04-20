@@ -23,42 +23,16 @@ NOTE: These guidelines apply only to code in the 4colour repo.
 - Ensure all code passes linting and formatting checks before committing.
 - Use lowercase names for folders.
 
-## Test-Driven Development
-
-- Update unit tests whenever functionality changes - they're as important as the implementation.
-- Tests should match the behavior of your implementation.
-- Run tests before and after making changes to verify correctness.
-- All new features must have corresponding tests.
-
-```bash
-# Run basic tests
-python -m unittest discover -s tests
-
-# Run with runtime logging
-python log_function_calls.py
-
-# Run with coverage analysis (requires: pip install coverage pandas matplotlib)
-python -m tests.run_coverage
-```
-
-Read tests/README.md for more details on test coverage analysis.
-
 ## Planning
 
-Work items use checkboxes (`- [ ]`) and should be completed in sequential order. Mark tasks complete (`- [x]`) when both implementation and tests are finished. Update the Project Structure section when files change.
-
-When adding new phases:
-1. Use level 3 heading: `### Phase [Number]: [Brief Title]`
-2. Include a summary paragraph explaining the goal
-3. List tasks with main items in bold and nested bullet points for subtasks
-
-**Note:** Detailed task planning and tracking for current and future phases is now managed in `PLAN.md`. Phase summaries will still be maintained here.
+Use the PLAN.md file for all planning and tracking. Use this file for summaries when work phases are completed.
 
 ## Project Structure
 
 The project is organized into the following key files and directories:
 
-*   `README.md`: Current file with project goals and planning
+*   `README.md`: Current file. Project goals, summaries of initial development phases
+*   `PLAN.md`:  and planning
 *   `canvas_app.py`: Main application class
 *   `ui_manager.py`: UI element management
 *   `circle_manager.py`: Circle data operations
@@ -77,7 +51,7 @@ The initial development phases established core functionality: Tkinter UI, circl
 
 ### Phase 8-9: Summary
 
-These phases implemented deterministic coloring based on the Four Color Theorem with a priority system (1=yellow, 2=green, 3=blue, 4=red), conflict resolution, and codebase optimization through extracted utility functions and comprehensive tests.
+These phases implemented deterministic coloring based on the Four Color Theorem with a priority system (1=yellow, 2=green, 3=blue, 4=red), conflict resolution, and codebase optimization.
 
 ### Phase 10-11: Summary
 
