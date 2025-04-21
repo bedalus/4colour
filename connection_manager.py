@@ -258,13 +258,13 @@ class ConnectionManager:
         Returns:
             int: Canvas ID of the created handle
         """
-        # Draw a small black square at the midpoint with the connection key as part of its tags
+        # Draw a small VCOLOR square at the midpoint with the connection key as part of its tags
         handle_id = self.app.canvas.create_rectangle(
             x - self.app.midpoint_radius,
             y - self.app.midpoint_radius,
             x + self.app.midpoint_radius,
             y + self.app.midpoint_radius,
-            fill="black",  # Black square
+            fill="black",  # VCOLOR square
             outline="white",  # White outline for visibility
             width=1,
             tags=("midpoint_handle", connection_key)

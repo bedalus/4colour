@@ -157,16 +157,16 @@ class UIManager:
 
     def clear_canvas(self):
         """Clear the canvas and reset application state."""
-        # Reset mode button if it's currently in "Fix Black" mode
+        # Reset mode button if it's currently in "Fix VCOLOR" mode
         if hasattr(self.app, '_stored_mode_button_command') and self.app.mode_button:
             # Restore the original command
             self.app.mode_button.config(command=self.app._stored_mode_button_command)
             delattr(self.app, '_stored_mode_button_command')
             print("DEBUG: Restored mode button's original command after canvas clear")
         
-        # Reset black node state
-        if hasattr(self.app, 'fix_black'):
-            self.app.clear_black_nodes()
+        # Reset VCOLOR node state
+        if hasattr(self.app, 'fix_VCOLOR'):
+            self.app.clear_VCOLOR_nodes()
         
         # Clear the canvas - delete all items except fixed nodes/connections
         for item in self.app.canvas.find_all():

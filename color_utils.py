@@ -5,7 +5,7 @@ This module provides functions for working with colors and their priorities.
 """
 
 # Define color priority mappings
-# Priority order: 1=yellow (lowest), 2=green, 3=blue, 4=red, 5=black (highest)
+# Priority order: 1=yellow (lowest), 2=green, 3=blue, 4=red, 5=VCOLOR (highest)
 COLOR_PRIORITY = {
     1: "yellow",
     2: "green",
@@ -38,7 +38,7 @@ def determine_color_priority_for_connections(connected_priorities):
     This implements the core 4-color algorithm logic:
     1. If there are no connections, use priority 1 (yellow)
     2. Otherwise, use the lowest priority not used by any connected circle
-    3. If all priorities 1-4 are used, return priority 5 (black)
+    3. If all priorities 1-4 are used, return priority 5 (VCOLOR)
     
     Args:
         connected_priorities (set): Set of priorities used by connected circles
@@ -52,5 +52,5 @@ def determine_color_priority_for_connections(connected_priorities):
     # Find lowest unused priority
     available_priority = find_lowest_available_priority(connected_priorities)
     
-    # If all priorities 1-4 are used, return priority 5 (black)
+    # If all priorities 1-4 are used, return priority 5 (VCOLOR)
     return available_priority if available_priority is not None else 5

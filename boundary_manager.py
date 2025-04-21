@@ -42,6 +42,15 @@ class BoundaryManager:
         if self.app.debug_enabled:
             self.app.ui_manager.show_debug_info()
 
+    def get_border_node_ids(self):
+        """Returns a list of IDs for all nodes currently on the boundary (not enclosed)."""
+        border_ids = []
+        for circle_id, circle_data in self.app.circle_lookup.items():
+            # A node is on the border if it's not enclosed
+            if not circle_data.get('enclosed'):
+                border_ids.append(circle_id)
+        return border_ids
+
     def _traverse_boundary(self):
         """Traverse the outer boundary of the graph in clockwise order.
         

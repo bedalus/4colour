@@ -42,7 +42,7 @@ The project is organized into the following key files and directories:
 *   `color_manager.py`: Color assignment operations
 *   `color_utils.py`: Color utility functions and priority mappings
 *   `boundary_manager.py`: Boundary node identification and enclosure status
-*   `fix_black.py`: Black node management and conflict resolution
+*   `fix_VCOLOR.py`: VCOLOR node management and conflict resolution
 *   `function_logger.py`, `log_function_calls.py`, `analyze_call_logs.py`: Debugging tools
 
 ### Component Relationships
@@ -51,7 +51,7 @@ The project is organized into the following key files and directories:
 *   The Managers focus on specific domains (UI, circles, connections, colors, boundaries)
 *   `interaction_handler.py` processes user input and coordinates with managers
 *   `app_enums.py` provides consistent mode definitions across components
-*   `fix_black.py` centralizes color conflict resolution logic
+*   `fix_VCOLOR.py` centralizes color conflict resolution logic
 
 ### Phases 1-7 Summary
 
@@ -71,4 +71,4 @@ Phase 13 implemented clockwise connection ordering. Phase 14 added boundary dete
 
 ### Phase 16: Summary
 
-Phase 16 centralized all black node logic and state into the new `fix_black.py` module, with `ColorManager` and related classes delegating black node operations. This refactor improved modularity and prepares the codebase for future enhancements.
+Phase 16 centralized all VCOLOR node logic and state into the new `fix_VCOLOR.py` module, with `ColorManager` and related classes delegating VCOLOR node operations. This refactor improved modularity and prepares the codebase for future enhancements.

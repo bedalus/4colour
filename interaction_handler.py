@@ -8,7 +8,7 @@ from color_utils import get_color_from_priority
 from app_enums import ApplicationMode  # Import from app_enums instead
 
 ADJUST_MODE_BG = "#FFEEEE"
-BLACK_FIX_MODE_BG = "#FFDDDD"
+VCOLOR_FIX_MODE_BG = "#FFDDDD"
 HIGHLIGHT_COLOR = 'purple'
 HIGHLIGHT_TAG = "temp_highlight"
 
@@ -29,13 +29,13 @@ class InteractionHandler:
         self.app.ui_manager.show_hint_text("")
             
         # Don't allow transition to ADJUST mode from SELECTION mode
-        # EXCEPTION: Allow if it's for a black node
+        # EXCEPTION: Allow if it's for a VCOLOR node
         if self.app._mode == ApplicationMode.SELECTION and new_mode == ApplicationMode.ADJUST:
-            if not self.app.has_black_nodes():
-                print("DEBUG: Blocking SELECTION to ADJUST transition (not for black node)")
+            if not self.app.has_VCOLOR_nodes():
+                print("DEBUG: Blocking SELECTION to ADJUST transition (not for VCOLOR node)")
                 return
             else:
-                print("DEBUG: Allowing SELECTION to ADJUST transition for black node")
+                print("DEBUG: Allowing SELECTION to ADJUST transition for VCOLOR node")
         
         print(f"DEBUG: Transitioning from {self.app._mode} to {new_mode}")
         
@@ -768,25 +768,26 @@ class InteractionHandler:
         connection["curve_X"] = self.app.drag_state.get("orig_curve_x", connection.get("curve_X", 0)) # Revert using original or default
         connection["curve_Y"] = self.app.drag_state.get("orig_curve_y", connection.get("curve_Y", 0))
 
-    def switch_to_black_fix_mode(self):
-        """Switch to ADJUST mode specifically for fixing black nodes."""
+    def switch_to_VCOLOR_fix_mode(self):
+        """Switch to ADJUST mode specifically for fixing VCOLOR nodes."""
         # Handle mode transition with specialized flag
-        is_transition = self._prepare_mode_transition(ApplicationMode.ADJUST, for_black_node_=True)
+        is_transition = self._prepare_mode_transition(ApplicationMode.ADJUST, for_VCOLOR_node_=True)
         
-        # Additional setup for black node fix mode
+        # Additional setup for VCOLOR node fix mode
         if is_transition and self.app.mode_button:
             # Update button text
-            self.app.mode_button.config(text="Fix Black")
+            button_text = get_color_from_priority(5)
+            self.app.mode_button.config(text=button_text)
             
             # Store the original mode button's command
             original_command = self.app.mode_button['command']
             self.app._stored_mode_button_command = original_command
             self.app.mode_button.config(
                 command=lambda: self.app._focus_after(
-                    self.app.handle_fix_black_node_button
+                    self.app.handle_fix_VCOLOR_node_button
                 )
             )
-            print("DEBUG: Changed mode button to 'Fix Black'")
+            print("DEBUG: Changed mode button to '{button_text}'")
     
     def _clear_selection_state(self):
         """Clear all selection-related state and UI elements."""
@@ -833,10 +834,10 @@ class InteractionHandler:
         elif mode == ApplicationMode.ADJUST:
             self._cleanup_adjust_mode_ui() # Renamed from _cleanup_adjust_mode
 
-    def _setup_mode_ui(self, mode, for_black_node_=False):
+    def _setup_mode_ui(self, mode, for_VCOLOR_node_=False):
         """Set up UI elements specific to the given mode.""" 
         if mode == ApplicationMode.ADJUST:
-            self._setup_adjust_mode_ui(for_black_node_)
+            self._setup_adjust_mode_ui(for_VCOLOR_node_)
 
     def _cleanup_adjust_mode_ui(self):
         """Cleans up UI elements and state specific to ADJUST mode."""
@@ -848,12 +849,12 @@ class InteractionHandler:
             self.app.canvas.delete(self.app.highlighted_circle_id)
             self.app.highlighted_circle_id = None
 
-    def _setup_adjust_mode_ui(self, for_black_node_=False):
+    def _setup_adjust_mode_ui(self, for_VCOLOR_node_=False):
         """Sets up UI elements for ADJUST mode."""
-        # Display specific hint based on whether it's black fix mode or normal adjust mode
-        if for_black_node_:
-            self.app.ui_manager.show_hint_text("Adjust the black node position and connectors, then click 'Fix Black'")
-            self.app.canvas.config(bg=BLACK_FIX_MODE_BG)
+        # Display specific hint based on whether it's VCOLOR fix mode or normal adjust mode
+        if for_VCOLOR_node_:
+            self.app.ui_manager.show_hint_text("Adjust the VCOLOR node position and connectors, then click 'Fix VCOLOR'")
+            self.app.canvas.config(bg=VCOLOR_FIX_MODE_BG)
         else:
             self.app.ui_manager.show_hint_text("The last node placed and its connections can be adjusted")
             self.app.canvas.config(bg=ADJUST_MODE_BG)
@@ -889,7 +890,7 @@ class InteractionHandler:
                     if connection and not connection.get("fixed", False):
                         connection["locked"] = False
 
-    def _prepare_mode_transition(self, new_mode, for_black_node_=False):
+    def _prepare_mode_transition(self, new_mode, for_VCOLOR_node_=False):
         """Handle common mode transition tasks.""" 
         old_mode = self.app._mode
 
@@ -906,11 +907,11 @@ class InteractionHandler:
 
         # Bind events and set up new mode UI
         self.bind_mode_events(new_mode)
-        self._setup_mode_ui(new_mode, for_black_node_) # Pass black node flag
+        self._setup_mode_ui(new_mode, for_VCOLOR_node_) # Pass VCOLOR node flag
 
         # Special handling for ADJUST mode setup (unlocking last node is now in _setup_adjust_mode_ui)
         if new_mode == ApplicationMode.ADJUST:
-            # Return True only if the transition was specifically for a black node fix
-            return for_black_node_
+            # Return True only if the transition was specifically for a VCOLOR node fix
+            return for_VCOLOR_node_
 
         return True # Return True indicating a successful transition occurred

@@ -13,14 +13,14 @@ When adding new phases:
 
 The goal of this phase is to enhance the Kempe system for complex graph scenarios.
 
-- [ ] **Black-Node exchange algorithm: Kempe Chain Improvements and constraints**
-    *   Kick off trigger will be when placing a new node creates a conflict resulting in a priority 5 'black-node'.
+- [ ] **VCOLOR-Node exchange algorithm: Kempe Chain Improvements and constraints**
+    *   Kick off trigger will be when placing a new node creates a conflict resulting in a priority 5 'VCOLOR-node'.
     *   Use Kempe chain to decide on some pairing of yellow, green, blue or red suitable for color exchange.
-    *   If the 'black-node' can now be recolored to use one of the four colors, then the algorithm is finished. If not, it should call itself again (be careful of infinite recursion).
+    *   If the 'VCOLOR-node' can now be recolored to use one of the four colors, then the algorithm is finished. If not, it should call itself again (be careful of infinite recursion).
     *   Finally, check which is the most used color on the border nodes (the graph's outer face). Perform an exchange between that color and whichever other colour is the most used (using color priority for ties).
 
 ## Future Phases (Placeholder)
 
 - [ ] **Document Algorithm and Implementation:**
-    *   Add detailed comments explaining the color reassignment strategy in reassign_color_network (`fix_black.py`).
+    *   Add detailed comments explaining the color reassignment strategy in reassign_color_network (`fix_VCOLOR.py`).
     *   The goal of the commentary should be to prove that the algorithm will always be successful in reconfiguring the graph to use only four colours.

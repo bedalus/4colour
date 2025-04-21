@@ -17,7 +17,7 @@ from connection_manager import ConnectionManager
 from interaction_handler import InteractionHandler
 from color_manager import ColorManager
 from boundary_manager import BoundaryManager
-from fix_black import FixBlackManager
+from fix_VCOLOR import FixVCOLORManager
 
 class CanvasApplication:
     """Main application class for the drawing canvas."""
@@ -99,7 +99,7 @@ class CanvasApplication:
         self.connection_manager = ConnectionManager(self)
         self.interaction_handler = InteractionHandler(self)
         self.color_manager = ColorManager(self)
-        self.fix_black = FixBlackManager(self)
+        self.fix_VCOLOR = FixVCOLORManager(self)
         self.boundary_manager = BoundaryManager(self)
         
         # Initialize drag state
@@ -245,8 +245,6 @@ class CanvasApplication:
         self.mode_button = ttk.Button(control_frame, text="Engage adjust mode", 
                                      command=lambda: self._focus_after(self._toggle_mode))
         self.mode_button.pack(side=tk.LEFT, padx=2)
-        
-        # Remove the "Fix Black" button creation - we'll reuse the mode button instead
         
         # Create canvas for drawing
         self.canvas = tk.Canvas(
@@ -406,40 +404,40 @@ class CanvasApplication:
         return self.connection_manager.draw_connection_angle_visualizations(connection_key)
 
     def check_and_resolve_color_conflicts(self, circle_id):
-        return self.fix_black.check_and_resolve_color_conflicts(circle_id)
+        return self.fix_VCOLOR.check_and_resolve_color_conflicts(circle_id)
 
     def reassign_color_network(self, circle_id):
-        return self.fix_black.reassign_color_network(circle_id)
+        return self.fix_VCOLOR.reassign_color_network(circle_id)
 
-    def fix_black_node_(self):
-        return self.fix_black.fix_black_node_()
+    def fix_VCOLOR_node_(self):
+        return self.fix_VCOLOR.fix_VCOLOR_node_()
 
-    def handle_black_node_creation(self, circle_id):
-        return self.fix_black.handle_black_node_creation(circle_id)
+    def handle_VCOLOR_node_creation(self, circle_id):
+        return self.fix_VCOLOR.handle_VCOLOR_node_creation(circle_id)
 
-    def handle_black_node_fixed(self):
-        return self.fix_black.handle_black_node_fixed()
+    def handle_VCOLOR_node_fixed(self):
+        return self.fix_VCOLOR.handle_VCOLOR_node_fixed()
 
-    def has_black_nodes(self):
-        return self.fix_black._black_node_manager.has_black_nodes()
+    def has_VCOLOR_nodes(self):
+        return self.fix_VCOLOR._VCOLOR_node_manager.has_VCOLOR_nodes()
 
-    def get_current_black_node_(self):
-        return self.fix_black._black_node_manager.get_current_black_node_()
+    def get_current_VCOLOR_node_(self):
+        return self.fix_VCOLOR._VCOLOR_node_manager.get_current_VCOLOR_node_()
 
-    def add_black_node_(self, node_id, reason="Color conflict"):
-        return self.fix_black._black_node_manager.add_black_node_(node_id, reason)
+    def add_VCOLOR_node_(self, node_id, reason="Color conflict"):
+        return self.fix_VCOLOR._VCOLOR_node_manager.add_VCOLOR_node_(node_id, reason)
 
-    def advance_to_next_black_node_(self):
-        return self.fix_black._black_node_manager.advance_to_next_black_node_()
+    def advance_to_next_VCOLOR_node_(self):
+        return self.fix_VCOLOR._VCOLOR_node_manager.advance_to_next_VCOLOR_node_()
 
-    def get_black_node_reason(self, node_id=None):
-        return self.fix_black._black_node_manager.get_black_node_reason(node_id)
+    def get_VCOLOR_node_reason(self, node_id=None):
+        return self.fix_VCOLOR._VCOLOR_node_manager.get_VCOLOR_node_reason(node_id)
 
-    def clear_black_nodes(self):
-        return self.fix_black._black_node_manager.clear()
+    def clear_VCOLOR_nodes(self):
+        return self.fix_VCOLOR._VCOLOR_node_manager.clear()
 
-    def handle_fix_black_node_button(self):
-        return self.fix_black.fix_black_node_()
+    def handle_fix_VCOLOR_node_button(self):
+        return self.fix_VCOLOR.fix_VCOLOR_node_()
 
 def main():
     """Application entry point."""
