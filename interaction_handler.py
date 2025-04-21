@@ -60,8 +60,6 @@ class InteractionHandler:
                 self.app.mode_button.config(text="Engage create mode")
             else:
                 self.app.mode_button.config(text="Engage adjust mode")
-        
-        self._check_violations_and_update_button()
     
     def bind_mode_events(self, mode):
         """Bind the appropriate events for the given mode.
@@ -165,9 +163,9 @@ class InteractionHandler:
             return
             
         # Normal mode: draw a new circle
-        # Use the deterministic color assignment
+        # Use the deterministic colour assignment
         color_priority = self.app._assign_color_based_on_connections()  # Only get priority
-        color_name = get_color_from_priority(color_priority)  # Get color name for drawing
+        color_name = get_color_from_priority(color_priority)  # Get colour name for drawing
         
         # Detect if the new point is too close to an existing circle
         r = self.app.circle_radius
@@ -195,7 +193,7 @@ class InteractionHandler:
             y - self.app.circle_radius,
             x + self.app.circle_radius,
             y + self.app.circle_radius,
-            fill=color_name,  # Use derived color name
+            fill=color_name,  # Use derived colour name
             outline="black",
             tags="circle"  # Add tag for circle
         )
@@ -292,9 +290,9 @@ class InteractionHandler:
         for circle_id in self.app.selected_circles:
             self.app.connection_manager.add_connection(new_circle_id, circle_id)
 
-        # After all connections are made, check for color conflicts and resolve them once
+        # After all connections are made, check for colour conflicts and resolve them once
         if self.app.newly_placed_circle_id and self.app.selected_circles:
-            # Check and resolve color conflicts for the newly placed circle
+            # Check and resolve colour conflicts for the newly placed circle
             self.app.check_and_resolve_color_conflicts(self.app.newly_placed_circle_id)
         
         # Clear selection state
@@ -511,9 +509,6 @@ class InteractionHandler:
                         self.app.drag_state["curve_x"] = self.app.drag_state.get("orig_curve_x", 0)
                         self.app.drag_state["curve_y"] = self.app.drag_state.get("orig_curve_y", 0)
 
-        # Update the button state based on overall violations
-        self._check_violations_and_update_button()
-
         # Clear any angle visualization lines when dragging ends
         self.app.ui_manager.clear_angle_visualizations()
         
@@ -631,7 +626,7 @@ class InteractionHandler:
         self._update_debug_for_circles(*debug_circle_ids)
         
         # Ensure final state reflects constraints after drag ends
-        self._check_violations_and_update_button() # Add final check here
+        self._check_violations_and_update_button()
 
     def _update_connection_visuals(self, connection_key):
         """Updates the visual representation of a single connection."""
@@ -770,7 +765,7 @@ class InteractionHandler:
 
     def switch_to_VCOLOR_fix_mode(self):
         """Switch to ADJUST mode specifically for fixing VCOLOR nodes."""
-        # Handle mode transition with specialized flag
+        # Handle mode transition with specialised flag
         is_transition = self._prepare_mode_transition(ApplicationMode.ADJUST, for_VCOLOR_node_=True)
         
         # Additional setup for VCOLOR node fix mode
@@ -907,7 +902,7 @@ class InteractionHandler:
 
         # Bind events and set up new mode UI
         self.bind_mode_events(new_mode)
-        self._setup_mode_ui(new_mode, for_VCOLOR_node_) # Pass VCOLOR node flag
+        self._setup_mode_ui(new_mode, for_VCOLOR_node_)
 
         # Special handling for ADJUST mode setup (unlocking last node is now in _setup_adjust_mode_ui)
         if new_mode == ApplicationMode.ADJUST:

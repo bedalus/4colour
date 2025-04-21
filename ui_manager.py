@@ -98,7 +98,7 @@ class UIManager:
         Returns:
             str: Formatted debug info text with right-justified values
         """
-        # Derive color name from priority for display
+        # Derive colour name from priority for display
         from color_utils import get_color_from_priority
         color_name = get_color_from_priority(circle['color_priority'])
         

@@ -37,11 +37,11 @@ class CanvasApplication:
         """
         self.root = root
         self.root.title("4colour Canvas")
-        self.root.geometry("800x600")
+        self.root.geometry("900x600")
         
         # Initialize canvas dimensions
-        self.canvas_width = 800
-        self.canvas_height = 500
+        self.canvas_width = 900
+        self.canvas_height = 600
         self.circle_radius = 10
         self.midpoint_radius = 5  # Size of the midpoint handle
         
@@ -123,7 +123,7 @@ class CanvasApplication:
             y_a - self.circle_radius,
             x_a + self.circle_radius,
             y_a + self.circle_radius,
-            fill="yellow",  # Color priority 1 = yellow
+            fill="yellow",  # Colour priority 1 = yellow
             outline="black",
             tags="fixed_circle"  # Special tag to identify fixed nodes
         )
@@ -135,7 +135,7 @@ class CanvasApplication:
             y_b - self.circle_radius,
             x_b + self.circle_radius,
             y_b + self.circle_radius,
-            fill="green",  # Color priority 2 = green
+            fill="green",  # Colour priority 2 = green
             outline="black",
             tags="fixed_circle"
         )
@@ -424,7 +424,7 @@ class CanvasApplication:
     def get_current_VCOLOR_node_(self):
         return self.fix_VCOLOR._VCOLOR_node_manager.get_current_VCOLOR_node_()
 
-    def add_VCOLOR_node_(self, node_id, reason="Color conflict"):
+    def add_VCOLOR_node_(self, node_id, reason="Colour conflict"):
         return self.fix_VCOLOR._VCOLOR_node_manager.add_VCOLOR_node_(node_id, reason)
 
     def advance_to_next_VCOLOR_node_(self):

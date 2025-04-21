@@ -1,13 +1,13 @@
 """
 Color Manager for the 4colour project.
 
-This module handles color assignment and color conflict resolution.
+This module handles colour assignment and colour conflict resolution.
 """
 
 from color_utils import get_color_from_priority, determine_color_priority_for_connections
 
 class ColorManager:
-    """Manages color assignment and conflict resolution."""
+    """Manages colour assignment and conflict resolution."""
     
     def __init__(self, app):
         """Initialize with a reference to the main application."""
@@ -24,20 +24,20 @@ class ColorManager:
             # No connections, or circle doesn't exist
             return 1
             
-        # Get all colors used by connected circles
+        # Get all colours used by connected circles
         used_priorities = set()
         for connected_id in circle["connected_to"]:
             connected_circle = self.app.circle_lookup.get(connected_id)
             if connected_circle and "color_priority" in connected_circle:
                 used_priorities.add(connected_circle["color_priority"])
         
-        # Use the color utility function to determine the appropriate priority
+        # Use the colour utility function to determine the appropriate priority
         priority = determine_color_priority_for_connections(used_priorities)
         
         return priority
 
     def update_circle_color(self, circle_id, color_priority):
-        """Update a circle's color priority both in data and visually."""
+        """Update a circle's colour priority both in data and visually."""
         circle = self.app.circle_lookup.get(circle_id)
         if not circle:
             return False
@@ -45,7 +45,7 @@ class ColorManager:
         # Update data - only priority
         circle["color_priority"] = color_priority
 
-        # Get color name from priority for visual update
+        # Get colour name from priority for visual update
         color_name = get_color_from_priority(color_priority)
 
         # Update visual appearance

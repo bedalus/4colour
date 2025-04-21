@@ -4,13 +4,13 @@ from color_utils import get_color_from_priority, find_lowest_available_priority
 from app_enums import ApplicationMode
 
 class VCOLORNodeManager:
-    """Manages VCOLOR nodes that need attention in the graph."""
+    """Manages 'V' Colour nodes that need attention in the graph."""
     def __init__(self):
         self._VCOLOR_node_queue = []
         self._VCOLOR_node_reasons = {}
         self.current_VCOLOR_node_id = None
 
-    def add_VCOLOR_node_(self, node_id, reason="Color conflict"):
+    def add_VCOLOR_node_(self, node_id, reason="Colour conflict"):
         if node_id in self._VCOLOR_node_queue:
             print(f"DEBUG: VCOLOR node {node_id} already in queue")
             return False
@@ -52,7 +52,7 @@ class VCOLORNodeManager:
 
 class FixVCOLORManager:
     """
-    Centralizes all logic and state for VCOLOR node (priority 5) handling.
+    Centralises all logic and state for VCOLOR node (priority 5) handling.
     This includes detection, state management, UI triggers, and resolution.
     """
     def __init__(self, app):
@@ -61,8 +61,8 @@ class FixVCOLORManager:
 
     def swap_kempe_chain(self, node_id):
         """
-        Performs a Kempe chain color swap to resolve the VCOLOR node.
-        Tries different pairs of adjacent colors until one allows the VCOLOR node to be colored.
+        Performs a Kempe chain colour swap to resolve the colour node.
+        Tries different pairs of adjacent colours until one allows the colour node to be coloured.
         Returns True if successful, False otherwise.
         """
         print(f"DEBUG: Beginning Kempe chain swap for VCOLOR node {node_id}")
@@ -73,7 +73,7 @@ class FixVCOLORManager:
             return False
         if node.get("color_priority") != 5:
             print(f"ERROR: Node {node_id} is not a VCOLOR node (priority 5)")
-            return False # Should only be called for VCOLOR nodes
+            return False # Should only be called for colour nodes
 
         # Get adjacent nodes and their priorities (1-4)
         connected_circles = node.get("connected_to", [])
@@ -84,16 +84,16 @@ class FixVCOLORManager:
             connected_circle = self.app.circle_lookup.get(connected_id)
             if connected_circle:
                 priority = connected_circle.get("color_priority")
-                if 1 <= priority <= 4: # Only consider standard colors
+                if 1 <= priority <= 4: # Only consider standard colours
                     adjacent_priorities.add(priority)
                     adjacent_nodes_by_priority[priority].append(connected_id)
 
         print(f"DEBUG: VCOLOR Node {node_id} has adjacent priorities: {adjacent_priorities}")
         print(f"DEBUG: Adjacent nodes by priority: {adjacent_nodes_by_priority}")
 
-        # We need at least two different adjacent colors to attempt a swap
+        # We need at least two different adjacent colours to attempt a swap
         if len(adjacent_priorities) < 2:
-             print(f"ERROR: Cannot perform Kempe swap for node {node_id}. Needs at least 2 different adjacent colors.")
+             print(f"ERROR: Cannot perform Kempe swap for node {node_id}. Needs at least 2 different adjacent colours.")
              # This case might indicate an issue elsewhere or a very simple graph structure
              # Try assigning the lowest available if possible (though this method is usually called when none are available)
              available_priority = find_lowest_available_priority(adjacent_priorities)
@@ -102,7 +102,7 @@ class FixVCOLORManager:
                  self.app.color_manager.update_circle_color(node_id, available_priority)
                  return True
              else:
-                 print(f"ERROR: Node {node_id} has < 2 adjacent colors and no simple available priority.")
+                 print(f"ERROR: Node {node_id} has < 2 adjacent colours and no simple available priority.")
                  return False # Cannot resolve
 
         # Iterate through pairs of adjacent priorities (c1, c2)
@@ -112,7 +112,7 @@ class FixVCOLORManager:
             print(f"\nDEBUG: Attempting Kempe swap with priorities ({c1}, {c2}) for node {node_id}")
 
             # Get a starting neighbor node for each color
-            # We only need one neighbor of each color to start the chain check
+            # We only need one neighbor of each colour to start the chain check
             neighbor_c1_id = adjacent_nodes_by_priority[c1][0] if adjacent_nodes_by_priority[c1] else None
             neighbor_c2_id = adjacent_nodes_by_priority[c2][0] if adjacent_nodes_by_priority[c2] else None
 
@@ -138,9 +138,9 @@ class FixVCOLORManager:
             # Check if the neighbor with priority c2 is in the *same* chain
             if neighbor_c2_id not in kempe_chain_set:
                 print(f"DEBUG: Success! Neighbor {neighbor_c2_id} (priority {c2}) is NOT in the chain starting from {neighbor_c1_id}.")
-                print(f"DEBUG: Swapping colors {c1} <-> {c2} in the chain: {kempe_chain_nodes}")
+                print(f"DEBUG: Swapping colours {c1} <-> {c2} in the chain: {kempe_chain_nodes}")
 
-                # Perform the color swap for all nodes in this chain
+                # Perform the colour swap for all nodes in this chain
                 for chain_node_id in kempe_chain_nodes:
                     chain_node = self.app.circle_lookup.get(chain_node_id)
                     if not chain_node: continue # Should exist
@@ -169,7 +169,7 @@ class FixVCOLORManager:
 
         # If loop finishes, no suitable Kempe chain swap was found
         print(f"ERROR: Exhausted all Kempe chain pairs for node {node_id}. Could not resolve VCOLOR.")
-        # According to the theorem, for planar graphs, this shouldn't happen if the graph had a valid 4-coloring before the conflict.
+        # According to the theorem, for planar graphs, this shouldn't happen if the graph had a valid 4-colouring before the conflict.
         # This might indicate a non-planar graph segment or an issue in the graph state.
         return False
 
@@ -213,7 +213,7 @@ class FixVCOLORManager:
         return kempe_chain
 
     def reassign_color_network(self, circle_id):
-        """MAIN ALGORITHM ENTRY POINT: Graph color reassignment when a new node is assigned priority 5 (VCOLOR)."""
+        """MAIN ALGORITHM ENTRY POINT: Graph colour reassignment when a new node is assigned priority 5 ('V' colour)."""
         circle_data = self.app.circle_lookup.get(circle_id)
         if not circle_data:
             try:
@@ -222,7 +222,7 @@ class FixVCOLORManager:
                 print(f"Error: {e}")
                 sys.exit(1)
 
-        # NOTE: Reaching this point means a VCOLOR placeholder node needs assigning a color from 1-4
+        # NOTE: Reaching this point means a colour placeholder node needs assigning a colour from 1-4
         #       Start fixing the graph!
         #       Function Notes:
         #          has_VCOLOR_nodes is True if we've queued any
@@ -239,7 +239,7 @@ class FixVCOLORManager:
             current_VCOLOR_node_id = self._VCOLOR_node_manager.current_VCOLOR_node_id
             VCOLOR_circle = self.app.circle_lookup.get(current_VCOLOR_node_id)
 
-            # Get all connected nodes and their colors
+            # Get all connected nodes and their colours
             connected_circles = VCOLOR_circle.get("connected_to", [])
             # Ensure connected_circles is not None before proceeding
             if connected_circles is None: connected_circles = []
@@ -250,7 +250,7 @@ class FixVCOLORManager:
                 if connected_circle:
                     used_priorities.add(connected_circle["color_priority"])
 
-            # Find available color (not used by neighbors)
+            # Find available colour (not used by neighbors)
             # Check priorities 1-4 only
             available_priority = find_lowest_available_priority(used_priorities)
 
@@ -259,8 +259,7 @@ class FixVCOLORManager:
                 print("DEBUG: No conflicting nodes found, skipping Kempe chain.")
                 self.app.color_manager.update_circle_color(current_VCOLOR_node_id, available_priority)
             else:
-                # Complex case - need to swap colors in a chain (Kempe chain)
-                # TODO: Add recursion if necessary - based on False being returned or still impossible to change VCOLOR to another color
+                # Complex case - need to swap colours in a chain (Kempe chain)
                 self.swap_kempe_chain(current_VCOLOR_node_id)
 
             # Loop until queue is empty. Queue system may be overkill depending on solution, but haven't ruled out recursion yet.
@@ -270,14 +269,14 @@ class FixVCOLORManager:
             print(f"reassign_color_network: Advancing to next VCOLOR node ID")
             self._VCOLOR_node_manager.advance_to_next_VCOLOR_node_()
 
-        # Finally, perform the border/overall color swap
+        # Finally, perform the border/overall colour swap
         # Get Border Nodes
         border_node_ids = self.app.boundary_manager.get_border_node_ids()
         if not border_node_ids:
             print("DEBUG: No border nodes found, skipping final swap.")
             return
 
-        # Count Border Colors
+        # Count Border Colours
         border_color_counts = {p: 0 for p in range(1, 5)} # Initialize counts for priorities 1-4
         for node_id in border_node_ids:
             circle_data = self.app.circle_lookup.get(node_id)
@@ -285,9 +284,9 @@ class FixVCOLORManager:
                 priority = circle_data.get("color_priority")
                 if priority in border_color_counts:
                     border_color_counts[priority] += 1
-        print(f"DEBUG: Border color counts: {border_color_counts}")
+        print(f"DEBUG: Border colour counts: {border_color_counts}")
 
-        # Find Most Used Border Color (lowest priority wins ties)
+        # Find Most Used Border Colour (lowest priority wins ties)
         most_used_border_priority = -1
         max_border_count = -1
         for priority in range(1, 5): # Check priorities 1-4
@@ -300,17 +299,17 @@ class FixVCOLORManager:
             print("DEBUG: Could not determine most used border color, skipping final swap.")
             return
 
-        # Count Overall Colors
+        # Count Overall Colours
         overall_color_counts = {p: 0 for p in range(1, 5)} # Initialize counts for priorities 1-4
         for node_id, circle_data in self.app.circle_lookup.items():
             priority = circle_data.get("color_priority")
             if priority in overall_color_counts:
                 overall_color_counts[priority] += 1
-        print(f"DEBUG: Overall color counts: {overall_color_counts}")
+        print(f"DEBUG: Overall colour counts: {overall_color_counts}")
 
-        # Find LEAST Used Overall Color (lowest priority wins ties)
+        # Find LEAST Used Overall Colour (lowest priority wins ties)
         least_used_overall_priority = -1
-        lowest_overall_count = -1
+        lowest_overall_count = float('inf') # Initialize with infinity to correctly find the minimum
         for priority in range(1, 5): # Check priorities 1-4
             count = overall_color_counts.get(priority, 0)
             if count < lowest_overall_count:
@@ -326,7 +325,7 @@ class FixVCOLORManager:
 
         # Conditional Swap
         if most_used_border_priority == least_used_overall_priority:
-            print("DEBUG: Most used border and overall colors are the same, no swap needed.")
+            print("DEBUG: Most used border and overall colours are the same, no swap needed.")
             return
 
         # Perform Swap
@@ -349,7 +348,7 @@ class FixVCOLORManager:
             self.app.color_manager.update_circle_color(node_id, most_used_border_priority)
 
     def check_and_resolve_color_conflicts(self, circle_id):
-        """Checks for color conflicts after connections are made and resolves them."""
+        """Checks for colour conflicts after connections are made and resolves them."""
         # Get the current circle's data
         circle_data = self.app.circle_lookup.get(circle_id)
         if not circle_data:
@@ -392,9 +391,9 @@ class FixVCOLORManager:
         # Update the circle with the new priority and visual appearance
         if available_priority is None:
             print(f"DEBUG: VCOLOR node {circle_id} created in check_and_resolve_color_conflicts")
-            self.app.color_manager.update_circle_color(circle_id, 5) # Assign priority 5 (VCOLOR)
-            # Initial entry point into the VCOLOR Node Manager
-            # Push the VCOLOR node id
+            self.app.color_manager.update_circle_color(circle_id, 5) # Assign priority 5 ('V' colour)
+            # Initial entry point into the colour Node Manager
+            # Push the colour node id
             self._VCOLOR_node_manager.add_VCOLOR_node_(circle_id, "No lower priorities available. Create VCOLOR")
             # Call Handler
             self.handle_VCOLOR_node_creation(circle_id)
@@ -439,43 +438,12 @@ class FixVCOLORManager:
         
         # Since we deal with these as they arise, this should never be true
         if self._VCOLOR_node_manager.has_VCOLOR_nodes():
-            # This 'if' was previously:
-            # # We have another VCOLOR node that needs fixing
-            # next_VCOLOR_node_ = self._VCOLOR_node_manager.get_current_VCOLOR_node_()
-            # print(f"DEBUG: Found pending VCOLOR node {next_VCOLOR_node_} to fix")
-            # # Handle the new VCOLOR node (stays in ADJUST mode)
-            # self.handle_VCOLOR_node_creation(next_VCOLOR_node_)
             try:
                 raise Exception(f"Still have VCOLOR nodes. Should be fixed already: handle_VCOLOR_node_fixed")
             except Exception as e:
                 print(f"Error: {e}")
                 sys.exit(1)
-
         else:
             # No pending VCOLOR nodes, return to CREATE mode
             print("DEBUG: Auto transitioning back to CREATE mode")
             self.app._set_application_mode(ApplicationMode.CREATE)
-
-
-    # We're not rotating a VCOLOR node into the graph, so this isn't possible 
-    # def check_internal_VCOLOR_conflict(self, circle_id):
-    #     """Check if a circle has any adjacent VCOLOR nodes (priority 5) and queue them."""
-    #     circle = self.app.circle_lookup.get(circle_id)
-    #     if not circle:
-    #         return False # Indicate no conflict if circle doesn't exist
-            
-    #     connected_circles = circle.get("connected_to", [])
-    #     # Ensure connected_circles is not None before proceeding
-    #     if connected_circles is None: connected_circles = []
-        
-    #     has_conflict = False
-    #     for connected_id in connected_circles:
-    #         connected_circle = self.app.circle_lookup.get(connected_id)
-    #         # Check if connected circle exists and is VCOLOR (priority 5)
-    #         if connected_circle and connected_circle.get("color_priority") == 5:
-    #             print(f"Pushing VCOLOR node: {circle_id} is adjacent to VCOLOR node: {connected_id}")
-    #             # Add the *adjacent* VCOLOR node to the queue for processing
-    #             self._VCOLOR_node_manager.add_VCOLOR_node_(connected_id, f"Adjacent to newly created VCOLOR node {circle_id}")
-    #             has_conflict = True
-                
-    #     return has_conflict # Return True if any adjacent VCOLOR node was found and queued
