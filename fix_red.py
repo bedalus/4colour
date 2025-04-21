@@ -88,26 +88,26 @@ class FixRedManager:
             print(f"reassign_color_network: Handling current_red_node_id: {self.red_node_manager.current_red_node_id}")
             print(f"reassign_color_network:  - reason: {self.red_node_manager.get_red_node_reason(self.red_node_manager.current_red_node_id)}")
             # Deal with the red node identified as 'current'
-            # Pseudocode for red node conflict resolution:
-            # current_red_node_id = self.red_node_manager.current_red_node_id
-            # red_circle = self.app.circle_lookup.get(current_red_node_id)
+            current_red_node_id = self.red_node_manager.current_red_node_id
+            red_circle = self.app.circle_lookup.get(current_red_node_id)
 
-            # # Get all connected nodes and their colors
-            # connected_circles = red_circle.get("connected_to", [])
-            # used_priorities = {self.app.circle_lookup.get(cid)["color_priority"] for cid in connected_circles}
+            # Get all connected nodes and their colors
+            connected_circles = red_circle.get("connected_to", [])
+            used_priorities = {self.app.circle_lookup.get(cid)["color_priority"] for cid in connected_circles}
 
-            # # Find available color (not used by neighbors)
-            # available_priority = find_lowest_available_priority(used_priorities)
+            # Find available color (not used by neighbors)
+            available_priority = find_lowest_available_priority(used_priorities)
 
-            # if available_priority:
-            #     # Simple case - can directly change color
-            #     self.app.color_manager.update_circle_color(current_red_node_id, available_priority)
+            if available_priority:
+                # Simple case - can directly change color
+                self.app.color_manager.update_circle_color(current_red_node_id, available_priority)
             # else:
             #     PLACEHOLDER! Pseudocode:
             #     # Complex case - need to swap colors in a chain (Kempe chain)
             #     # Pick color with fewest connections to swap with
             #     swap_priority = find_best_kempe_chain_color(current_red_node_id)
             #     swap_kempe_chain(current_red_node_id, 4, swap_priority)
+            
             print(f"reassign_color_network: Advancing to next red node ID")
             self.red_node_manager.advance_to_next_red_node()
 
