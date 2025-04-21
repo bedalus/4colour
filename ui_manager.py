@@ -157,7 +157,7 @@ class UIManager:
 
     def clear_canvas(self):
         """Clear the canvas and reset application state."""
-        # Reset mode button if it's currently in "Fix VCOLOR" mode
+        # Reset mode button if it's currently in "Fix" mode
         if hasattr(self.app, '_stored_mode_button_command') and self.app.mode_button:
             # Restore the original command
             self.app.mode_button.config(command=self.app._stored_mode_button_command)

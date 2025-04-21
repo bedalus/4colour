@@ -175,7 +175,7 @@ class FixVCOLORManager:
         #       PUSH will only be used if our algorithm must move a VCOLOR next to another VCOLOR (impossible?).
         #        - If creating something recursive, watch out for infinite loops.
         print(f"reassign_color_network: Called for VCOLOR node: {circle_id}")
-        while True:
+        while self._VCOLOR_node_manager.has_VCOLOR_nodes():
             print(f"reassign_color_network: Handling current_VCOLOR_node_id: {self._VCOLOR_node_manager.current_VCOLOR_node_id}")
             print(f"reassign_color_network:  - reason: {self._VCOLOR_node_manager.get_VCOLOR_node_reason(self._VCOLOR_node_manager.current_VCOLOR_node_id)}")
             # Deal with the VCOLOR node identified as 'current'
@@ -213,13 +213,13 @@ class FixVCOLORManager:
             print(f"reassign_color_network: Advancing to next VCOLOR node ID")
             self._VCOLOR_node_manager.advance_to_next_VCOLOR_node_()
 
-        # Finally, perform the border/overall color swap        
+        # Finally, perform the border/overall color swap
         # Get Border Nodes
         border_node_ids = self.app.boundary_manager.get_border_node_ids()
         if not border_node_ids:
             print("DEBUG: No border nodes found, skipping final swap.")
             return
-            
+
         # Count Border Colors
         border_color_counts = {p: 0 for p in range(1, 5)} # Initialize counts for priorities 1-4
         for node_id in border_node_ids:
@@ -349,9 +349,6 @@ class FixVCOLORManager:
         circle_id = self._VCOLOR_node_manager.get_current_VCOLOR_node_()
         if circle_id is None:
             return False
-            
-        # Store the ID and advance in the queue
-        self._VCOLOR_node_manager.advance_to_next_VCOLOR_node_()
         
         # Now perform the actual swap using reassign_color_network
         self.reassign_color_network(circle_id)

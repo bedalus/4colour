@@ -775,8 +775,8 @@ class InteractionHandler:
         
         # Additional setup for VCOLOR node fix mode
         if is_transition and self.app.mode_button:
-            # Update button text
-            button_text = get_color_from_priority(5)
+            # Update button text using an f-string
+            button_text = f"Fix {get_color_from_priority(5)}"
             self.app.mode_button.config(text=button_text)
             
             # Store the original mode button's command
@@ -787,7 +787,7 @@ class InteractionHandler:
                     self.app.handle_fix_VCOLOR_node_button
                 )
             )
-            print("DEBUG: Changed mode button to '{button_text}'")
+            print(f"DEBUG: Changed mode button to '{button_text}'") # Also update the debug print to use f-string
     
     def _clear_selection_state(self):
         """Clear all selection-related state and UI elements."""
@@ -853,7 +853,7 @@ class InteractionHandler:
         """Sets up UI elements for ADJUST mode."""
         # Display specific hint based on whether it's VCOLOR fix mode or normal adjust mode
         if for_VCOLOR_node_:
-            self.app.ui_manager.show_hint_text("Adjust the VCOLOR node position and connectors, then click 'Fix VCOLOR'")
+            self.app.ui_manager.show_hint_text("Adjust the circle/connections if necessary, then click the 'Fix' button")
             self.app.canvas.config(bg=VCOLOR_FIX_MODE_BG)
         else:
             self.app.ui_manager.show_hint_text("The last node placed and its connections can be adjusted")
