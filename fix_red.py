@@ -58,6 +58,103 @@ class FixRedManager:
         self.app = app
         self.red_node_manager = RedNodeManager()
 
+    def swap_kempe_chain(self, node_id):
+        """
+        Performs a Kempe chain color swap for the given red node.
+        Returns True if successful, False otherwise.
+        """
+        print(f"DEBUG: Beginning Kempe chain swap for node {node_id}")
+        
+        # Ensure the node exists
+        node = self.app.circle_lookup.get(node_id)
+        if not node:
+            print(f"ERROR: Node {node_id} not found in circle_lookup")
+            return False
+        
+        # Get connected nodes to check which colors are already adjacent
+        connected_circles = node.get("connected_to", [])
+        adjacent_priorities = set()
+        for connected_id in connected_circles:
+            connected_circle = self.app.circle_lookup.get(connected_id)
+            if connected_circle:
+                adjacent_priorities.add(connected_circle["color_priority"])
+        
+        print(f"DEBUG: Node {node_id} has adjacent priorities: {adjacent_priorities}")
+        
+        # Try each non-red color priority that isn't adjacent to our node
+        swap_priority = None
+        for priority in [1, 2, 3]:
+            if priority not in adjacent_priorities:
+                swap_priority = priority
+                print(f"DEBUG: Selected priority {swap_priority} for Kempe chain swap (not adjacent)")
+                break
+        
+        # If all colors are adjacent, simply default to priority 1
+        if swap_priority is None:
+            swap_priority = 1
+            print(f"DEBUG: All priorities are adjacent, defaulting to priority {swap_priority}")
+        
+        # Find all nodes in the Kempe chain
+        kempe_chain = self.find_kempe_chain(node_id, 4, swap_priority)
+        if not kempe_chain:
+            print(f"ERROR: Failed to find Kempe chain for node {node_id}")
+            return False
+            
+        print(f"DEBUG: Found Kempe chain with {len(kempe_chain)} nodes: {kempe_chain}")
+        
+        # Perform the swap on all nodes in the chain
+        for chain_node_id in kempe_chain:
+            chain_node = self.app.circle_lookup.get(chain_node_id)
+            current_priority = chain_node["color_priority"]
+            if current_priority == 4:  # Red
+                self.app.color_manager.update_circle_color(chain_node_id, swap_priority)
+                print(f"DEBUG: Changed node {chain_node_id} from red to priority {swap_priority}")
+            elif current_priority == swap_priority:
+                self.app.color_manager.update_circle_color(chain_node_id, 4)  # Red
+                print(f"DEBUG: Changed node {chain_node_id} from priority {swap_priority} to red")
+        
+        print(f"DEBUG: Kempe chain swap completed successfully for node {node_id}")
+        return True
+
+    def find_kempe_chain(self, start_node_id, priority1, priority2):
+        """
+        Finds all nodes in a Kempe chain starting from the given node.
+        A Kempe chain is a connected component where all nodes are one of the two specified priorities.
+        
+        Returns:
+            A list of node IDs in the Kempe chain
+        """
+        print(f"DEBUG: Finding Kempe chain from node {start_node_id} with priorities {priority1} and {priority2}")
+        
+        kempe_chain = []
+        visited = set()
+        queue = [start_node_id]
+        
+        while queue:
+            current_id = queue.pop(0)
+            if current_id in visited:
+                continue
+            
+            visited.add(current_id)
+            current_node = self.app.circle_lookup.get(current_id)
+            if not current_node:
+                continue
+            
+            current_priority = current_node["color_priority"]
+            if current_priority == priority1 or current_priority == priority2:
+                kempe_chain.append(current_id)
+                
+                # Add all connected nodes to the queue
+                for connected_id in current_node.get("connected_to", []):
+                    if connected_id not in visited:
+                        connected_node = self.app.circle_lookup.get(connected_id)
+                        if connected_node and (connected_node["color_priority"] == priority1 or 
+                                               connected_node["color_priority"] == priority2):
+                            queue.append(connected_id)
+        
+        print(f"DEBUG: Kempe chain contains {len(kempe_chain)} nodes")
+        return kempe_chain
+
     def reassign_color_network(self, circle_id):
         """MAIN ALGORITHM ENTRY POINT: Graph color reassignment when a new node is assigned priority 4 (red)."""
         circle_data = self.app.circle_lookup.get(circle_id)
@@ -101,13 +198,10 @@ class FixRedManager:
             if available_priority:
                 # Simple case - can directly change color
                 self.app.color_manager.update_circle_color(current_red_node_id, available_priority)
-            # else:
-            #     PLACEHOLDER! Pseudocode:
-            #     # Complex case - need to swap colors in a chain (Kempe chain)
-            #     # Pick color with fewest connections to swap with
-            #     swap_priority = find_best_kempe_chain_color(current_red_node_id)
-            #     swap_kempe_chain(current_red_node_id, 4, swap_priority)
-            
+            else:
+                # Complex case - need to swap colors in a chain (Kempe chain)
+                self.swap_kempe_chain(current_red_node_id)
+
             print(f"reassign_color_network: Advancing to next red node ID")
             self.red_node_manager.advance_to_next_red_node()
 
