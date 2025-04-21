@@ -27,11 +27,6 @@ class InteractionHandler:
         """Set the application mode and handle all related state transitions."""
         # Clear any hint text
         self.app.ui_manager.show_hint_text("")
-
-        # Validate the mode transition
-        if new_mode == self.app._mode:
-            print(f"DEBUG: Already in {new_mode} mode, ignoring transition")
-            return
             
         # Don't allow transition to ADJUST mode from SELECTION mode
         # EXCEPTION: Allow if it's for a red node
@@ -52,9 +47,9 @@ class InteractionHandler:
             for circle in self.app.circles:
                 if not circle.get("fixed", False):
                     circle["locked"] = True
-            for connection_key, connection in self.app.connections.items():
-                 if not connection.get("fixed", False):
-                    connection["locked"] = True
+            for connection_key, connection_data in self.app.connections.items():
+                if not connection_data.get("fixed", False):
+                    connection_data["locked"] = True
         
         # Common mode transition handling
         self._prepare_mode_transition(new_mode)

@@ -207,50 +207,7 @@ class UIManager:
         # Always reset to CREATE mode
         self.app._set_application_mode(ApplicationMode.CREATE)
         
-        # Ensure the boundary state is properly reset and fixed nodes are connected
-        if self.app.circles and len(self.app.circles) >= 2:
-            # Make sure fixed nodes A and B are connected properly
-            if self.app.FIXED_NODE_A_ID in self.app.circle_lookup and self.app.FIXED_NODE_B_ID in self.app.circle_lookup:
-                fixed_node_a = self.app.circle_lookup[self.app.FIXED_NODE_A_ID]
-                fixed_node_b = self.app.circle_lookup[self.app.FIXED_NODE_B_ID]
-                
-                # Ensure they're connected to each other
-                if self.app.FIXED_NODE_B_ID not in fixed_node_a["connected_to"]:
-                    fixed_node_a["connected_to"].append(self.app.FIXED_NODE_B_ID)
-                if self.app.FIXED_NODE_A_ID not in fixed_node_b["connected_to"]:
-                    fixed_node_b["connected_to"].append(self.app.FIXED_NODE_A_ID)
-                    
-                # Update the ordered connections
-                self.app.connection_manager.update_ordered_connections(self.app.FIXED_NODE_A_ID)
-                self.app.connection_manager.update_ordered_connections(self.app.FIXED_NODE_B_ID)
-                
-                # Ensure the connection exists in the connections dictionary
-                connection_key = f"{self.app.FIXED_NODE_A_ID}_{self.app.FIXED_NODE_B_ID}"
-                if connection_key not in self.app.connections:
-                    # Recreate the connection
-                    points = self.app.connection_manager.calculate_curve_points(
-                        self.app.FIXED_NODE_A_ID, self.app.FIXED_NODE_B_ID)
-                    
-                    line_id = self.app.canvas.create_line(
-                        points,
-                        width=1,
-                        smooth=True,
-                        tags=("line", "fixed_connection")
-                    )
-                    
-                    self.app.canvas.lower("line")
-                    
-                    self.app.connections[connection_key] = {
-                        "line_id": line_id,
-                        "from_circle": self.app.FIXED_NODE_A_ID,
-                        "to_circle": self.app.FIXED_NODE_B_ID,
-                        "curve_X": 0,
-                        "curve_Y": 0,
-                        "fixed": True
-                    }
-        else:
-            # If we have no fixed nodes, recreate them
-            self.app._initialize_fixed_nodes()
+        self.app._initialize_fixed_nodes()
         
         # Update enclosure status for boundary detection
         self.app.boundary_manager.update_enclosure_status()
