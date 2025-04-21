@@ -93,7 +93,54 @@ class FixRedManager:
             self.red_node_manager.advance_to_next_red_node()
 
         # Finally, count every color being used. If red is the most, swap it with the least (using lowest priority for ties)
-        # Global graph color swap code goes here.
+        # Count how many circles are using each color priority
+        color_counts = {1: 0, 2: 0, 3: 0, 4: 0}  # Initialize counts for each priority
+        
+        # Count circles by color priority
+        for circle_id, circle_data in self.app.circle_lookup.items():
+            priority = circle_data.get("color_priority")
+            color_counts[priority] += 1
+        
+        print(f"DEBUG: Color usage counts: {color_counts}")
+        
+        # Check if red (priority 4) is the most used color
+        red_count = color_counts[4]
+        max_count = max(color_counts.values())
+        max_colors = [p for p, count in color_counts.items() if count == max_count]
+        
+        # Only proceed if red is the most used color (or tied for most) and there are red nodes
+        if 4 in max_colors and red_count > 0:
+            # Find the least used color, favoring lower priorities for ties
+            least_used_priority = None
+            least_used_count = float('inf')
+            
+            # Check priorities 1, 2, 3 (excluding red which is priority 4)
+            for priority in [1, 2, 3]:
+                count = color_counts[priority]
+                if count < least_used_count:
+                    least_used_count = count
+                    least_used_priority = priority
+            
+            print(f"DEBUG: Swapping all red nodes (count: {red_count}) to priority {least_used_priority} (count: {least_used_count})")
+            
+            # Perform a true swap: red nodes become least_used_priority, and least_used_priority nodes become red
+            red_node_ids = []
+            least_used_node_ids = []
+            
+            # First identify all nodes of both colors (to avoid changing a node twice)
+            for circle_id, circle_data in self.app.circle_lookup.items():
+                priority = circle_data.get("color_priority")
+                if priority == 4:  # Red
+                    red_node_ids.append(circle_id)
+                elif priority == least_used_priority:
+                    least_used_node_ids.append(circle_id)
+            
+            # Now perform the swap
+            for circle_id in red_node_ids:
+                self.app.color_manager.update_circle_color(circle_id, least_used_priority)
+                
+            for circle_id in least_used_node_ids:
+                self.app.color_manager.update_circle_color(circle_id, 4)
 
     def check_and_resolve_color_conflicts(self, circle_id):
         """Checks for color conflicts after connections are made and resolves them."""
