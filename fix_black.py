@@ -2,65 +2,65 @@ import sys
 from color_utils import get_color_from_priority, find_lowest_available_priority
 from app_enums import ApplicationMode
 
-class RedNodeManager:
-    """Manages red nodes that need attention in the graph."""
+class BlackNodeManager:
+    """Manages black nodes that need attention in the graph."""
     def __init__(self):
-        self.red_node_queue = []
-        self.red_node_reasons = {}
-        self.current_red_node_id = None
+        self._black_node_queue = []
+        self._black_node_reasons = {}
+        self.current_black_node_id = None
 
-    def add_red_node(self, node_id, reason="Color conflict"):
-        if node_id in self.red_node_queue:
-            print(f"DEBUG: Red node {node_id} already in queue")
+    def add_black_node_(self, node_id, reason="Color conflict"):
+        if node_id in self._black_node_queue:
+            print(f"DEBUG: Black node {node_id} already in queue")
             return False
-        self.red_node_queue.append(node_id)
-        self.red_node_reasons[node_id] = reason
-        if self.current_red_node_id is None:
-            self.current_red_node_id = node_id
-        print(f"DEBUG: Added red node {node_id} to queue with reason: {reason}")
+        self._black_node_queue.append(node_id)
+        self._black_node_reasons[node_id] = reason
+        if self.current_black_node_id is None:
+            self.current_black_node_id = node_id
+        print(f"DEBUG: Added black node {node_id} to queue with reason: {reason}")
         return True
 
-    def get_current_red_node(self):
-        return self.current_red_node_id
+    def get_current_black_node_(self):
+        return self.current_black_node_id
 
-    def advance_to_next_red_node(self):
-        if self.current_red_node_id in self.red_node_queue:
-            self.red_node_queue.remove(self.current_red_node_id)
-        self.red_node_reasons.pop(self.current_red_node_id, None)
-        if self.red_node_queue:
-            self.current_red_node_id = self.red_node_queue[0]
-            print(f"DEBUG: Advanced to next red node: {self.current_red_node_id}")
+    def advance_to_next_black_node_(self):
+        if self.current_black_node_id in self._black_node_queue:
+            self._black_node_queue.remove(self.current_black_node_id)
+        self._black_node_reasons.pop(self.current_black_node_id, None)
+        if self._black_node_queue:
+            self.current_black_node_id = self._black_node_queue[0]
+            print(f"DEBUG: Advanced to next black node: {self.current_black_node_id}")
         else:
-            self.current_red_node_id = None
-            print("DEBUG: No more red nodes in queue")
-        return self.current_red_node_id
+            self.current_black_node_id = None
+            print("DEBUG: No more black nodes in queue")
+        return self.current_black_node_id
 
-    def has_red_nodes(self):
-        return len(self.red_node_queue) > 0
+    def has_black_node_s(self):
+        return len(self._black_node_queue) > 0
 
-    def get_red_node_reason(self, node_id=None):
+    def get_black_node_reason(self, node_id=None):
         if node_id is None:
-            node_id = self.current_red_node_id
-        return self.red_node_reasons.get(node_id, "Unknown reason")
+            node_id = self.current_black_node_id
+        return self._black_node_reasons.get(node_id, "Unknown reason")
 
     def clear(self):
-        self.red_node_queue = []
-        self.red_node_reasons = {}
-        self.current_red_node_id = None
-        print("DEBUG: Red node queue cleared")
+        self._black_node_queue = []
+        self._black_node_reasons = {}
+        self.current_black_node_id = None
+        print("DEBUG: Black node queue cleared")
 
-class FixRedManager:
+class FixBlackManager:
     """
-    Centralizes all logic and state for red node (priority 4) handling.
+    Centralizes all logic and state for black node (priority 4) handling.
     This includes detection, state management, UI triggers, and resolution.
     """
     def __init__(self, app):
         self.app = app
-        self.red_node_manager = RedNodeManager()
+        self._black_node_manager = BlackNodeManager()
 
     def swap_kempe_chain(self, node_id):
         """
-        Performs a Kempe chain color swap for the given red node.
+        Performs a Kempe chain color swap for the given black node.
         Returns True if successful, False otherwise.
         """
         print(f"DEBUG: Beginning Kempe chain swap for node {node_id}")
@@ -81,9 +81,9 @@ class FixRedManager:
         
         print(f"DEBUG: Node {node_id} has adjacent priorities: {adjacent_priorities}")
         
-        # Try each non-red color priority that isn't adjacent to our node
+        # Try each non-black color priority that isn't adjacent to our node
         swap_priority = None
-        for priority in [1, 2, 3]:
+        for priority in [1, 2, 3, 4]:
             if priority not in adjacent_priorities:
                 swap_priority = priority
                 print(f"DEBUG: Selected priority {swap_priority} for Kempe chain swap (not adjacent)")
@@ -91,7 +91,7 @@ class FixRedManager:
         
         # If all colors are adjacent, simply default to priority 1
         if swap_priority is None:
-            swap_priority = 1
+            swap_priority = 1  # This can introduce conflicts!
             print(f"DEBUG: All priorities are adjacent, defaulting to priority {swap_priority}")
         
         # Find all nodes in the Kempe chain
@@ -106,12 +106,12 @@ class FixRedManager:
         for chain_node_id in kempe_chain:
             chain_node = self.app.circle_lookup.get(chain_node_id)
             current_priority = chain_node["color_priority"]
-            if current_priority == 4:  # Red
+            if current_priority == 5:  # Black
                 self.app.color_manager.update_circle_color(chain_node_id, swap_priority)
-                print(f"DEBUG: Changed node {chain_node_id} from red to priority {swap_priority}")
+                print(f"DEBUG: Changed node {chain_node_id} from black to priority {swap_priority}")
             elif current_priority == swap_priority:
-                self.app.color_manager.update_circle_color(chain_node_id, 4)  # Red
-                print(f"DEBUG: Changed node {chain_node_id} from priority {swap_priority} to red")
+                self.app.color_manager.update_circle_color(chain_node_id, 4)  # Black
+                print(f"DEBUG: Changed node {chain_node_id} from priority {swap_priority} to black")
         
         print(f"DEBUG: Kempe chain swap completed successfully for node {node_id}")
         return True
@@ -156,7 +156,7 @@ class FixRedManager:
         return kempe_chain
 
     def reassign_color_network(self, circle_id):
-        """MAIN ALGORITHM ENTRY POINT: Graph color reassignment when a new node is assigned priority 4 (red)."""
+        """MAIN ALGORITHM ENTRY POINT: Graph color reassignment when a new node is assigned priority 4 (black)."""
         circle_data = self.app.circle_lookup.get(circle_id)
         if not circle_data:
             try:
@@ -165,31 +165,31 @@ class FixRedManager:
                 print(f"Error: {e}")
                 sys.exit(1)
 
-        # Checks if the new red node is adjacent to another
-        has_conflicts = self.check_internal_red_conflict(circle_id)
+        # Checks if the new black node is adjacent to another
+        has_conflicts = self.check_internal_black_conflict(circle_id)
 
         if not has_conflicts:
-            print(f"reassign_color_network: Red node {circle_id} has no conflicts")
+            print(f"reassign_color_network: Black node {circle_id} has no conflicts")
             return
 
-        # NOTE: Reaching this point means the latest red is adjacent to at least one other
+        # NOTE: Reaching this point means the latest black is adjacent to at least one other
         #       Start fixing the graph!
         #       Function Notes:
-        #          has_red_nodes is True if we've queued any
-        #          add_red_node is PUSH
-        #          advance_to_next_red_node is POP
+        #          has_black_node_s is True if we've queued any
+        #          add_black_node_ is PUSH
+        #          advance_to_next_black_node_ is POP
         #          self.app.color_manager.update_circle_color(circle_id, priority) sets node color. Will be needed for swapping.
-        #       PUSH will only be used if our algorithm must move a red next to another red. Watch out for infinite loops.
-        print(f"reassign_color_network: Called for red node: {circle_id}")
-        while self.red_node_manager.has_red_nodes():
-            print(f"reassign_color_network: Handling current_red_node_id: {self.red_node_manager.current_red_node_id}")
-            print(f"reassign_color_network:  - reason: {self.red_node_manager.get_red_node_reason(self.red_node_manager.current_red_node_id)}")
-            # Deal with the red node identified as 'current'
-            current_red_node_id = self.red_node_manager.current_red_node_id
-            red_circle = self.app.circle_lookup.get(current_red_node_id)
+        #       PUSH will only be used if our algorithm must move a black next to another black. Watch out for infinite loops.
+        print(f"reassign_color_network: Called for black node: {circle_id}")
+        while self._black_node_manager.has_black_node_s():
+            print(f"reassign_color_network: Handling current_black_node_id: {self._black_node_manager.current_black_node_id}")
+            print(f"reassign_color_network:  - reason: {self._black_node_manager.get_black_node_reason(self._black_node_manager.current_black_node_id)}")
+            # Deal with the black node identified as 'current'
+            current_black_node_id = self._black_node_manager.current_black_node_id
+            black_circle = self.app.circle_lookup.get(current_black_node_id)
 
             # Get all connected nodes and their colors
-            connected_circles = red_circle.get("connected_to", [])
+            connected_circles = black_circle.get("connected_to", [])
             used_priorities = {self.app.circle_lookup.get(cid)["color_priority"] for cid in connected_circles}
 
             # Find available color (not used by neighbors)
@@ -197,15 +197,15 @@ class FixRedManager:
 
             if available_priority:
                 # Simple case - can directly change color
-                self.app.color_manager.update_circle_color(current_red_node_id, available_priority)
+                self.app.color_manager.update_circle_color(current_black_node_id, available_priority)
             else:
                 # Complex case - need to swap colors in a chain (Kempe chain)
-                self.swap_kempe_chain(current_red_node_id)
+                self.swap_kempe_chain(current_black_node_id)
 
-            print(f"reassign_color_network: Advancing to next red node ID")
-            self.red_node_manager.advance_to_next_red_node()
+            print(f"reassign_color_network: Advancing to next black node ID")
+            self._black_node_manager.advance_to_next_black_node_()
 
-        # Finally, count every color being used. If red is the most, swap it with the least (using lowest priority for ties)
+        # Finally, count every color being used. If black is the most, swap it with the least (using lowest priority for ties)
         # Count how many circles are using each color priority
         color_counts = {1: 0, 2: 0, 3: 0, 4: 0}  # Initialize counts for each priority
         
@@ -216,40 +216,40 @@ class FixRedManager:
         
         print(f"DEBUG: Color usage counts: {color_counts}")
         
-        # Check if red (priority 4) is the most used color
-        red_count = color_counts[4]
+        # Check if black (priority 4) is the most used color
+        black_count = color_counts[4]
         max_count = max(color_counts.values())
         max_colors = [p for p, count in color_counts.items() if count == max_count]
         
-        # Only proceed if red is the most used color (or tied for most) and there are red nodes
-        if 4 in max_colors and red_count > 0:
+        # Only proceed if black is the most used color (or tied for most) and there are black nodes
+        if 4 in max_colors and black_count > 0:
             # Find the least used color, favoring lower priorities for ties
             least_used_priority = None
             least_used_count = float('inf')
             
-            # Check priorities 1, 2, 3 (excluding red which is priority 4)
-            for priority in [1, 2, 3]:
+            # Check priorities 1, 2, 3 (excluding black which is priority 5)
+            for priority in [1, 2, 3, 4]:
                 count = color_counts[priority]
                 if count < least_used_count:
                     least_used_count = count
                     least_used_priority = priority
             
-            print(f"DEBUG: Swapping all red nodes (count: {red_count}) to priority {least_used_priority} (count: {least_used_count})")
+            print(f"DEBUG: Swapping all black nodes (count: {black_count}) to priority {least_used_priority} (count: {least_used_count})")
             
-            # Perform a true swap: red nodes become least_used_priority, and least_used_priority nodes become red
-            red_node_ids = []
+            # Perform a true swap: black nodes become least_used_priority, and least_used_priority nodes become black
+            _black_node_ids = []
             least_used_node_ids = []
             
             # First identify all nodes of both colors (to avoid changing a node twice)
             for circle_id, circle_data in self.app.circle_lookup.items():
                 priority = circle_data.get("color_priority")
-                if priority == 4:  # Red
-                    red_node_ids.append(circle_id)
+                if priority == 5:  # Black
+                    _black_node_ids.append(circle_id)
                 elif priority == least_used_priority:
                     least_used_node_ids.append(circle_id)
             
             # Now perform the swap
-            for circle_id in red_node_ids:
+            for circle_id in _black_node_ids:
                 self.app.color_manager.update_circle_color(circle_id, least_used_priority)
                 
             for circle_id in least_used_node_ids:
@@ -298,47 +298,47 @@ class FixRedManager:
 
         # Update the circle with the new priority and visual appearance
         if available_priority is None:
-            print(f"DEBUG: Red node {circle_id} created in check_and_resolve_color_conflicts")
+            print(f"DEBUG: Black node {circle_id} created in check_and_resolve_color_conflicts")
             self.app.color_manager.update_circle_color(circle_id, 4)
-            # Initial entry point into the Red Node Manager
-            # Push the red node id
-            self.red_node_manager.add_red_node(circle_id, "No lower priorities available. Create RED")
+            # Initial entry point into the Black Node Manager
+            # Push the black node id
+            self._black_node_manager.add_black_node_(circle_id, "No lower priorities available. Create BLACK")
             # Call Handler
-            self.handle_red_node_creation(circle_id)
+            self.handle_black_node_creation(circle_id)
         else:
             self.app.color_manager.update_circle_color(circle_id, available_priority)
 
-    def fix_red_node(self):
-        """Manually triggered function to check any new red node."""
-        circle_id = self.red_node_manager.get_current_red_node()
+    def fix_black_node_(self):
+        """Manually triggered function to check any new black node."""
+        circle_id = self._black_node_manager.get_current_black_node_()
         if circle_id is None:
             return False
             
         # Store the ID and advance in the queue
-        self.red_node_manager.advance_to_next_red_node()
+        self._black_node_manager.advance_to_next_black_node_()
         
         # Now perform the actual swap using reassign_color_network
         self.reassign_color_network(circle_id)
         
         # Hide the fix button and transition back to CREATE mode
-        self.handle_red_node_fixed()
+        self.handle_black_node_fixed()
 
-    def handle_red_node_creation(self, circle_id):
-        """Handle the creation of a red node by showing the fix button and entering adjust mode."""
-        print(f"DEBUG: handle_red_node_creation called for circle {circle_id}")
+    def handle_black_node_creation(self, circle_id):
+        """Handle the creation of a black node by showing the fix button and entering adjust mode."""
+        print(f"DEBUG: handle_black_node_creation called for circle {circle_id}")
         
         # Store the circle ID for ADJUST mode
         self.app.last_circle_id = circle_id
         
         # Delegate mode switching to interaction handler
-        self.app.interaction_handler.switch_to_red_fix_mode()
+        self.app.interaction_handler.switch_to_black_fix_mode()
         
         # Add a small delay to ensure all UI updates are processed
         self.app.root.after(100, lambda: print("DEBUG: Mode transition complete"))
 
-    def handle_red_node_fixed(self):
-        """Handle operations after a red node has been fixed."""
-        print("DEBUG: Red nodes fixed")
+    def handle_black_node_fixed(self):
+        """Handle operations after a black node has been fixed."""
+        print("DEBUG: Black nodes fixed")
         
         # Restore the mode toggle button's original functionality
         if hasattr(self.app, 'mode_button') and hasattr(self.app, '_stored_mode_button_command'):
@@ -348,42 +348,42 @@ class FixRedManager:
             print("DEBUG: Restored mode button's original command")
         
         # Since we deal with these as they arise, this should never be true
-        if self.red_node_manager.has_red_nodes():
+        if self._black_node_manager.has_black_node_s():
             # This 'if' was previously:
-            # # We have another red node that needs fixing
-            # next_red_node = self.red_node_manager.get_current_red_node()
-            # print(f"DEBUG: Found pending red node {next_red_node} to fix")
-            # # Handle the new red node (stays in ADJUST mode)
-            # self.handle_red_node_creation(next_red_node)
+            # # We have another black node that needs fixing
+            # next_black_node_ = self._black_node_manager.get_current_black_node_()
+            # print(f"DEBUG: Found pending black node {next_black_node_} to fix")
+            # # Handle the new black node (stays in ADJUST mode)
+            # self.handle_black_node_creation(next_black_node_)
             try:
-                raise Exception(f"Still have red nodes. Should be fixed already: handle_red_node_fixed")
+                raise Exception(f"Still have black nodes. Should be fixed already: handle_black_node_fixed")
             except Exception as e:
                 print(f"Error: {e}")
                 sys.exit(1)
 
         else:
-            # No pending red nodes, return to CREATE mode
+            # No pending black nodes, return to CREATE mode
             print("DEBUG: Auto transitioning back to CREATE mode")
             self.app._set_application_mode(ApplicationMode.CREATE)
 
-    def check_internal_red_conflict(self, circle_id):
-        """Check if a circle has any adjacent red nodes and log a warning if found."""
+    def check_internal_black_conflict(self, circle_id):
+        """Check if a circle has any adjacent black nodes and log a warning if found."""
         circle = self.app.circle_lookup.get(circle_id)
         if not circle:
             return None
             
         connected_circles = circle.get("connected_to", [])
-        adjacent_red_nodes = []
+        adjacent_black_node_s = []
         
         for connected_id in connected_circles:
             connected_circle = self.app.circle_lookup.get(connected_id)
-            if connected_circle and connected_circle["color_priority"] == 4:
-                adjacent_red_nodes.append(connected_id)
+            if connected_circle and connected_circle["color_priority"] == 5:
+                adjacent_black_node_s.append(connected_id)
                 
-        if adjacent_red_nodes:
-            for rednode in adjacent_red_nodes:
-                print(f"Pushing Red node: {circle_id} is adjacent to other red node: {rednode}")
-                self.red_node_manager.add_red_node(rednode, "Adjacent to another red node")
+        if adjacent_black_node_s:
+            for blacknode in adjacent_black_node_s:
+                print(f"Pushing Black node: {circle_id} is adjacent to other black node: {blacknode}")
+                self._black_node_manager.add_black_node_(blacknode, "Adjacent to another black node")
             return True
         
         return False

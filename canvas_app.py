@@ -17,7 +17,7 @@ from connection_manager import ConnectionManager
 from interaction_handler import InteractionHandler
 from color_manager import ColorManager
 from boundary_manager import BoundaryManager
-from fix_red import FixRedManager
+from fix_black import FixBlackManager
 
 class CanvasApplication:
     """Main application class for the drawing canvas."""
@@ -99,7 +99,7 @@ class CanvasApplication:
         self.connection_manager = ConnectionManager(self)
         self.interaction_handler = InteractionHandler(self)
         self.color_manager = ColorManager(self)
-        self.fix_red = FixRedManager(self)
+        self.fix_black = FixBlackManager(self)
         self.boundary_manager = BoundaryManager(self)
         
         # Initialize drag state
@@ -246,7 +246,7 @@ class CanvasApplication:
                                      command=lambda: self._focus_after(self._toggle_mode))
         self.mode_button.pack(side=tk.LEFT, padx=2)
         
-        # Remove the "Fix Red" button creation - we'll reuse the mode button instead
+        # Remove the "Fix Black" button creation - we'll reuse the mode button instead
         
         # Create canvas for drawing
         self.canvas = tk.Canvas(
@@ -406,40 +406,40 @@ class CanvasApplication:
         return self.connection_manager.draw_connection_angle_visualizations(connection_key)
 
     def check_and_resolve_color_conflicts(self, circle_id):
-        return self.fix_red.check_and_resolve_color_conflicts(circle_id)
+        return self.fix_black.check_and_resolve_color_conflicts(circle_id)
 
     def reassign_color_network(self, circle_id):
-        return self.fix_red.reassign_color_network(circle_id)
+        return self.fix_black.reassign_color_network(circle_id)
 
-    def fix_red_node(self):
-        return self.fix_red.fix_red_node()
+    def fix_black_node_(self):
+        return self.fix_black.fix_black_node_()
 
-    def handle_red_node_creation(self, circle_id):
-        return self.fix_red.handle_red_node_creation(circle_id)
+    def handle_black_node_creation(self, circle_id):
+        return self.fix_black.handle_black_node_creation(circle_id)
 
-    def handle_red_node_fixed(self):
-        return self.fix_red.handle_red_node_fixed()
+    def handle_black_node_fixed(self):
+        return self.fix_black.handle_black_node_fixed()
 
-    def has_red_nodes(self):
-        return self.fix_red.red_node_manager.has_red_nodes()
+    def has_black_node_s(self):
+        return self.fix_black._black_node_manager.has_black_node_s()
 
-    def get_current_red_node(self):
-        return self.fix_red.red_node_manager.get_current_red_node()
+    def get_current_black_node_(self):
+        return self.fix_black._black_node_manager.get_current_black_node_()
 
-    def add_red_node(self, node_id, reason="Color conflict"):
-        return self.fix_red.red_node_manager.add_red_node(node_id, reason)
+    def add_black_node_(self, node_id, reason="Color conflict"):
+        return self.fix_black._black_node_manager.add_black_node_(node_id, reason)
 
-    def advance_to_next_red_node(self):
-        return self.fix_red.red_node_manager.advance_to_next_red_node()
+    def advance_to_next_black_node_(self):
+        return self.fix_black._black_node_manager.advance_to_next_black_node_()
 
-    def get_red_node_reason(self, node_id=None):
-        return self.fix_red.red_node_manager.get_red_node_reason(node_id)
+    def get_black_node_reason(self, node_id=None):
+        return self.fix_black._black_node_manager.get_black_node_reason(node_id)
 
-    def clear_red_nodes(self):
-        return self.fix_red.red_node_manager.clear()
+    def clear_black_node_s(self):
+        return self.fix_black._black_node_manager.clear()
 
-    def handle_fix_red_node_button(self):
-        return self.fix_red.fix_red_node()
+    def handle_fix_black_node_button(self):
+        return self.fix_black.fix_black_node_()
 
 def main():
     """Application entry point."""

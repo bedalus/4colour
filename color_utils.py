@@ -5,24 +5,18 @@ This module provides functions for working with colors and their priorities.
 """
 
 # Define color priority mappings
-# Priority order: 1=yellow (lowest), 2=green, 3=blue, 4=red (highest)
+# Priority order: 1=yellow (lowest), 2=green, 3=blue, 4=red, 5=black (highest)
 COLOR_PRIORITY = {
     1: "yellow",
     2: "green",
     3: "blue",
-    4: "red"
+    4: "red",
+    5: "black"
 }
 
 def get_color_from_priority(priority):
-    """Get the color name corresponding to a given priority.
-    
-    Args:
-        priority (int): The priority number (1-4)
-        
-    Returns:
-        str: The color name, or "black" if priority is invalid
-    """
-    return COLOR_PRIORITY.get(priority, "black") # Default to black if invalid
+    """Get the color name corresponding to a given priority."""
+    return COLOR_PRIORITY.get(priority)
 
 def find_lowest_available_priority(used_priorities):
     """Find the lowest color priority that isn't in the used_priorities set.
@@ -31,12 +25,12 @@ def find_lowest_available_priority(used_priorities):
         used_priorities (set): Set of priority numbers already in use
         
     Returns:
-        int or None: The lowest available priority (1-3), or None if all are used
+        int or None: The lowest available priority (1-4), or None if all are used
     """
-    for priority in range(1, 4):  # Check priorities 1, 2, 3
+    for priority in range(1, 5):  # Check priorities 1, 2, 3, 4
         if priority not in used_priorities:
             return priority
-    return None  # All priorities 1-3 are used
+    return None  # All priorities 1-4 are used
 
 def determine_color_priority_for_connections(connected_priorities):
     """Determine the appropriate color priority given connected circles' priorities.
@@ -44,7 +38,7 @@ def determine_color_priority_for_connections(connected_priorities):
     This implements the core 4-color algorithm logic:
     1. If there are no connections, use priority 1 (yellow)
     2. Otherwise, use the lowest priority not used by any connected circle
-    3. If all priorities 1-3 are used, return priority 4 (red)
+    3. If all priorities 1-4 are used, return priority 5 (black)
     
     Args:
         connected_priorities (set): Set of priorities used by connected circles
@@ -58,5 +52,5 @@ def determine_color_priority_for_connections(connected_priorities):
     # Find lowest unused priority
     available_priority = find_lowest_available_priority(connected_priorities)
     
-    # If all priorities 1-3 are used, return priority 4 (red)
-    return available_priority if available_priority is not None else 4
+    # If all priorities 1-4 are used, return priority 5 (black)
+    return available_priority if available_priority is not None else 5

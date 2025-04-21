@@ -11,15 +11,16 @@ When adding new phases:
 
 ## Phase 17: Advanced Color Network Reassignment
 
-The goal of this phase is to enhance the 'fix red' system for complex graph scenarios.
+The goal of this phase is to enhance the Kempe system for complex graph scenarios.
 
-- [ ] **Fix Red: Algorithm Improvements and constraints**
-    *   Kick off trigger will be when placing a new node creates a red conflict.
-    *   Use Kempe chain to move the red with the lowest ID away
-    *   After all red conflicts are resolved, check if red is the most used color. If so, perform a swap between red and whichever other colour is the least used (using color priority for ties).
+- [ ] **Black-Node exchange algorithm: Kempe Chain Improvements and constraints**
+    *   Kick off trigger will be when placing a new node creates a conflict resulting in a priority 5 'black-node'.
+    *   Use Kempe chain to decide on some pairing of yellow, green, blue or red suitable for color exchange.
+    *   If the 'black-node' can now be recolored to use one of the four colors, then the algorithm is finished. If not, it should call itself again (be careful of infinite recursion).
+    *   Finally, check which is the most used color on the border nodes (the graph's outer face). Perform an exchange between that color and whichever other colour is the most used (using color priority for ties).
 
 ## Future Phases (Placeholder)
 
 - [ ] **Document Algorithm and Implementation:**
-    *   Add detailed comments explaining the color reassignment strategy in reassign_color_network (`fix_red.py`).
+    *   Add detailed comments explaining the color reassignment strategy in reassign_color_network (`fix_black.py`).
     *   The goal of the commentary should be to prove that the algorithm will always be successful in reconfiguring the graph to use only four colours.
