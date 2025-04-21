@@ -1,4 +1,5 @@
 import sys
+import itertools # Import itertools for combinations
 from color_utils import get_color_from_priority, find_lowest_available_priority
 from app_enums import ApplicationMode
 
@@ -60,61 +61,117 @@ class FixVCOLORManager:
 
     def swap_kempe_chain(self, node_id):
         """
-        Performs a Kempe chain color swap for the given VCOLOR node.
+        Performs a Kempe chain color swap to resolve the VCOLOR node.
+        Tries different pairs of adjacent colors until one allows the VCOLOR node to be colored.
         Returns True if successful, False otherwise.
         """
-        print(f"DEBUG: Beginning Kempe chain swap for node {node_id}")
-        
-        # Ensure the node exists
+        print(f"DEBUG: Beginning Kempe chain swap for VCOLOR node {node_id}")
+
         node = self.app.circle_lookup.get(node_id)
         if not node:
             print(f"ERROR: Node {node_id} not found in circle_lookup")
             return False
-        
-        # Get connected nodes to check which colors are already adjacent
+        if node.get("color_priority") != 5:
+            print(f"ERROR: Node {node_id} is not a VCOLOR node (priority 5)")
+            return False # Should only be called for VCOLOR nodes
+
+        # Get adjacent nodes and their priorities (1-4)
         connected_circles = node.get("connected_to", [])
+        adjacent_nodes_by_priority = {p: [] for p in range(1, 5)}
         adjacent_priorities = set()
+
         for connected_id in connected_circles:
             connected_circle = self.app.circle_lookup.get(connected_id)
             if connected_circle:
-                adjacent_priorities.add(connected_circle["color_priority"])
-        
-        print(f"DEBUG: Node {node_id} has adjacent priorities: {adjacent_priorities}")
-        
-        # Try each non-VCOLOR color priority that isn't adjacent to our node
-        swap_priority = None
-        for priority in [1, 2, 3, 4]:
-            if priority not in adjacent_priorities:
-                swap_priority = priority
-                print(f"DEBUG: Selected priority {swap_priority} for Kempe chain swap (not adjacent)")
-                break
-        
-        # If all colors are adjacent, simply default to priority 1
-        if swap_priority is None:
-            swap_priority = 1  # This can introduce conflicts!
-            print(f"DEBUG: All priorities are adjacent, defaulting to priority {swap_priority}")
-        
-        # Find all nodes in the Kempe chain
-        kempe_chain = self.find_kempe_chain(node_id, 4, swap_priority)
-        if not kempe_chain:
-            print(f"ERROR: Failed to find Kempe chain for node {node_id}")
-            return False
-            
-        print(f"DEBUG: Found Kempe chain with {len(kempe_chain)} nodes: {kempe_chain}")
-        
-        # Perform the swap on all nodes in the chain
-        for chain_node_id in kempe_chain:
-            chain_node = self.app.circle_lookup.get(chain_node_id)
-            current_priority = chain_node["color_priority"]
-            if current_priority == 5:  # VCOLOR
-                self.app.color_manager.update_circle_color(chain_node_id, swap_priority)
-                print(f"DEBUG: Changed node {chain_node_id} from VCOLOR to priority {swap_priority}")
-            elif current_priority == swap_priority:
-                self.app.color_manager.update_circle_color(chain_node_id, 4)  # VCOLOR
-                print(f"DEBUG: Changed node {chain_node_id} from priority {swap_priority} to VCOLOR")
-        
-        print(f"DEBUG: Kempe chain swap completed successfully for node {node_id}")
-        return True
+                priority = connected_circle.get("color_priority")
+                if 1 <= priority <= 4: # Only consider standard colors
+                    adjacent_priorities.add(priority)
+                    adjacent_nodes_by_priority[priority].append(connected_id)
+
+        print(f"DEBUG: VCOLOR Node {node_id} has adjacent priorities: {adjacent_priorities}")
+        print(f"DEBUG: Adjacent nodes by priority: {adjacent_nodes_by_priority}")
+
+        # We need at least two different adjacent colors to attempt a swap
+        if len(adjacent_priorities) < 2:
+             print(f"ERROR: Cannot perform Kempe swap for node {node_id}. Needs at least 2 different adjacent colors.")
+             # This case might indicate an issue elsewhere or a very simple graph structure
+             # Try assigning the lowest available if possible (though this method is usually called when none are available)
+             available_priority = find_lowest_available_priority(adjacent_priorities)
+             if available_priority:
+                 print(f"DEBUG: Found simple available priority {available_priority} for node {node_id}")
+                 self.app.color_manager.update_circle_color(node_id, available_priority)
+                 return True
+             else:
+                 print(f"ERROR: Node {node_id} has < 2 adjacent colors and no simple available priority.")
+                 return False # Cannot resolve
+
+        # Iterate through pairs of adjacent priorities (c1, c2)
+        # Sort priorities to ensure consistent pair generation (e.g., (1, 2) not (2, 1))
+        sorted_priorities = sorted(list(adjacent_priorities))
+        for c1, c2 in itertools.combinations(sorted_priorities, 2):
+            print(f"\nDEBUG: Attempting Kempe swap with priorities ({c1}, {c2}) for node {node_id}")
+
+            # Get a starting neighbor node for each color
+            # We only need one neighbor of each color to start the chain check
+            neighbor_c1_id = adjacent_nodes_by_priority[c1][0] if adjacent_nodes_by_priority[c1] else None
+            neighbor_c2_id = adjacent_nodes_by_priority[c2][0] if adjacent_nodes_by_priority[c2] else None
+
+            if not neighbor_c1_id or not neighbor_c2_id:
+                 print(f"WARN: Missing neighbor for priority {c1} or {c2}. Skipping pair.")
+                 continue # Should not happen if adjacent_priorities was populated correctly
+
+            print(f"DEBUG: Starting chain search from neighbor {neighbor_c1_id} (priority {c1})")
+            # Find the Kempe chain starting from the neighbor with priority c1
+            kempe_chain_nodes = self.find_kempe_chain(neighbor_c1_id, c1, c2)
+
+            if not kempe_chain_nodes:
+                print(f"WARN: No Kempe chain found starting from {neighbor_c1_id} with ({c1}, {c2}). This might be okay.")
+                # If the chain is empty, it means neighbor_c1 is isolated regarding c1/c2,
+                # which implies neighbor_c2 cannot be in this non-existent chain.
+                # However, find_kempe_chain should at least return [neighbor_c1_id].
+                # Let's treat this as if n2 is not in the chain.
+                pass # Proceed to check if n2 is in the (empty) chain set
+
+            kempe_chain_set = set(kempe_chain_nodes)
+            print(f"DEBUG: Found ({c1}, {c2}) chain: {kempe_chain_nodes}")
+
+            # Check if the neighbor with priority c2 is in the *same* chain
+            if neighbor_c2_id not in kempe_chain_set:
+                print(f"DEBUG: Success! Neighbor {neighbor_c2_id} (priority {c2}) is NOT in the chain starting from {neighbor_c1_id}.")
+                print(f"DEBUG: Swapping colors {c1} <-> {c2} in the chain: {kempe_chain_nodes}")
+
+                # Perform the color swap for all nodes in this chain
+                for chain_node_id in kempe_chain_nodes:
+                    chain_node = self.app.circle_lookup.get(chain_node_id)
+                    if not chain_node: continue # Should exist
+
+                    current_priority = chain_node["color_priority"]
+                    new_priority = -1
+                    if current_priority == c1:
+                        new_priority = c2
+                    elif current_priority == c2:
+                        new_priority = c1
+                    else:
+                        # This should not happen if find_kempe_chain is correct
+                        print(f"ERROR: Node {chain_node_id} in ({c1},{c2}) chain has unexpected priority {current_priority}!")
+                        continue
+
+                    self.app.color_manager.update_circle_color(chain_node_id, new_priority)
+                    # print(f"DEBUG: Swapped node {chain_node_id} from {current_priority} to {new_priority}") # Verbose
+
+                # Now that the c1 neighbor has changed color, c1 is available for the VCOLOR node
+                print(f"DEBUG: Assigning freed priority {c1} to VCOLOR node {node_id}")
+                self.app.color_manager.update_circle_color(node_id, c1)
+                print(f"DEBUG: Kempe chain swap completed successfully for node {node_id}.")
+                return True # Successfully resolved the VCOLOR node
+            else:
+                print(f"DEBUG: Neighbor {neighbor_c2_id} (priority {c2}) IS in the chain. Trying next pair.")
+
+        # If loop finishes, no suitable Kempe chain swap was found
+        print(f"ERROR: Exhausted all Kempe chain pairs for node {node_id}. Could not resolve VCOLOR.")
+        # According to the theorem, for planar graphs, this shouldn't happen if the graph had a valid 4-coloring before the conflict.
+        # This might indicate a non-planar graph segment or an issue in the graph state.
+        return False
 
     def find_kempe_chain(self, start_node_id, priority1, priority2):
         """
