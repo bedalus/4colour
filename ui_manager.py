@@ -220,11 +220,6 @@ class UIManager:
         if self.app.hint_text_id:
             self.app.canvas.delete(self.app.hint_text_id)
             self.app.hint_text_id = None
-            
-        # Clear the edit hint text
-        if self.app.edit_hint_text_id:
-            self.app.canvas.delete(self.app.edit_hint_text_id)
-            self.app.edit_hint_text_id = None
         
         # Reset any warnings
         self.clear_warning()

@@ -817,11 +817,6 @@ class InteractionHandler:
         
         # Clear angle visualizations
         self.app.ui_manager.clear_angle_visualizations()
-        
-        # Clear adjust mode hint text
-        if self.app.edit_hint_text_id:
-            self.app.canvas.delete(self.app.edit_hint_text_id)
-            self.app.edit_hint_text_id = None
             
         # Reset canvas background
         self.app.canvas.config(bg="white")
@@ -848,9 +843,6 @@ class InteractionHandler:
         self.app.ui_manager.show_hint_text("")
         self.app.connection_manager.hide_midpoint_handles()
         self.app.ui_manager.clear_angle_visualizations()
-        if self.app.edit_hint_text_id:
-            self.app.canvas.delete(self.app.edit_hint_text_id)
-            self.app.edit_hint_text_id = None
         self.app.canvas.config(bg="white")
         if self.app.highlighted_circle_id:
             self.app.canvas.delete(self.app.highlighted_circle_id)

@@ -64,7 +64,6 @@ class CanvasApplication:
         self.newly_placed_circle_id = None
         
         # Edit mode properties
-        self.edit_hint_text_id = None
         self.highlighted_circle_id = None  # ID for the temporary highlight circle
         
         # Current application mode
