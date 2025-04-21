@@ -24,6 +24,7 @@ wheels/
 .installed.cfg
 *.egg
 MANIFEST
+canvas_app.dist/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
