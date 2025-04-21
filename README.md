@@ -14,6 +14,19 @@ Thanks also to the creators and maintainers of the following tools and services:
 - **Roo Code**: For its effective VS Code extension that enhances the AI-assisted coding experience.
 - **Claude Sonnet 3.7**, **GPT 4.1**, **o3 mini** and **Gemini 2.5 Pro** provided by Anthropic, OpenAI, and Google. These LLMs really did the bulk of the coding. I had only modest expectations of these tools, and while in practice one *"create a method that..."* was usually followed by five "*I now have a bug that..."* statements, I know I could not have got this working without their astonishing capabilities.
 
+## Running the App
+
+You can either clone the repo and run it with ```python canvas.app```
+or download a Windows 64-bit executable here: https://github.com/bedalus/4colour/releases/tag/release
+
+The Windows 64-bit executable was compiled using nuitka: https://nuitka.net/user-documentation/
+
+Tkinter isn't supported yet for compilation using python 3.13 so I went back to 3.12, i.e.
+
+```PowerShell
+py.exe -3.12 -m nuitka canvas_app.py --mode=onefile --enable-plugin=tk-inter --follow-imports --include-package-data=package_name
+```
+
 ## How It Works
 
 **tl;dr**: Just play with it!
