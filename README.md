@@ -32,18 +32,26 @@ Use the PLAN.md file for all planning and tracking. Use this file for summaries 
 The project is organized into the following key files and directories:
 
 *   `README.md`: Current file. Project goals, summaries of initial development phases
-*   `PLAN.md`:  and planning
-*   `canvas_app.py`: Main application class
-*   `ui_manager.py`: UI element management
-*   `circle_manager.py`: Circle data operations
-*   `connection_manager.py`: Connection management and visualization
-*   `interaction_handler.py`: User input processing and mode transitions
-*   `color_manager.py`: Color assignment and conflict resolution
-*   `color_utils.py`: Color utility functions
-*   `app_enums.py`: Application enumerations
-*   `boundary_manager.py`: Boundary node identification
+*   `PLAN.md`: Development planning and tracking
+*   `canvas_app.py`: Main application class with event delegation
+*   `app_enums.py`: Application enumerations like ApplicationMode
+*   `ui_manager.py`: UI element management and visualization
+*   `circle_manager.py`: Circle data operations and lifecycle
+*   `connection_manager.py`: Connection management, curve calculation, and angle validation
+*   `interaction_handler.py`: User input processing, drag operations, and mode transitions
+*   `color_manager.py`: Color assignment operations
+*   `color_utils.py`: Color utility functions and priority mappings
+*   `boundary_manager.py`: Boundary node identification and enclosure status
+*   `fix_red.py`: Red node management and conflict resolution
 *   `function_logger.py`, `log_function_calls.py`, `analyze_call_logs.py`: Debugging tools
-*   `tests/`: Unit and integration tests
+
+### Component Relationships
+
+*   `canvas_app.py` serves as the main controller, delegating to specialized managers
+*   The Managers focus on specific domains (UI, circles, connections, colors, boundaries)
+*   `interaction_handler.py` processes user input and coordinates with managers
+*   `app_enums.py` provides consistent mode definitions across components
+*   `fix_red.py` centralizes color conflict resolution logic
 
 ### Phases 1-7 Summary
 

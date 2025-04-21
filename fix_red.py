@@ -1,3 +1,4 @@
+import sys
 from color_utils import get_color_from_priority, find_lowest_available_priority
 from app_enums import ApplicationMode
 
@@ -57,21 +58,58 @@ class FixRedManager:
         self.app = app
         self.red_node_manager = RedNodeManager()
 
+    def reassign_color_network(self, circle_id):
+        """MAIN ALGORITHM ENTRY POINT: Graph color reassignment when a new node is assigned priority 4 (red)."""
+        circle_data = self.app.circle_lookup.get(circle_id)
+        if not circle_data:
+            try:
+                raise Exception(f"reassign_color_network: Circle {circle_id} not found in circle_lookup - invalid state")
+            except Exception as e:
+                print(f"Error: {e}")
+                sys.exit(1)
+
+        # Checks if the new red node is adjacent to another
+        has_conflicts = self.check_internal_red_conflict(circle_id)
+
+        if not has_conflicts:
+            print(f"reassign_color_network: Red node {circle_id} has no conflicts")
+            return
+
+        # NOTE: Reaching this point means the latest red is adjacent to at least one other
+        #       Start fixing the graph!
+        #       Function Notes:
+        #          has_red_nodes is True if we've queued any
+        #          add_red_node is PUSH
+        #          advance_to_next_red_node is POP
+        #          self.app.color_manager.update_circle_color(circle_id, priority) sets node color. Will be needed for swapping.
+        #       PUSH will only be used if our algorithm must move a red next to another red. Watch out for infinite loops.
+        print(f"reassign_color_network: Called for red node: {circle_id}")
+        while self.red_node_manager.has_red_nodes():
+            print(f"reassign_color_network: Handling current_red_node_id: {self.red_node_manager.current_red_node_id}")
+            print(f"reassign_color_network:  - reason: {self.red_node_manager.get_red_node_reason(self.red_node_manager.current_red_node_id)}")
+            # Deal with the red node identified as 'current'
+            # PLACEHOLDER: Some genius code
+            print(f"reassign_color_network: Advancing to next red node ID")
+            self.red_node_manager.advance_to_next_red_node()
+
+        # Finally, count every color being used. If red is the most, swap it with the least (using lowest priority for ties)
+        # Global graph color swap code goes here.
+
     def check_and_resolve_color_conflicts(self, circle_id):
         """Checks for color conflicts after connections are made and resolves them."""
         # Get the current circle's data
         circle_data = self.app.circle_lookup.get(circle_id)
         if not circle_data:
-            return None
+            try:
+                raise Exception(f"Circle {circle_id} not found in circle_lookup - invalid state in check_and_resolve_color_conflicts")
+            except Exception as e:
+                print(f"Error: {e}")
+                sys.exit(1)
 
         current_priority = circle_data["color_priority"]
 
         # Get all directly connected circles
         connected_circles = circle_data.get("connected_to", [])
-
-        # If no connections, no conflicts to resolve
-        if not connected_circles:
-            return current_priority
 
         # Check for conflicts
         has_conflict = False
@@ -80,7 +118,11 @@ class FixRedManager:
         for connected_id in connected_circles:
             connected_circle = self.app.circle_lookup.get(connected_id)
             if not connected_circle:
-                continue
+                try:
+                    raise Exception(f"Circle {connected_id} not found in circle_lookup - invalid state in check_and_resolve_color_conflicts #2")
+                except Exception as e:
+                    print(f"Error: {e}")
+                    sys.exit(1)
 
             connected_priority = connected_circle["color_priority"]
             used_priorities.add(connected_priority)
@@ -94,69 +136,20 @@ class FixRedManager:
         # Find the lowest priority that isn't used by any connected circle
         available_priority = find_lowest_available_priority(used_priorities)
 
-        # If there are available priorities, use the lowest one
-        if available_priority is not None:
-            new_priority = available_priority
-        else:
-            # If all lower priorities are used, tag this node for manual fixing
-            new_priority = 4
-            self.app.color_manager.update_circle_color(circle_id, new_priority)
-            # Updated to use RedNodeManager
-            self.red_node_manager.add_red_node(circle_id, "Color conflict")
-            print(f"DEBUG: Red node {circle_id} created in check_and_resolve_color_conflicts")
-            self.handle_red_node_creation(circle_id)
-            return new_priority
-
         # Update the circle with the new priority and visual appearance
-        self.app.color_manager.update_circle_color(circle_id, new_priority)
-        return new_priority
-
-    def reassign_color_network(self, circle_id):
-        """Reassigns colors when a circle is assigned priority 4 (red)."""
-        circle_data = self.app.circle_lookup.get(circle_id)
-        if not circle_data:
-            return 4 # Should not happen if called correctly
-
-        original_circle_priority = 4 # This circle was just assigned red
-
-        swap_target_id = None
-        swap_target_original_priority = None
-
-        # Find an enclosed neighbor to swap color with
-        enclosed_neighbors = []
-        
-        for connected_id in circle_data.get("connected_to", []):
-            connected_circle_data = self.app.circle_lookup.get(connected_id)
-            if connected_circle_data and connected_circle_data.get("enclosed") is True:
-                enclosed_neighbors.append((connected_id, connected_circle_data))
-        
-        # If no enclosed neighbors found, this is unexpected according to Four Color Theorem logic
-        if not enclosed_neighbors:
-            print(f"WARNING: Node {circle_id} has no enclosed neighbors for swapping red priority!")
-            # Ensure the circle is visually red and return priority 4
-            self.app.color_manager.update_circle_color(circle_id, original_circle_priority)
-            return original_circle_priority
-        
-        # Try each enclosed neighbor until we find one that works
-        for neighbor_id, neighbor_data in enclosed_neighbors:
-            swap_target_id = neighbor_id
-            swap_target_original_priority = neighbor_data["color_priority"]
-            
-            # Perform the swap
-            print(f"DEBUG: Swapping red node (ID:{circle_id}) with enclosed {get_color_from_priority(swap_target_original_priority)} node (ID:{swap_target_id})")
-            self.app.color_manager.update_circle_color(circle_id, swap_target_original_priority)
-            self.app.color_manager.update_circle_color(swap_target_id, original_circle_priority) # Assign red (4) to the target
-
-            # Check for conflicts after the swap
-            final_priority_original = self.check_and_resolve_color_conflicts(circle_id)
-            final_priority_target = self.check_internal_red_conflict(swap_target_id)
-            return final_priority_original
-        
-        # If we get here, no viable swaps were found
-        raise RuntimeError(f"ERROR: No viable enclosed neighbor found for node {circle_id} to swap with.")
+        if available_priority is None:
+            print(f"DEBUG: Red node {circle_id} created in check_and_resolve_color_conflicts")
+            self.app.color_manager.update_circle_color(circle_id, 4)
+            # Initial entry point into the Red Node Manager
+            # Push the red node id
+            self.red_node_manager.add_red_node(circle_id, "No lower priorities available. Create RED")
+            # Call Handler
+            self.handle_red_node_creation(circle_id)
+        else:
+            self.app.color_manager.update_circle_color(circle_id, available_priority)
 
     def fix_red_node(self):
-        """Manually triggered function to fix a red node by swapping with an enclosed neighbor."""
+        """Manually triggered function to check any new red node."""
         circle_id = self.red_node_manager.get_current_red_node()
         if circle_id is None:
             return False
@@ -165,12 +158,10 @@ class FixRedManager:
         self.red_node_manager.advance_to_next_red_node()
         
         # Now perform the actual swap using reassign_color_network
-        new_priority = self.reassign_color_network(circle_id)
+        self.reassign_color_network(circle_id)
         
         # Hide the fix button and transition back to CREATE mode
         self.handle_red_node_fixed()
-        
-        return new_priority != 4  # Return True if we successfully changed from red
 
     def handle_red_node_creation(self, circle_id):
         """Handle the creation of a red node by showing the fix button and entering adjust mode."""
@@ -187,7 +178,7 @@ class FixRedManager:
 
     def handle_red_node_fixed(self):
         """Handle operations after a red node has been fixed."""
-        print("DEBUG: Red node fixed")
+        print("DEBUG: Red nodes fixed")
         
         # Restore the mode toggle button's original functionality
         if hasattr(self.app, 'mode_button') and hasattr(self.app, '_stored_mode_button_command'):
@@ -196,18 +187,24 @@ class FixRedManager:
             delattr(self.app, '_stored_mode_button_command')
             print("DEBUG: Restored mode button's original command")
         
-        # Check if we have a pending red node to fix
+        # Since we deal with these as they arise, this should never be true
         if self.red_node_manager.has_red_nodes():
-            # We have another red node that needs fixing
-            next_red_node = self.red_node_manager.get_current_red_node()
-            print(f"DEBUG: Found pending red node {next_red_node} to fix")
-            # Handle the new red node (stays in ADJUST mode)
-            self.handle_red_node_creation(next_red_node)
+            # This 'if' was previously:
+            # # We have another red node that needs fixing
+            # next_red_node = self.red_node_manager.get_current_red_node()
+            # print(f"DEBUG: Found pending red node {next_red_node} to fix")
+            # # Handle the new red node (stays in ADJUST mode)
+            # self.handle_red_node_creation(next_red_node)
+            try:
+                raise Exception(f"Still have red nodes. Should be fixed already: handle_red_node_fixed")
+            except Exception as e:
+                print(f"Error: {e}")
+                sys.exit(1)
+
         else:
             # No pending red nodes, return to CREATE mode
             print("DEBUG: Auto transitioning back to CREATE mode")
             self.app._set_application_mode(ApplicationMode.CREATE)
-            # Button text will be updated by the mode transition
 
     def check_internal_red_conflict(self, circle_id):
         """Check if a circle has any adjacent red nodes and log a warning if found."""
@@ -215,7 +212,6 @@ class FixRedManager:
         if not circle:
             return None
             
-        current_priority = circle["color_priority"]
         connected_circles = circle.get("connected_to", [])
         adjacent_red_nodes = []
         
@@ -225,10 +221,9 @@ class FixRedManager:
                 adjacent_red_nodes.append(connected_id)
                 
         if adjacent_red_nodes:
-            warning_msg = f"UNHANDLED INTERNAL RED CONFLICT: Red node {circle_id} is adjacent to other red nodes: {adjacent_red_nodes}"
-            print(warning_msg)
-            # Add these nodes to the red node queue too
-            for node_id in adjacent_red_nodes:
-                self.red_node_manager.add_red_node(node_id, "Adjacent to another red node")
+            for rednode in adjacent_red_nodes:
+                print(f"Pushing Red node: {circle_id} is adjacent to other red node: {rednode}")
+                self.red_node_manager.add_red_node(rednode, "Adjacent to another red node")
+            return True
         
-        return current_priority
+        return False

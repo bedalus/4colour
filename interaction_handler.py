@@ -300,7 +300,7 @@ class InteractionHandler:
         # After all connections are made, check for color conflicts and resolve them once
         if self.app.newly_placed_circle_id and self.app.selected_circles:
             # Check and resolve color conflicts for the newly placed circle
-            priority = self.app.check_and_resolve_color_conflicts(self.app.newly_placed_circle_id)
+            self.app.check_and_resolve_color_conflicts(self.app.newly_placed_circle_id)
         
         # Clear selection state
         self.app.selected_circles.clear()
