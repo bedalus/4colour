@@ -31,7 +31,7 @@ class InteractionHandler:
         # Don't allow transition to ADJUST mode from SELECTION mode
         # EXCEPTION: Allow if it's for a black node
         if self.app._mode == ApplicationMode.SELECTION and new_mode == ApplicationMode.ADJUST:
-            if not self.app.has_black_node_s():
+            if not self.app.has_black_nodes():
                 print("DEBUG: Blocking SELECTION to ADJUST transition (not for black node)")
                 return
             else:

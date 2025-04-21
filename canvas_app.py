@@ -420,8 +420,8 @@ class CanvasApplication:
     def handle_black_node_fixed(self):
         return self.fix_black.handle_black_node_fixed()
 
-    def has_black_node_s(self):
-        return self.fix_black._black_node_manager.has_black_node_s()
+    def has_black_nodes(self):
+        return self.fix_black._black_node_manager.has_black_nodes()
 
     def get_current_black_node_(self):
         return self.fix_black._black_node_manager.get_current_black_node_()
@@ -435,7 +435,7 @@ class CanvasApplication:
     def get_black_node_reason(self, node_id=None):
         return self.fix_black._black_node_manager.get_black_node_reason(node_id)
 
-    def clear_black_node_s(self):
+    def clear_black_nodes(self):
         return self.fix_black._black_node_manager.clear()
 
     def handle_fix_black_node_button(self):

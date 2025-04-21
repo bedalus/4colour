@@ -166,7 +166,7 @@ class UIManager:
         
         # Reset black node state
         if hasattr(self.app, 'fix_black'):
-            self.app.clear_black_node_s()
+            self.app.clear_black_nodes()
         
         # Clear the canvas - delete all items except fixed nodes/connections
         for item in self.app.canvas.find_all():

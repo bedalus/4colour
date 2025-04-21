@@ -35,7 +35,7 @@ class BlackNodeManager:
             print("DEBUG: No more black nodes in queue")
         return self.current_black_node_id
 
-    def has_black_node_s(self):
+    def has_black_nodes(self):
         return len(self._black_node_queue) > 0
 
     def get_black_node_reason(self, node_id=None):
@@ -51,7 +51,7 @@ class BlackNodeManager:
 
 class FixBlackManager:
     """
-    Centralizes all logic and state for black node (priority 4) handling.
+    Centralizes all logic and state for black node (priority 5) handling.
     This includes detection, state management, UI triggers, and resolution.
     """
     def __init__(self, app):
@@ -156,7 +156,7 @@ class FixBlackManager:
         return kempe_chain
 
     def reassign_color_network(self, circle_id):
-        """MAIN ALGORITHM ENTRY POINT: Graph color reassignment when a new node is assigned priority 4 (black)."""
+        """MAIN ALGORITHM ENTRY POINT: Graph color reassignment when a new node is assigned priority 5 (black)."""
         circle_data = self.app.circle_lookup.get(circle_id)
         if not circle_data:
             try:
@@ -165,23 +165,17 @@ class FixBlackManager:
                 print(f"Error: {e}")
                 sys.exit(1)
 
-        # Checks if the new black node is adjacent to another
-        has_conflicts = self.check_internal_black_conflict(circle_id)
-
-        if not has_conflicts:
-            print(f"reassign_color_network: Black node {circle_id} has no conflicts")
-            return
-
-        # NOTE: Reaching this point means the latest black is adjacent to at least one other
+        # NOTE: Reaching this point means a black placeholder node needs assigning a color from 1-4
         #       Start fixing the graph!
         #       Function Notes:
-        #          has_black_node_s is True if we've queued any
+        #          has_black_nodes is True if we've queued any
         #          add_black_node_ is PUSH
         #          advance_to_next_black_node_ is POP
         #          self.app.color_manager.update_circle_color(circle_id, priority) sets node color. Will be needed for swapping.
-        #       PUSH will only be used if our algorithm must move a black next to another black. Watch out for infinite loops.
+        #       PUSH will only be used if our algorithm must move a black next to another black (impossible?).
+        #        - If creating something recursive, watch out for infinite loops.
         print(f"reassign_color_network: Called for black node: {circle_id}")
-        while self._black_node_manager.has_black_node_s():
+        while self._black_node_manager.has_black_nodes():
             print(f"reassign_color_network: Handling current_black_node_id: {self._black_node_manager.current_black_node_id}")
             print(f"reassign_color_network:  - reason: {self._black_node_manager.get_black_node_reason(self._black_node_manager.current_black_node_id)}")
             # Deal with the black node identified as 'current'
@@ -190,70 +184,108 @@ class FixBlackManager:
 
             # Get all connected nodes and their colors
             connected_circles = black_circle.get("connected_to", [])
-            used_priorities = {self.app.circle_lookup.get(cid)["color_priority"] for cid in connected_circles}
+            # Ensure connected_circles is not None before proceeding
+            if connected_circles is None: connected_circles = []
+            
+            used_priorities = set()
+            for cid in connected_circles:
+                connected_circle = self.app.circle_lookup.get(cid)
+                if connected_circle:
+                    used_priorities.add(connected_circle["color_priority"])
 
             # Find available color (not used by neighbors)
+            # Check priorities 1-4 only
             available_priority = find_lowest_available_priority(used_priorities)
 
             if available_priority:
                 # Simple case - can directly change color
+                print("DEBUG: No conflicting nodes found, skipping Kempe chain.")
                 self.app.color_manager.update_circle_color(current_black_node_id, available_priority)
             else:
                 # Complex case - need to swap colors in a chain (Kempe chain)
+                # TODO: Add recursion if necessary - based on False being returned or still impossible to change black to another color
                 self.swap_kempe_chain(current_black_node_id)
 
             print(f"reassign_color_network: Advancing to next black node ID")
             self._black_node_manager.advance_to_next_black_node_()
 
-        # Finally, count every color being used. If black is the most, swap it with the least (using lowest priority for ties)
-        # Count how many circles are using each color priority
-        color_counts = {1: 0, 2: 0, 3: 0, 4: 0}  # Initialize counts for each priority
-        
-        # Count circles by color priority
-        for circle_id, circle_data in self.app.circle_lookup.items():
-            priority = circle_data.get("color_priority")
-            color_counts[priority] += 1
-        
-        print(f"DEBUG: Color usage counts: {color_counts}")
-        
-        # Check if black (priority 4) is the most used color
-        black_count = color_counts[4]
-        max_count = max(color_counts.values())
-        max_colors = [p for p, count in color_counts.items() if count == max_count]
-        
-        # Only proceed if black is the most used color (or tied for most) and there are black nodes
-        if 4 in max_colors and black_count > 0:
-            # Find the least used color, favoring lower priorities for ties
-            least_used_priority = None
-            least_used_count = float('inf')
+        # Finally, perform the border/overall color swap        
+        # Get Border Nodes
+        border_node_ids = self.app.boundary_manager.get_border_node_ids()
+        if not border_node_ids:
+            print("DEBUG: No border nodes found, skipping final swap.")
+            return
             
-            # Check priorities 1, 2, 3 (excluding black which is priority 5)
-            for priority in [1, 2, 3, 4]:
-                count = color_counts[priority]
-                if count < least_used_count:
-                    least_used_count = count
-                    least_used_priority = priority
-            
-            print(f"DEBUG: Swapping all black nodes (count: {black_count}) to priority {least_used_priority} (count: {least_used_count})")
-            
-            # Perform a true swap: black nodes become least_used_priority, and least_used_priority nodes become black
-            _black_node_ids = []
-            least_used_node_ids = []
-            
-            # First identify all nodes of both colors (to avoid changing a node twice)
-            for circle_id, circle_data in self.app.circle_lookup.items():
+        # Count Border Colors
+        border_color_counts = {p: 0 for p in range(1, 5)} # Initialize counts for priorities 1-4
+        for node_id in border_node_ids:
+            circle_data = self.app.circle_lookup.get(node_id)
+            if circle_data:
                 priority = circle_data.get("color_priority")
-                if priority == 5:  # Black
-                    _black_node_ids.append(circle_id)
-                elif priority == least_used_priority:
-                    least_used_node_ids.append(circle_id)
+                if priority in border_color_counts:
+                    border_color_counts[priority] += 1
+        print(f"DEBUG: Border color counts: {border_color_counts}")
+
+        # Find Most Used Border Color (lowest priority wins ties)
+        most_used_border_priority = -1
+        max_border_count = -1
+        for priority in range(1, 5): # Check priorities 1-4
+            count = border_color_counts.get(priority, 0)
+            if count > max_border_count:
+                max_border_count = count
+                most_used_border_priority = priority
             
-            # Now perform the swap
-            for circle_id in _black_node_ids:
-                self.app.color_manager.update_circle_color(circle_id, least_used_priority)
-                
-            for circle_id in least_used_node_ids:
-                self.app.color_manager.update_circle_color(circle_id, 4)
+        if most_used_border_priority == -1:
+            print("DEBUG: Could not determine most used border color, skipping final swap.")
+            return
+
+        # Count Overall Colors
+        overall_color_counts = {p: 0 for p in range(1, 5)} # Initialize counts for priorities 1-4
+        for node_id, circle_data in self.app.circle_lookup.items():
+            priority = circle_data.get("color_priority")
+            if priority in overall_color_counts:
+                overall_color_counts[priority] += 1
+        print(f"DEBUG: Overall color counts: {overall_color_counts}")
+
+        # Find LEAST Used Overall Color (lowest priority wins ties)
+        least_used_overall_priority = -1
+        lowest_overall_count = -1
+        for priority in range(1, 5): # Check priorities 1-4
+            count = overall_color_counts.get(priority, 0)
+            if count < lowest_overall_count:
+                lowest_overall_count = count
+                least_used_overall_priority = priority
+
+        if least_used_overall_priority == -1:
+            print("DEBUG: Could not determine most used overall color, skipping final swap.")
+            return
+             
+        print(f"DEBUG: Most used border color: {most_used_border_priority} (Count: {max_border_count})")
+        print(f"DEBUG: LEAST used overall color: {least_used_overall_priority} (Count: {lowest_overall_count})")
+
+        # Conditional Swap
+        if most_used_border_priority == least_used_overall_priority:
+            print("DEBUG: Most used border and overall colors are the same, no swap needed.")
+            return
+
+        # Perform Swap
+        print(f"DEBUG: Swapping priority {most_used_border_priority} with {least_used_overall_priority}")
+        border_priority_nodes = []
+        overall_priority_nodes = []
+
+        # Identify nodes for swapping
+        for node_id, circle_data in self.app.circle_lookup.items():
+            priority = circle_data.get("color_priority")
+            if priority == most_used_border_priority:
+                border_priority_nodes.append(node_id)
+            elif priority == least_used_overall_priority:
+                overall_priority_nodes.append(node_id)
+
+        # Perform the swap using ColorManager
+        for node_id in border_priority_nodes:
+            self.app.color_manager.update_circle_color(node_id, least_used_overall_priority)
+        for node_id in overall_priority_nodes:
+            self.app.color_manager.update_circle_color(node_id, most_used_border_priority)
 
     def check_and_resolve_color_conflicts(self, circle_id):
         """Checks for color conflicts after connections are made and resolves them."""
@@ -293,13 +325,13 @@ class FixBlackManager:
         if not has_conflict:
             return current_priority
 
-        # Find the lowest priority that isn't used by any connected circle
+        # Find the lowest priority that isn't used by any connected circle (1-4)
         available_priority = find_lowest_available_priority(used_priorities)
 
         # Update the circle with the new priority and visual appearance
         if available_priority is None:
             print(f"DEBUG: Black node {circle_id} created in check_and_resolve_color_conflicts")
-            self.app.color_manager.update_circle_color(circle_id, 4)
+            self.app.color_manager.update_circle_color(circle_id, 5) # Assign priority 5 (Black)
             # Initial entry point into the Black Node Manager
             # Push the black node id
             self._black_node_manager.add_black_node_(circle_id, "No lower priorities available. Create BLACK")
@@ -348,7 +380,7 @@ class FixBlackManager:
             print("DEBUG: Restored mode button's original command")
         
         # Since we deal with these as they arise, this should never be true
-        if self._black_node_manager.has_black_node_s():
+        if self._black_node_manager.has_black_nodes():
             # This 'if' was previously:
             # # We have another black node that needs fixing
             # next_black_node_ = self._black_node_manager.get_current_black_node_()
@@ -366,24 +398,26 @@ class FixBlackManager:
             print("DEBUG: Auto transitioning back to CREATE mode")
             self.app._set_application_mode(ApplicationMode.CREATE)
 
-    def check_internal_black_conflict(self, circle_id):
-        """Check if a circle has any adjacent black nodes and log a warning if found."""
-        circle = self.app.circle_lookup.get(circle_id)
-        if not circle:
-            return None
+
+    # We're not rotating a black node into the graph, so this isn't possible 
+    # def check_internal_black_conflict(self, circle_id):
+    #     """Check if a circle has any adjacent black nodes (priority 5) and queue them."""
+    #     circle = self.app.circle_lookup.get(circle_id)
+    #     if not circle:
+    #         return False # Indicate no conflict if circle doesn't exist
             
-        connected_circles = circle.get("connected_to", [])
-        adjacent_black_node_s = []
+    #     connected_circles = circle.get("connected_to", [])
+    #     # Ensure connected_circles is not None before proceeding
+    #     if connected_circles is None: connected_circles = []
         
-        for connected_id in connected_circles:
-            connected_circle = self.app.circle_lookup.get(connected_id)
-            if connected_circle and connected_circle["color_priority"] == 5:
-                adjacent_black_node_s.append(connected_id)
+    #     has_conflict = False
+    #     for connected_id in connected_circles:
+    #         connected_circle = self.app.circle_lookup.get(connected_id)
+    #         # Check if connected circle exists and is black (priority 5)
+    #         if connected_circle and connected_circle.get("color_priority") == 5:
+    #             print(f"Pushing Black node: {circle_id} is adjacent to black node: {connected_id}")
+    #             # Add the *adjacent* black node to the queue for processing
+    #             self._black_node_manager.add_black_node_(connected_id, f"Adjacent to newly created black node {circle_id}")
+    #             has_conflict = True
                 
-        if adjacent_black_node_s:
-            for blacknode in adjacent_black_node_s:
-                print(f"Pushing Black node: {circle_id} is adjacent to other black node: {blacknode}")
-                self._black_node_manager.add_black_node_(blacknode, "Adjacent to another black node")
-            return True
-        
-        return False
+    #     return has_conflict # Return True if any adjacent black node was found and queued
